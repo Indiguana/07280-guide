@@ -22,6 +22,8 @@ const CHAPTERS = [
   { slug: "optimization",        n: "9",   title: "Optimization: GD & SGD" },
   { slug: "feature-engineering", n: "10",  title: "Feature engineering" },
   { slug: "logistic-regression", n: "11",  title: "Logistic regression" },
+  { slug: "model-selection",     n: "12",  title: "Regularization & cross-validation" },
+  { slug: "neural-networks",     n: "13",  title: "Neural networks" },
 
   { group: "Reference" },
   { slug: "practice",            n: "",    title: "Guided problems (Part I)" },

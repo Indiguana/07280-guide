@@ -30,7 +30,7 @@
 
   <div class="viz">
     <div class="viz-title">Chapter dependencies</div>
-    <svg viewBox="0 0 700 410" role="img" aria-label="Dependency graph of the chapters: search foundations leads to informed search and to constraint satisfaction; informed search leads to adversarial search. ML formulation leads to decision trees and to linear regression; decision trees leads to information theory; linear regression leads to optimization, which leads to feature engineering, which leads to logistic regression.">
+    <svg viewBox="0 0 700 490" role="img" aria-label="Dependency graph of the chapters: search foundations leads to informed search and to constraint satisfaction; informed search leads to adversarial search. ML formulation leads to decision trees and to linear regression; decision trees leads to information theory; linear regression leads to optimization, which leads to feature engineering, which leads to logistic regression and to model selection; logistic regression and model selection lead to neural networks.">
       <defs>
         <marker id="h2sArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-mute)"></path>
@@ -98,6 +98,17 @@
       <line x1="434" y1="294" x2="474" y2="294" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></line>
       <path d="M 580 320 C 580 342, 470 330, 400 348" fill="none" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></path>
       <line x1="434" y1="374" x2="474" y2="374" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></line>
+      <a href="model-selection.html">
+        <rect x="250" y="432" width="180" height="44" rx="8" fill="var(--panel)" stroke="var(--line-2)"></rect>
+        <text x="340" y="459" text-anchor="middle" font-size="13" fill="currentColor">12 · Model selection</text>
+      </a>
+      <a href="neural-networks.html">
+        <rect x="480" y="432" width="200" height="44" rx="8" fill="var(--panel)" stroke="var(--line-2)"></rect>
+        <text x="580" y="459" text-anchor="middle" font-size="13" fill="currentColor">13 · Neural networks</text>
+      </a>
+      <line x1="340" y1="400" x2="340" y2="426" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></line>
+      <line x1="580" y1="400" x2="580" y2="426" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></line>
+      <line x1="434" y1="454" x2="474" y2="454" stroke="var(--ink-mute)" stroke-width="1.5" marker-end="url(#h2sArrow)"></line>
     </svg>
     <div class="caption">What to notice: the two halves of the course are independent of each other — you can revise search and ML in either order. Inside each half the chain is strict. Chapter 5 is the hinge of Part II: both the tree branch and the regression branch assume its notation ($\X$, $\Y$, $\D$, $\ell$, $\hat R$, ERM), so skipping it makes everything downstream look like arbitrary symbol-pushing.</div>
   </div>
@@ -144,7 +155,7 @@
 
   <p>Everything else you should be able to <em>re-derive on the spot</em>: why BFS is optimal only with uniform edge costs; why an inconsistent heuristic can make A* re-expand a node; why $\alpha$-$\beta$ pruning cannot change the minimax value; why the minimiser of squared error is the mean; why the normal equation comes from setting a gradient to zero; why zero-one loss cannot be optimised by gradient descent. If you can rebuild those, the memorised five are a convenience rather than a crutch.</p>
 
-  <p><strong>A suggested order.</strong> Read a chapter in one sitting, doing the guided problems as you meet them rather than saving them for the end. Budget roughly: two sessions for search (Ch. 1–2), one for adversarial search and one for CSPs, one for Chapter 5 — which is short but is the vocabulary for everything after it — then one each for trees, information theory, linear regression and optimization, and a final one for features and logistic regression. That is about ten sittings. Then, and only then, work the <a href="practice.html">problem set</a> cold, without notes, and use the <a href="cheatsheet.html">cheat sheet</a> purely to check yourself. If a cheat-sheet line surprises you, go back to the chapter that derived it.</p>
+  <p><strong>A suggested order.</strong> Read a chapter in one sitting, doing the guided problems as you meet them rather than saving them for the end. Budget roughly: two sessions for search (Ch. 1–2), one for adversarial search and one for CSPs, one for Chapter 5 — which is short but is the vocabulary for everything after it — then one each for trees, information theory, linear regression and optimization, then one for features and logistic regression, and one each for model selection and neural networks. That is about twelve sittings. Then, and only then, work the <a href="practice.html">problem set</a> cold, without notes, and use the <a href="cheatsheet.html">cheat sheet</a> purely to check yourself. If a cheat-sheet line surprises you, go back to the chapter that derived it.</p>
 
   <h2 id="sources">Sources</h2>
 

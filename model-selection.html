@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Selection: Regularization &amp; Cross-Validation · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="model-selection">
+<main>
+
+  <div class="eyebrow">Part II · Chapter 12</div>
+  <h1>Model selection: regularization &amp; cross-validation</h1>
+  <p class="subtitle">ERM always prefers the more complex model. This chapter gives you two tools that push back — a
+  penalty on complexity inside the objective, and held-out data outside it — and the recipe for choosing any
+  hyperparameter honestly.</p>
+
+  <div data-toc></div>
+
+  <h2 id="recap-features">1. Where we are: polynomial features, and the question they leave open</h2>
+
+  <p>The lecture opens with data that is plainly curved ($\mathcal X = \R$, $\mathcal Y = \R$). A line
+  $y = wx + b$ won't fit it, but a quadratic $h(x) = \theta_2 x^2 + \theta_1 x + \theta_0$ will. Generalise:
+  $h(x) = \theta_k x^k + \dots + \theta_1 x + \theta_0$, or more abstractly, any feature map
+  $\phi : \mathcal X \to \R^{d'}$. The recipe, which you already know from
+  <a href="feature-engineering.html">chapter 10</a>:</p>
+
+  <ol>
+    <li>Transform the training set: $(x^{(i)}, y^{(i)}) \mapsto (\phi(x^{(i)}), y^{(i)})$.</li>
+    <li>Train an ordinary linear regressor $h : \R^{d'} \to \R$ on the transformed data.</li>
+    <li>Predict on a new point with $h(\phi(x^{\text{new}}))$.</li>
+  </ol>
+
+  <p>Here $d'$ is the number of features after the transform — for a degree-$k$ polynomial, $\phi(x) = [x, x^2, \dots, x^k]$
+  plus the bias.</p>
+
+  <p><strong>The open question: how do you choose $k$?</strong> The tempting answer is "use ERM — pick the $k$ with the
+  lowest training error". That answer is wrong, and it's wrong in a predictable direction.</p>
+
+  <div class="box key"><span class="label">Key idea — why ERM can't choose $k$</span>
+    <p>Every degree-$k$ polynomial is also a degree-$(k+1)$ polynomial (set $\theta_{k+1} = 0$). So the degree-$(k+1)$ model class
+    <em>contains</em> the degree-$k$ class, and its best training error can only be equal or lower. ERM therefore always
+    prefers higher $k$. Higher-degree polynomials bend to fit the <strong>noise</strong> in the data, not just the signal:
+    <strong>overfitting</strong>.</p>
+  </div>
+
+  <p>The lecture lists three responses. <strong>Get more data</strong> — effective, but often expensive. The other two
+  are this chapter: <strong>regularization</strong> (change the objective) and <strong>cross-validation</strong>
+  (change how you evaluate).</p>
+
+  <h2 id="regularization">2. Regularization: charge the model for complexity</h2>
+
+  <div class="box analogy"><span class="label">Analogy</span>
+    <p>An expense policy. Without one, an employee (ERM) will buy the most expensive tool for every job, because
+    it's always at least as good. With a policy that charges them for each purchase, they only buy the expensive
+    tool when it's <em>enough</em> better to justify the price. $\lambda$ is the price. Where the analogy leaks: the
+    "price" here isn't money but a penalty in the same units as the loss, and you set its size by experiment (§5), not
+    by accounting.</p>
+  </div>
+
+  <div class="box defn"><span class="label">Definition — regularized ERM</span>
+    $$ \theta^\star \;=\; \arg\min_{\theta\in\R^{d'}} \;\underbrace{\frac{1}{N}\sum_{i=1}^{N}\Bigl(\theta^\top\phi(x^{(i)}) - y^{(i)}\Bigr)^2}_{\text{empirical risk}} \;+\; \lambda\,\underbrace{r(\theta)}_{\text{regularizer}} $$
+    <ul>
+      <li>$r : \R^{d'} \to \R$ is the <strong>regularizer</strong>: a number measuring how "complex" $\theta$ is. More complex → bigger.</li>
+      <li>$\lambda &gt; 0$ is the <strong>regularization strength</strong>: how much weight the complexity penalty gets relative to the empirical risk.</li>
+    </ul>
+  </div>
+
+  <p>Why this works, in the lecture's words: a more complex model always has lower empirical risk because it can fit more
+  complex data. The regularizer is larger for more complex models, so now <strong>a complex model is only chosen if its
+  drop in empirical risk is big enough to pay for its increase in $\lambda r(\theta)$</strong>. Otherwise a simpler model wins.</p>
+
+  <h3>Three regularizers</h3>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Name</th><th>$r(\theta)$</th><th>What it encourages</th><th>Catch</th></tr></thead>
+    <tbody>
+      <tr><td>"$L_0$" — count of non-zeros</td><td>$\sum_{j=1}^{d'} \1\{\theta_j \ne 0\}$</td><td><strong>Sparsity</strong>: few features used at all</td><td>Finding the arg min is computationally hard (combinatorial: which subset of features?)</td></tr>
+      <tr><td><strong>LASSO</strong> ($L_1$)</td><td>$\sum_{j=1}^{d'} |\theta_j|$</td><td>Also <strong>sparsity</strong> — many coefficients become exactly $0$</td><td>Not differentiable at $0$, but convex and efficiently solvable</td></tr>
+      <tr><td><strong>Ridge</strong> ($L_2^2$)</td><td>$\sum_{j=1}^{d'} \theta_j^2$</td><td>Small coefficients, spread out</td><td>Rarely makes anything exactly $0$</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Evaluate the three penalties</div>
+    <div class="g-body"><p>For $\theta = [3,\ 0,\ -4]$ (bias already excluded), compute the $L_0$, LASSO and ridge penalties.
+    Then: which penalty would be <em>unchanged</em> if the first entry went from $3$ to $0.001$?</p></div>
+    <details class="step"><summary>Step 1 — Compute each</summary><div>
+      <p>$L_0$: two entries are non-zero → $2$. LASSO: $|3| + |0| + |-4| = 7$. Ridge: $9 + 0 + 16 = 25$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$L_0$ stays $2$ — it only cares <em>whether</em> an entry is non-zero, not how big. That's exactly why it's hard to
+      optimize: shrinking a coefficient gradually gains nothing until it hits exactly $0$, so there's no gradient to
+      follow. LASSO drops to $4.001$ and ridge to about $16$ — both reward shrinking, which is what makes them tractable.</p></div></details>
+  </div>
+
+  <h3>Why LASSO gives exact zeros and ridge doesn't</h3>
+  <p>The notes state "LASSO also encourages sparsity" without saying why. The picture that explains it: minimizing loss
+  plus $\lambda r(\theta)$ is equivalent to minimizing the loss subject to $r(\theta) \le t$ for some budget $t$. The loss has
+  elliptical contours around its unregularized minimum; you want the lowest contour that touches the allowed region.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 1 — the $L_1$ diamond has corners; the $L_2$ disc doesn't</div>
+    <svg id="geoSvg" viewBox="0 0 640 320" role="img" aria-label="Elliptical loss contours touching an L1 diamond and an L2 disc"></svg>
+    <div class="controls">
+      <label>Unregularized optimum $\theta_1$ <input type="range" id="geoA" min="-2.5" max="2.5" step="0.05" value="1.8" data-out="geoAv" data-dp="2"><span class="val" id="geoAv"></span></label>
+      <label>$\theta_2$ <input type="range" id="geoB" min="-2.5" max="2.5" step="0.05" value="-0.2" data-out="geoBv" data-dp="2"><span class="val" id="geoBv"></span></label>
+      <label>Budget $t$ <input type="range" id="geoT" min="0.2" max="2" step="0.05" value="1" data-out="geoTv" data-dp="2"><span class="val" id="geoTv"></span></label>
+    </div>
+    <div class="caption" id="geoOut"></div>
+    <div class="caption">What to notice: at the starting position the LASSO solution sits exactly on the corner $(1, 0)$ — $\theta_2$ is
+    zeroed — while ridge keeps a small non-zero $\theta_2$. Move the optimum around: for a whole range of positions the diamond's
+    solution stays pinned to a <strong>corner</strong>; the disc's solution lands exactly on an axis only for
+    special, knife-edge positions. Drag $\theta_2$ up to about $0.7$ and LASSO leaves the corner too — sparsity is likely, not guaranteed. The constrained optimum is found numerically by scanning the boundary.</div>
+  </div>
+
+  <h3>Practical rules from the lecture</h3>
+  <div class="box warn"><span class="label">Common mistake 1 — penalizing the bias</span>
+    <p><strong>Exclude $\theta_0$ from the regularizer.</strong> The bias just shifts predictions up or down to match the average
+    $y$. Penalizing it drags every prediction toward $0$ — if all your targets are around $1000$, a penalized bias would
+    systematically under-predict, which has nothing to do with complexity.</p>
+  </div>
+  <div class="box warn"><span class="label">Common mistake 2 — mixing scales</span>
+    <p><strong>Standardize features first</strong>: same units, same scale — subtract each feature's training mean and divide by
+    its spread. The penalty treats every $\theta_j$ the same, but a feature measured in millimetres needs a coefficient
+    1000× larger than the same feature in metres, so it would get penalized far more for no reason. (The notes say "divide by
+    the variance"; the standard choice is the <strong>standard deviation</strong>, which puts every feature on unit scale.
+    Dividing by the variance would leave a feature with spread $\sigma$ at scale $1/\sigma$, not $1$.)</p>
+  </div>
+  <p>Other regularizers exist that the lecture mentions but doesn't cover: <strong>dropout</strong> and <strong>early
+  stopping</strong> (you'll meet both with <a href="neural-networks.html">neural networks</a>). And the obvious question —
+  <em>how do you choose $\lambda$?</em> — is §4–5.</p>
+
+  <h2 id="ridge-lab">3. Watch regularization work</h2>
+
+  <p>Fifteen training points (orange) and fifteen separate validation points (teal) from the same curved function plus noise.
+  Fit a polynomial of degree $k$ with a regularizer, and watch the coefficients and both errors.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 2 — polynomial degree × regularizer × $\lambda$</div>
+    <svg id="rlFit" viewBox="0 0 640 280" role="img" aria-label="Training and validation points with the current regularized polynomial fit"></svg>
+    <svg id="rlCoef" viewBox="0 0 640 150" role="img" aria-label="Bar chart of the fitted coefficients"></svg>
+    <div class="controls">
+      <label>Degree $k$ <input type="range" id="rlK" min="1" max="12" step="1" value="10" data-out="rlKv" data-fmt="int"><span class="val" id="rlKv"></span></label>
+      <label>$\log_{10}\lambda$ <input type="range" id="rlL" min="-8" max="1" step="0.1" value="-8" data-out="rlLv" data-dp="1"><span class="val" id="rlLv"></span></label>
+      <label>Regularizer
+        <select id="rlR"><option value="ridge">Ridge ($L_2^2$)</option><option value="lasso">LASSO ($L_1$)</option></select></label>
+    </div>
+    <div class="caption" id="rlOut"></div>
+    <div class="caption">What to notice: at degree 10 with $\lambda$ near zero the curve wiggles to chase individual training
+    points — lowest training error, but validation error about twice its best value, and large coefficients. Raise $\lambda$ and the curve calms down: training
+    error rises a little, validation error falls a lot. Keep going and it <strong>underfits</strong> — both errors climb, and
+    at the far end the curve flattens toward the mean. Switch to LASSO at a moderate $\lambda$ and watch coefficients hit
+    exactly zero (grey bars). Features are standardized and the bias is unpenalized, as §2 recommends.</div>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Guided problem</span>Ridge by hand, one parameter</div>
+    <div class="g-body">
+      <p>Data: $(x, y) = (1, 2),\ (2, 4),\ (3, 7)$. Model $h(x) = \theta x$ (no bias, no features). Objective</p>
+      $$ J(\theta) = \frac{1}{3}\sum_{i=1}^{3}(\theta x^{(i)} - y^{(i)})^2 + \lambda\theta^2 . $$
+      <p>Find $\theta^\star$ as a function of $\lambda$, then evaluate at $\lambda = 0, 0.5, 1, 5$ together with the training MSE.</p>
+    </div>
+    <details class="step"><summary>Step 1 — Differentiate and set to zero</summary><div>
+      $$ J'(\theta) = \frac{2}{N}\sum_i x^{(i)}(\theta x^{(i)} - y^{(i)}) + 2\lambda\theta = 0 $$
+      $$ \Longrightarrow\quad \theta^\star = \frac{\frac{1}{N}\sum_i x^{(i)}y^{(i)}}{\frac{1}{N}\sum_i (x^{(i)})^2 + \lambda}. $$
+      <p>$J$ is a parabola in $\theta$ opening upward (the $\theta^2$ coefficient is $\frac1N\sum x^2 + \lambda &gt; 0$), so this is the minimum.</p></div></details>
+    <details class="step"><summary>Step 2 — Plug in the data</summary><div>
+      <p>$\sum xy = 2 + 8 + 21 = 31$, $\sum x^2 = 1 + 4 + 9 = 14$, $N = 3$:</p>
+      $$ \theta^\star(\lambda) = \frac{31/3}{14/3 + \lambda}. $$</div></details>
+    <details class="step"><summary>Step 3 — Evaluate</summary><div>
+      <table class="tight center">
+        <thead><tr><th>$\lambda$</th><th>$\theta^\star$</th><th>training MSE</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>2.2143</td><td>0.1190</td></tr>
+          <tr><td>0.5</td><td>2.0000</td><td>0.3333</td></tr>
+          <tr><td>1</td><td>1.8235</td><td>0.8316</td></tr>
+          <tr><td>5</td><td>1.0690</td><td>6.2406</td></tr>
+        </tbody>
+      </table></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$\lambda$ appears only in the denominator, so it <strong>shrinks $\theta^\star$ toward $0$</strong> smoothly — and training
+      error <em>must</em> rise, because $\lambda = 0$ was by definition the training-error minimizer. Regularization always
+      costs you training error; the bet is that it buys back more than that in validation error. Notice too that ridge never
+      reaches exactly $0$ for any finite $\lambda$: that's the "rarely makes anything exactly zero" row of the table.</p></div></details>
+  </div>
+
+  <h2 id="hyperparameters">4. Hyperparameters: the things ERM can't choose</h2>
+
+  <p>The lecture returns to <a href="decision-trees.html">decision trees</a> for a second example of the same problem.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 3 (reconstructed) — split again for one outlier, or stop?</div>
+    <svg id="dtSvg" viewBox="0 0 640 300" role="img" aria-label="Two classes of points separated by a split at x1 = 3.5, with one point of the other class near the top right, above a second candidate split at x2 = 4.5"></svg>
+    <div class="caption">Reconstructed from the notes' figure, which lost its points in extraction; only the split values
+    $x_1 = 3.5$ and $x_2 = 4.5$ survived. The layout of the points is illustrative.</div>
+  </div>
+
+  <p>Should the tree keep splitting until the lone point in the top right is classified correctly? <strong>For:</strong> it may
+  contain real information. <strong>Against:</strong> its label may just be noise. Training error can't settle this — the extra
+  split always lowers it.</p>
+
+  <div class="box defn"><span class="label">Definition</span>
+    <p>A <strong>hyperparameter</strong> is a choice about the model class or training procedure that ERM itself is biased on —
+    it would always choose the more complex option. The lecture's examples: <strong>tree depth</strong>, <strong>$\lambda$</strong>,
+    and <strong>polynomial degree $k$</strong>. (Learning rate and number of neural-network layers are hyperparameters too.)</p>
+  </div>
+
+  <p>The lecture's pivot: <em>what if we had some more labelled data?</em> Evaluate both trees on that other data and pick the one
+  with lower error. Data the model wasn't trained on can't be overfitted by that model — that's the whole idea of
+  cross-validation.</p>
+
+  <h2 id="cross-validation">5. Cross-validation</h2>
+
+  <h3>Holdout cross-validation</h3>
+  <div class="box defn"><span class="label">Algorithm — holdout CV</span>
+    <ol>
+      <li>Randomly split the training samples into a <strong>training set</strong> and a <strong>validation set</strong> (typically <strong>80 : 20</strong>).</li>
+      <li>For each candidate value of the hyperparameter(s): train on the training set; compute the average error on the validation set.</li>
+      <li>Choose the value with the lowest validation error.</li>
+      <li><strong>Retrain</strong> the model with the chosen value on the <strong>entire</strong> data.</li>
+    </ol>
+  </div>
+
+  <p><strong>Problem:</strong> with few samples, the validation set is tiny, and the score depends heavily on <em>which</em> points
+  happened to land in it. Re-split and you might choose a different $k$. That's <strong>high variance</strong>.</p>
+
+  <h3>$k$-fold cross-validation</h3>
+  <div class="box defn"><span class="label">Algorithm — $k$-fold CV</span>
+    <p>Randomly partition the training data into $k$ equal-sized <strong>folds</strong> $F_1, \dots, F_k$. For each candidate
+    hyperparameter value:</p>
+    <ol>
+      <li>For each fold $i = 1, \dots, k$: train on the other $k-1$ folds $\bigcup_{j\ne i}F_j$; compute the error $\text{error}_i$ on $F_i$.</li>
+      <li>Cross-validation error $= \frac{1}{k}\sum_{i=1}^{k}\text{error}_i$.</li>
+    </ol>
+    <p>Choose the value with the lowest CV error, then <strong>retrain on the full dataset</strong> with it.</p>
+  </div>
+
+  <p>Every point is used for validation exactly once, and the $k$ estimates are averaged, so the choice is far less at the
+  mercy of one lucky split. Common choices: $k = 5$ or $k = 10$. The extreme $k = N$ — each fold is a single point — is
+  <strong>leave-one-out cross-validation (LOOCV)</strong>.</p>
+
+  <div class="box warn"><span class="label">Name clash</span>
+    <p>This $k$ (number of folds) has nothing to do with the polynomial degree $k$ from §1. The lecture reuses the letter. In the
+    figure below they're labelled "folds" and "degree".</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 4 — choose the polynomial degree by $k$-fold CV</div>
+    <svg id="cvFolds" viewBox="0 0 640 70" role="img" aria-label="Strip showing which fold each data point belongs to"></svg>
+    <svg id="cvCurve" viewBox="0 0 640 260" role="img" aria-label="Training error and cross-validation error against polynomial degree"></svg>
+    <div class="controls">
+      <label>Folds <input type="range" id="cvK" min="2" max="24" step="1" value="5" data-out="cvKv" data-fmt="int"><span class="val" id="cvKv"></span></label>
+      <button class="btn" id="cvShuffle">Reshuffle folds</button>
+      <button class="btn" id="cvHold">Holdout 80:20 instead</button>
+    </div>
+    <div class="caption" id="cvOut"></div>
+    <div class="caption">24 points from a curved function plus noise; unregularized polynomial fits of degree 1–10. What to
+    notice: training error (orange) only goes down with degree — it would always pick the biggest model. CV error (teal) is
+    U-shaped, and its minimum is the choice. Press "Reshuffle" a few times: with 5 or more folds the chosen degree is fairly
+    stable; with "Holdout 80:20" it jumps around much more from split to split — the high variance the lecture warns about.
+    Slide folds to 24 for LOOCV (reshuffling then changes nothing: there's only one way to leave one out).</div>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>How many models do you train?</div>
+    <div class="g-body"><p>$N = 100$ samples; you're choosing $\lambda$ from 4 candidate values. How many times do you train a
+    model with (a) 5-fold CV, (b) LOOCV? Include the final retrain.</p></div>
+    <details class="step"><summary>Step 1 — Count per candidate</summary><div>
+      <p>$k$-fold trains once per fold per candidate: $4 \times k$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>(a) $4 \times 5 + 1 = 21$. (b) $4 \times 100 + 1 = 401$. LOOCV uses the data most thoroughly but costs $N$ trainings
+      per candidate — fine for linear regression, painful for a large neural network. That cost is why $5$ and $10$ are the
+      defaults.</p></div></details>
+  </div>
+
+  <div class="quiz" data-answer="1">
+    <div class="q">After 5-fold CV picks $\lambda = 0.1$, what do you deploy?</div>
+    <button class="opt">The model from whichever fold had the lowest validation error.</button>
+    <button class="opt">A model retrained on all the data with $\lambda = 0.1$.</button>
+    <button class="opt">The average of the five fold models' parameters.</button>
+    <button class="opt">A model trained on the validation folds only.</button>
+    <div class="why"><strong>Why:</strong> CV chooses the <em>hyperparameter</em>, not the parameters. The fold models were each
+    trained on only 80% of the data; once $\lambda$ is chosen you retrain on 100%. Picking the best fold (A) just rewards the
+    luckiest split.</div>
+  </div>
+
+  <div class="quiz" data-answer="3">
+    <div class="q">You tune $\lambda$ with CV, then report the CV error of the chosen $\lambda$ as your model's expected error on new data. What's wrong?</div>
+    <button class="opt">Nothing — that's what CV error is for.</button>
+    <button class="opt">You should report training error instead.</button>
+    <button class="opt">CV error is always higher than test error.</button>
+    <button class="opt">It's optimistically biased: you picked the $\lambda$ that happened to look best on those folds.</button>
+    <div class="why"><strong>Why:</strong> choosing the minimum of several noisy estimates selects in favour of a lucky one.
+    <span class="pill">beyond syllabus</span> The clean fix is a separate <em>test</em> set that is never touched during
+    model selection — or nested CV.</div>
+  </div>
+
+  <h2 id="feature-learning">6. Feature engineering vs feature learning</h2>
+
+  <p>The lecture ends with a distinction it will revisit — and which is the bridge to the next chapter.</p>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Feature engineering</th><th>Feature learning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Humans</strong> decide what features may be useful ($x^2$, $\log x$, …)</td><td>Useful features / representations are <strong>discovered automatically</strong> from data</td></tr>
+      <tr><td>Humans implement the feature-extraction algorithm</td><td>Typically needs <strong>large datasets</strong></td></tr>
+      <tr><td>Higher <strong>interpretability</strong></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Everything so far in this course has been feature engineering: <em>you</em> chose $\phi$. A <a href="neural-networks.html">neural
+  network</a> learns its own $\phi$ — its hidden layers are a feature map with trainable parameters — which is exactly why it needs
+  more data and is harder to interpret.</p>
+
+  <h2 id="recap">7. Recap</h2>
+  <ol>
+    <li>Richer model classes ($\phi$, higher degree, deeper trees) always win on training error, so ERM alone overfits.</li>
+    <li><strong>Regularized ERM</strong>: $\arg\min_\theta \frac1N\sum_i(\theta^\top\phi(x^{(i)}) - y^{(i)})^2 + \lambda r(\theta)$. A complex model must lower the risk by more than its penalty.</li>
+    <li>$L_0$ (count non-zeros) — sparse but hard to optimize; <strong>LASSO</strong> $\sum|\theta_j|$ — sparse, tractable; <strong>ridge</strong> $\sum\theta_j^2$ — shrinks, rarely zeros.</li>
+    <li>Don't penalize the bias; standardize features first.</li>
+    <li><strong>Hyperparameters</strong> (depth, $\lambda$, degree) are chosen on held-out data, not training data.</li>
+    <li><strong>Holdout</strong> (80:20) is simple but high-variance with little data; <strong>$k$-fold</strong> ($k = 5, 10$) averages $k$ estimates; <strong>LOOCV</strong> is $k = N$. Always retrain on all data with the chosen value.</li>
+    <li>Feature engineering: humans choose features, interpretable. Feature learning: learned from (lots of) data.</li>
+  </ol>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  const T = (svg, x, y, s, a = {}) => { const t = SG.el("text", Object.assign({x, y, "text-anchor":"middle", fill:"var(--ink)", "font-size":12}, a)); t.textContent = s; svg.appendChild(t); return t; };
+  // seeded RNG + gaussian
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  function gauss(r) { const u = Math.max(1e-12, r()), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  const truth = x => 1.6 * x * x - 0.6 * x - 0.3;
+
+  // linear solve (Gaussian elimination with partial pivoting)
+  function solve(A, b) {
+    const n = b.length, M = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      [M[c], M[p]] = [M[p], M[c]];
+      const d = M[c][c] || 1e-12;
+      for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c] / d; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+    }
+    return M.map((r, i) => r[n] / (r[i] || 1e-12));
+  }
+  // fit polynomial of degree k with regularizer; returns predictor + coefficients (standardized scale)
+  function fitPoly(xs, ys, k, lam, reg) {
+    const N = xs.length, P = xs.map(x => { const r = []; for (let j = 1; j <= k; j++) r.push(Math.pow(x, j)); return r; });
+    const mu = [], sd = [];
+    for (let j = 0; j < k; j++) { const col = P.map(r => r[j]); const m = col.reduce((a, v) => a + v, 0) / N; const s = Math.sqrt(col.reduce((a, v) => a + (v - m) ** 2, 0) / N) || 1; mu.push(m); sd.push(s); }
+    const Z = P.map(r => r.map((v, j) => (v - mu[j]) / sd[j]));
+    const ym = ys.reduce((a, v) => a + v, 0) / N, yc = ys.map(v => v - ym);
+    let th;
+    if (reg === "ridge" || lam === 0) {
+      const A = [], b = [];
+      for (let a = 0; a < k; a++) { A.push([]); b.push(Z.reduce((s, r, i) => s + r[a] * yc[i], 0) / N); for (let c = 0; c < k; c++) A[a].push(Z.reduce((s, r) => s + r[a] * r[c], 0) / N + (a === c ? lam + 1e-10 : 0)); }
+      th = solve(A, b);
+    } else {
+      th = Array(k).fill(0);
+      for (let it = 0; it < 400; it++) for (let j = 0; j < k; j++) {
+        let rho = 0; for (let i = 0; i < N; i++) { let pred = 0; for (let m = 0; m < k; m++) if (m !== j) pred += Z[i][m] * th[m]; rho += Z[i][j] * (yc[i] - pred); }
+        rho /= N; const t = lam / 2; th[j] = rho > t ? rho - t : rho < -t ? rho + t : 0;
+      }
+    }
+    const f = x => { let v = ym; for (let j = 0; j < k; j++) v += th[j] * (Math.pow(x, j + 1) - mu[j]) / sd[j]; return v; };
+    return { f, th };
+  }
+  const mse = (f, xs, ys) => xs.reduce((a, x, i) => a + (f(x) - ys[i]) ** 2, 0) / xs.length;
+
+  // ---------- Figure 2: regularization lab ----------
+  (function () {
+    const r = rng(7), trX = [], trY = [], vaX = [], vaY = [];
+    for (let i = 0; i < 15; i++) { const x = -1 + 2 * (i + 0.5) / 15 + (r() - 0.5) * 0.08; trX.push(x); trY.push(truth(x) + 0.35 * gauss(r)); }
+    for (let i = 0; i < 15; i++) { const x = -1 + 2 * r(); vaX.push(x); vaY.push(truth(x) + 0.35 * gauss(r)); }
+    const fit = document.getElementById("rlFit"), coef = document.getElementById("rlCoef"), K = document.getElementById("rlK"), L = document.getElementById("rlL"), R = document.getElementById("rlR"), out = document.getElementById("rlOut");
+    function draw() {
+      const k = +K.value, lam = Math.pow(10, +L.value), m = fitPoly(trX, trY, k, lam, R.value);
+      fit.innerHTML = ""; coef.innerHTML = "";
+      const X = x => 40 + (x + 1.05) / 2.1 * 580, Y = y => 140 - y * 55;
+      fit.appendChild(SG.el("line", {x1:40, y1:Y(0), x2:620, y2:Y(0), stroke:"var(--line-2)"}));
+      let d = "", dt = ""; for (let i = 0; i <= 300; i++) { const x = -1.02 + 2.04 * i / 300; const v = Math.max(-2.4, Math.min(2.4, m.f(x))); d += (i ? "L" : "M") + X(x) + "," + Y(v); dt += (i ? "L" : "M") + X(x) + "," + Y(truth(x)); }
+      fit.appendChild(SG.el("path", {d:dt, fill:"none", stroke:"var(--ink-mute)", "stroke-dasharray":"5 4", "stroke-width":1.5}));
+      fit.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent-3)", "stroke-width":3}));
+      trX.forEach((x, i) => fit.appendChild(SG.el("circle", {cx:X(x), cy:Y(trY[i]), r:5, fill:"var(--accent)"})));
+      vaX.forEach((x, i) => fit.appendChild(SG.el("circle", {cx:X(x), cy:Y(vaY[i]), r:5, fill:"none", stroke:"var(--accent-2)", "stroke-width":2})));
+      T(fit, 560, 20, "dashed = true function", {fill:"var(--ink-mute)"});
+      const mx = Math.max(1e-9, ...m.th.map(Math.abs)), bw = 580 / 12;
+      coef.appendChild(SG.el("line", {x1:40, y1:75, x2:620, y2:75, stroke:"var(--ink-mute)"}));
+      m.th.forEach((t, j) => {
+        const h = Math.abs(t) / mx * 60, zero = Math.abs(t) < 1e-8;
+        coef.appendChild(SG.el("rect", {x:40 + j * bw + 6, y: t >= 0 ? 75 - h : 75, width:bw - 12, height:Math.max(zero ? 2 : 1, h), fill: zero ? "var(--ink-mute)" : "var(--accent-3)"}));
+        T(coef, 40 + j * bw + bw / 2, 145, "θ" + (j + 1), {fill:"var(--ink-mute)", "font-size":11});
+      });
+      T(coef, 330, 12, `largest |θ| = ${mx.toExponential(2)} (bars scaled to it)`, {fill:"var(--ink-mute)", "font-size":11});
+      const tr = mse(m.f, trX, trY), va = mse(m.f, vaX, vaY), nz = m.th.filter(t => Math.abs(t) >= 1e-8).length;
+      out.innerHTML = `λ = ${lam.toExponential(1)} · training MSE <strong>${tr.toFixed(3)}</strong> · validation MSE <strong>${va.toFixed(3)}</strong> · non-zero coefficients: ${nz} of ${k}`;
+    }
+    [K, L, R].forEach(e => { e.addEventListener("input", draw); e.addEventListener("change", draw); });
+    document.addEventListener("themechange", draw); draw();
+  })();
+
+  // ---------- Figure 1: L1 vs L2 geometry ----------
+  (function () {
+    const svg = document.getElementById("geoSvg"), A = document.getElementById("geoA"), B = document.getElementById("geoB"), Tt = document.getElementById("geoT"), out = document.getElementById("geoOut");
+    const Q = (p, c) => { const dx = p[0] - c[0], dy = p[1] - c[1]; return 1.0 * dx * dx + 0.6 * dx * dy + 2.2 * dy * dy; };
+    function panel(ox, kind, c, t) {
+      const S = 45, X = u => ox + 150 + u * S, Y = v => 160 - v * S;
+      svg.appendChild(SG.el("line", {x1:X(-3.2), y1:Y(0), x2:X(3.2), y2:Y(0), stroke:"var(--line-2)"}));
+      svg.appendChild(SG.el("line", {x1:X(0), y1:Y(-3.2), x2:X(0), y2:Y(3.2), stroke:"var(--line-2)"}));
+      if (kind === "l1") svg.appendChild(SG.el("polygon", {points:[[t,0],[0,t],[-t,0],[0,-t]].map(p => X(p[0]) + "," + Y(p[1])).join(" "), fill:"var(--accent-2)", "fill-opacity":.25, stroke:"var(--accent-2)", "stroke-width":2}));
+      else svg.appendChild(SG.el("circle", {cx:X(0), cy:Y(0), r:t * S, fill:"var(--accent-2)", "fill-opacity":.25, stroke:"var(--accent-2)", "stroke-width":2}));
+      // solution: if center inside region, it's the center; else scan boundary
+      const inside = kind === "l1" ? Math.abs(c[0]) + Math.abs(c[1]) <= t : Math.hypot(c[0], c[1]) <= t;
+      let best = c;
+      if (!inside) { let bv = Infinity; for (let i = 0; i < 4000; i++) { const a = i / 4000 * 2 * Math.PI; let p; if (kind === "l2") p = [t * Math.cos(a), t * Math.sin(a)]; else { const u = Math.cos(a), v = Math.sin(a), s = t / (Math.abs(u) + Math.abs(v)); p = [u * s, v * s]; } const q = Q(p, c); if (q < bv) { bv = q; best = p; } } }
+      // contours through best
+      const lev = Q(best, c);
+      [lev, lev * 2.2, lev * 4.5].forEach((L, n) => { if (L <= 0) return; let d = ""; for (let i = 0; i <= 120; i++) { const a = i / 120 * 2 * Math.PI, u = Math.cos(a), v = Math.sin(a); const qq = 1.0 * u * u + 0.6 * u * v + 2.2 * v * v, rr = Math.sqrt(L / qq); d += (i ? "L" : "M") + X(c[0] + rr * u) + "," + Y(c[1] + rr * v); } svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width": n ? 1 : 2, opacity: n ? .5 : 1})); });
+      svg.appendChild(SG.el("circle", {cx:X(c[0]), cy:Y(c[1]), r:4, fill:"var(--accent)"}));
+      svg.appendChild(SG.el("circle", {cx:X(best[0]), cy:Y(best[1]), r:7, fill:"var(--gold)", stroke:"var(--ink)"}));
+      T(svg, ox + 150, 312, kind === "l1" ? "LASSO: |θ₁| + |θ₂| ≤ t" : "Ridge: θ₁² + θ₂² ≤ t²", {"font-weight":700});
+      return best;
+    }
+    function draw() {
+      svg.innerHTML = ""; const c = [+A.value, +B.value], t = +Tt.value;
+      const b1 = panel(10, "l1", c, t), b2 = panel(330, "l2", c, t);
+      const zs = b => b.map(v => Math.abs(v) < 0.02 ? "0" : v.toFixed(2)).join(", ");
+      out.innerHTML = `LASSO solution (gold): (${zs(b1)})${b1.some(v => Math.abs(v) < 0.02) ? " — <strong>a coordinate is exactly zero</strong>" : ""} · Ridge solution: (${zs(b2)})${b2.some(v => Math.abs(v) < 0.02) ? " — a coordinate is zero" : ""}`;
+    }
+    [A, B, Tt].forEach(e => e.addEventListener("input", draw)); draw();
+  })();
+
+  // ---------- Figure 3: decision-tree outlier (static, reconstructed) ----------
+  (function () {
+    const svg = document.getElementById("dtSvg");
+    const X = v => 60 + v / 6 * 540, Y = v => 270 - v / 6 * 250;
+    svg.appendChild(SG.el("line", {x1:X(0), y1:Y(0), x2:X(6), y2:Y(0), stroke:"var(--ink-mute)"})); svg.appendChild(SG.el("line", {x1:X(0), y1:Y(0), x2:X(0), y2:Y(6), stroke:"var(--ink-mute)"}));
+    T(svg, X(6) - 10, Y(0) + 20, "x₁", {fill:"var(--ink-soft)"}); T(svg, X(0) - 16, Y(6) + 10, "x₂", {fill:"var(--ink-soft)"});
+    svg.appendChild(SG.el("line", {x1:X(3.5), y1:Y(0), x2:X(3.5), y2:Y(6), stroke:"var(--accent-3)", "stroke-width":2.5}));
+    svg.appendChild(SG.el("line", {x1:X(3.5), y1:Y(4.5), x2:X(6), y2:Y(4.5), stroke:"var(--accent-3)", "stroke-width":2.5, "stroke-dasharray":"7 5"}));
+    T(svg, X(3.5), Y(6) - 4, "split 1: x₁ = 3.5", {fill:"var(--accent-3)"}); T(svg, X(5.1), Y(4.5) - 8, "split 2?: x₂ = 4.5", {fill:"var(--accent-3)"});
+    const A = [[0.6,1.2],[1.1,3.4],[1.8,0.8],[2.2,2.6],[2.9,4.1],[0.9,5.0],[2.6,1.6],[1.5,4.6]];
+    const B = [[4.1,0.9],[4.6,2.2],[5.3,1.4],[4.0,3.3],[5.5,3.6],[4.8,4.0],[5.2,0.5]];
+    A.forEach(p => svg.appendChild(SG.el("circle", {cx:X(p[0]), cy:Y(p[1]), r:7, fill:"var(--accent-2)"})));
+    B.forEach(p => svg.appendChild(SG.el("rect", {x:X(p[0]) - 6, y:Y(p[1]) - 6, width:12, height:12, fill:"var(--accent)"})));
+    svg.appendChild(SG.el("circle", {cx:X(5.3), cy:Y(5.3), r:7, fill:"var(--accent-2)", stroke:"var(--rose)", "stroke-width":3}));
+    T(svg, X(5.3) - 60, Y(5.3) + 4, "outlier →", {fill:"var(--rose)"});
+  })();
+
+  // ---------- Figure 4: k-fold CV ----------
+  (function () {
+    const r0 = rng(11), xs = [], ys = [];
+    for (let i = 0; i < 24; i++) { const x = -1 + 2 * r0(); xs.push(x); ys.push(truth(x) + 0.4 * gauss(r0)); }
+    const folds = document.getElementById("cvFolds"), curve = document.getElementById("cvCurve"), Kf = document.getElementById("cvK"), out = document.getElementById("cvOut");
+    let seed = 1, holdout = false;
+    const cols = ["--accent", "--accent-2", "--accent-3", "--gold", "--rose"];
+    function assign() {
+      const r = rng(seed * 977 + 3), idx = xs.map((_, i) => i);
+      for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+      const k = holdout ? 5 : +Kf.value, f = Array(xs.length);
+      idx.forEach((p, n) => f[p] = n % k);
+      return { f, k };
+    }
+    function draw() {
+      const { f, k } = assign(), D = 10, tr = [], cv = [];
+      for (let d = 1; d <= D; d++) {
+        tr.push(mse(fitPoly(xs, ys, d, 0, "ridge").f, xs, ys));
+        const useFolds = holdout ? [0] : [...Array(k).keys()];
+        let e = 0;
+        useFolds.forEach(i => {
+          const tX = [], tY = [], vX = [], vY = [];
+          xs.forEach((x, n) => (f[n] === i ? (vX.push(x), vY.push(ys[n])) : (tX.push(x), tY.push(ys[n]))));
+          e += mse(fitPoly(tX, tY, d, 0, "ridge").f, vX, vY);
+        });
+        cv.push(e / useFolds.length);
+      }
+      // fold strip
+      folds.innerHTML = "";
+      const order = xs.map((x, i) => i).sort((a, b) => xs[a] - xs[b]);
+      order.forEach((p, n) => { const fi = f[p]; const isVal = holdout && fi === 0; folds.appendChild(SG.el("rect", {x:40 + n * 24, y:18, width:20, height:26, rx:4, fill: holdout ? (isVal ? "var(--accent-2)" : "var(--accent)") : `var(${cols[fi % 5]})`, opacity: holdout || fi < 5 ? 0.9 : 0.5})); T(folds, 40 + n * 24 + 10, 36, holdout ? (isVal ? "V" : "T") : String(fi + 1), {"font-size":10}); });
+      T(folds, 320, 62, holdout ? "one split: T = train (80%), V = validation (20%)" : `each box is a point (sorted by x); number = its fold (${k} folds)`, {fill:"var(--ink-mute)", "font-size":11});
+      // curves
+      curve.innerHTML = "";
+      const mxv = Math.min(2.5, Math.max(...cv, ...tr)), X = d => 60 + (d - 1) / (D - 1) * 540, Y = v => 225 - Math.min(v, mxv) / mxv * 200;
+      curve.appendChild(SG.el("line", {x1:60, y1:225, x2:600, y2:225, stroke:"var(--ink-mute)"}));
+      for (let d = 1; d <= D; d++) T(curve, X(d), 244, String(d), {fill:"var(--ink-mute)", "font-size":11});
+      T(curve, 330, 258, "polynomial degree", {fill:"var(--ink-soft)", "font-size":11});
+      [[tr, "--accent", "training error"], [cv, "--accent-2", holdout ? "holdout error" : "CV error"]].forEach(([arr, c, lab], n) => {
+        curve.appendChild(SG.el("path", {d: arr.map((v, i) => (i ? "L" : "M") + X(i + 1) + "," + Y(v)).join(""), fill:"none", stroke:`var(${c})`, "stroke-width":3}));
+        arr.forEach((v, i) => curve.appendChild(SG.el("circle", {cx:X(i + 1), cy:Y(v), r:4, fill:`var(${c})`})));
+        T(curve, 520, 20 + n * 16, lab, {fill:`var(${c})`, "text-anchor":"start"});
+      });
+      const best = cv.indexOf(Math.min(...cv)) + 1;
+      curve.appendChild(SG.el("circle", {cx:X(best), cy:Y(cv[best - 1]), r:9, fill:"none", stroke:"var(--gold)", "stroke-width":3}));
+      out.innerHTML = `${holdout ? "Holdout 80:20" : (k === xs.length ? "LOOCV (" + k + " folds)" : k + "-fold CV")} chooses <strong>degree ${best}</strong> (error ${cv[best - 1].toFixed(3)}). Training error alone would choose degree ${tr.indexOf(Math.min(...tr)) + 1}.`;
+      document.getElementById("cvHold").textContent = holdout ? "Back to k-fold" : "Holdout 80:20 instead";
+    }
+    Kf.addEventListener("input", () => { holdout = false; draw(); });
+    document.getElementById("cvShuffle").onclick = () => { seed++; draw(); };
+    document.getElementById("cvHold").onclick = () => { holdout = !holdout; draw(); };
+    document.addEventListener("themechange", draw); draw();
+  })();
+});
+</script>
+</body>
+</html>

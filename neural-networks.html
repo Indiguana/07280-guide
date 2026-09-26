@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neural Networks · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="neural-networks">
+<main>
+
+  <div class="eyebrow">Part II · Chapter 13</div>
+  <h1>Neural networks</h1>
+  <p class="subtitle">You already know one neuron — it's logistic regression. This chapter stacks neurons into a network,
+  counts its parameters, trains a three-neuron network by hand with the chain rule, and builds the multivariate chain
+  rule that everything deeper depends on.</p>
+
+  <div data-toc></div>
+
+  <div class="box warn"><span class="label">Fixes to the pre-reading</span>
+    <p>The Neural Networks pre-reading has a few slips; this chapter uses the corrected versions and flags each where it comes up:</p>
+    <ul>
+      <li>A layer of $K$ neurons on $M$ inputs has $KM + K = K(M+1)$ parameters — the notes write "$KM + M$".</li>
+      <li>The 3-3-2-1 example sums to <strong>23</strong> ($12 + 8 + 3$); the notes' line says "Total: 21", though their own summary table says 23.</li>
+      <li>The three-neuron network's parameter list omits $w_{1,2}$ (it still correctly says 7 parameters).</li>
+      <li>In the logistic-regression derivative table, the bias line simplifies to $-\frac1N\sum(1-\hat y)$, which is only the $y = 1$ case; the general answer is $-\frac1N\sum(y - \hat y)$.</li>
+      <li>§2.2.3 ("Chain rule with multiple inputs") is cut off after its first paragraph.</li>
+    </ul>
+  </div>
+
+  <h2 id="old-friends">1. Linear and logistic regression, redrawn as networks</h2>
+
+  <p>Neural-network diagrams look intimidating, but the notes' first move is to redraw two models you already know in
+  network notation. Inputs on the left, a <strong>$\Sigma$ node</strong> that computes a weighted sum plus bias, then (for
+  logistic regression) a nonlinearity $g$, then the loss $\ell$ comparing the output $\hat y$ with the label $y$.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 1 — the same two models from chapters 8 and 11, as network diagrams</div>
+    <svg id="lrSvg" viewBox="0 0 640 200" role="img" aria-label="Linear regression: inputs x1, x2 with weights into a sum node then the loss. Logistic regression: the same with a g node after the sum."></svg>
+    <div class="caption">What to notice: the only structural difference is the $g$ box. Everything a neural network adds is
+    "more of these boxes, wired together".</div>
+  </div>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th></th><th>Linear regression</th><th>Logistic regression</th></tr></thead>
+    <tbody>
+      <tr><td>Model</td><td>$\hat y = b + \sum_j w_j x_j$</td><td>$\hat y = g_{\text{logistic}}\bigl(b + \sum_j w_j x_j\bigr)$</td></tr>
+      <tr><td>Parameters</td><td colspan="2" class="center">$w_1, w_2, b$</td></tr>
+      <tr><td>Loss</td><td>squared error $(y - \hat y)^2$</td><td>cross-entropy</td></tr>
+      <tr><td>Objective</td><td colspan="2" class="center">$J(\theta) = \frac1N\sum_{i=1}^N \ell(y^{(i)}, \hat y^{(i)})$</td></tr>
+      <tr><td>$\partial J/\partial w_j$ via chain rule</td><td>$\frac1N\sum_i \frac{\partial\ell}{\partial\hat y}\frac{\partial\hat y}{\partial w_j} = -\frac2N\sum_i (y^{(i)} - \hat y^{(i)})x_j^{(i)}$</td><td>$\frac1N\sum_i \frac{\partial\ell}{\partial\hat y}\frac{\partial\hat y}{\partial z}\frac{\partial z}{\partial w_j} = -\frac1N\sum_i (y^{(i)} - \hat y^{(i)})x_j^{(i)}$</td></tr>
+      <tr><td>$\partial J/\partial b$</td><td>$-\frac2N\sum_i (y^{(i)} - \hat y^{(i)})$</td><td>$-\frac1N\sum_i (y^{(i)} - \hat y^{(i)})$</td></tr>
+      <tr><td>SGD update</td><td colspan="2" class="center">$w_j \leftarrow w_j - \alpha\,\frac{\partial J^{(i)}}{\partial w_j}, \qquad b \leftarrow b - \alpha\,\frac{\partial J^{(i)}}{\partial b}$</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The point of the table is the <strong>derivative row</strong>. Each derivative is a product of local derivatives, one per
+  box the signal passes through — $\frac{\partial\ell}{\partial\hat y}$, then $\frac{\partial\hat y}{\partial z}$, then
+  $\frac{\partial z}{\partial w_j}$. The logistic middle factor is $\sigma'(z) = \hat y(1-\hat y)$, and it cancels against
+  the cross-entropy's $\frac{1}{\hat y}$-type terms exactly as in <a href="logistic-regression.html">chapter 11 §7.3</a>. A
+  neural network's gradient is the same idea with longer products.</p>
+
+  <h2 id="neuron">2. The neuron and its activation function</h2>
+
+  <div class="box defn"><span class="label">Definition</span>
+    <p>A <strong>neuron</strong> is a linear function followed by an <strong>activation function</strong>:</p>
+    $$ z = b + \sum_j w_j x_j, \qquad a = g(z). $$
+    <p>The activation $g$ is (almost) any <strong>nonlinear</strong> function. <strong>Logistic regression is a neuron</strong>
+    with $g = \sigma$.</p>
+  </div>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Activation</th><th>$g(z)$</th><th>$g'(z)$</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Logistic (sigmoid)</td><td>$\frac{1}{1+e^{-z}}$</td><td>$\sigma(z)(1-\sigma(z))$</td><td>Output in $(0,1)$; saturates at both ends</td></tr>
+      <tr><td><strong>ReLU</strong> (rectified linear unit)</td><td>$\max(0, z)$</td><td>$1$ if $z &gt; 0$, else $0$</td><td>"Takes the input and clamps negative values to zero." The modern default</td></tr>
+      <tr><td>Threshold (historic)</td><td>$\1\{z \ge 0\}$</td><td>$0$ almost everywhere</td><td>The original <strong>perceptron</strong>; untrainable by gradient descent</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 2 — one neuron, one input: shape the output</div>
+    <svg id="actSvg" viewBox="0 0 640 260" role="img" aria-label="The output of a single neuron as a function of its input, with its derivative"></svg>
+    <div class="controls">
+      <label>Activation <select id="actG"><option value="relu">ReLU</option><option value="sig">sigmoid</option><option value="step">threshold</option><option value="lin">none (identity)</option></select></label>
+      <label>$w$ <input type="range" id="actW" min="-3" max="3" step="0.1" value="1" data-out="actWv" data-dp="1"><span class="val" id="actWv"></span></label>
+      <label>$b$ <input type="range" id="actB" min="-3" max="3" step="0.1" value="0" data-out="actBv" data-dp="1"><span class="val" id="actBv"></span></label>
+    </div>
+    <div class="caption">Solid = $a = g(wx + b)$; dashed = $\frac{da}{dx}$. What to notice: $b$ slides the "kink" to $x = -b/w$;
+    the sign of $w$ decides which side is active. A ReLU neuron is a hinge you can place anywhere and point either way —
+    the building block §3 uses. Pick "threshold" and the derivative is flat zero: no gradient to learn from. Pick "none"
+    and the neuron is just linear regression.</div>
+  </div>
+
+  <div class="box key"><span class="label">Why the activation must be nonlinear</span>
+    <p>Stack two neurons with <em>no</em> activation: $w_2(w_1 x + b_1) + b_2 = (w_2w_1)x + (w_2b_1 + b_2)$ — still a line. Any
+    stack of linear layers collapses into a single linear layer, so depth buys nothing. The nonlinearity is what lets a network
+    represent curves.</p>
+  </div>
+
+  <h2 id="three-neurons">3. A three-neuron network</h2>
+
+  <p>The notes' example: <strong>predict traffic volume from time of day</strong>. The data rises through the morning and falls
+  through the evening, so a line in $x_1$ alone won't do. You've seen one fix — engineer $x_2 = x_1^2$ and fit a quadratic with
+  linear regression (<a href="feature-engineering.html">chapter 10</a>). Here's the other: two ReLU neurons, one to model the
+  morning's upward trend and one the evening's downward trend, and a third that combines them.</p>
+
+  <div class="grid2">
+    <div class="box example"><span class="label">Linear regression + quadratic feature</span>
+      $$ \hat y = b + w_1 x_1 + w_2 x_1^2 $$
+      <p>$w_1, w_2, b$ — <strong>3 parameters</strong>. You chose the feature $x_1^2$.</p></div>
+    <div class="box example"><span class="label">Three-neuron network</span>
+      $$ a_{1,j} = g_{\text{ReLU}}(b_{1,j} + w_{1,j}x_1),\quad j = 1, 2 $$
+      $$ \hat y = b_{2,1} + w_{2,1}a_{1,1} + w_{2,2}a_{1,2} $$
+      <p>$w_{1,1}, b_{1,1}, w_{1,2}, b_{1,2}, w_{2,1}, w_{2,2}, b_{2,1}$ — <strong>7 parameters</strong>. The network learns its own features $a_{1,1}, a_{1,2}$.</p></div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 3 — train the three-neuron network (the centrepiece)</div>
+    <svg id="tnSvg" viewBox="0 0 640 300" role="img" aria-label="Traffic volume data against hour of day with the network's prediction and each hidden neuron's contribution"></svg>
+    <div class="controls">
+      <button class="btn primary" id="tnTrain">Train 3000 GD steps</button>
+      <button class="btn" id="tnStep">10 steps</button>
+      <button class="btn" id="tnRand">New random start</button>
+      <label>learning rate $\alpha$ <input type="range" id="tnLR" min="0.01" max="1.5" step="0.01" value="0.1" data-out="tnLRv" data-dp="2"><span class="val" id="tnLRv"></span></label>
+      <label><input type="checkbox" id="tnQuad" checked> show quadratic regression</label>
+    </div>
+    <div class="caption" id="tnOut" style="font-family:var(--mono)"></div>
+    <div class="caption">Data is synthetic (30 hours, rising 5–9 am, then a slow decline), with hour rescaled to $x_1 = (h - 14)/4.5$.
+    Violet = network output; the dashed curves are the two hidden neurons' contributions $w_{2,j}a_{1,j}$ — each is a hinge.
+    Grey = the quadratic-feature linear regression, fitted in closed form. What to notice: (1) the network's output is two
+    hinges plus a constant — it can bend in exactly two places, which is why it can put the corner at 9 am while the
+    parabola can't. (2) Press "New random start" repeatedly and train each time: the final loss <strong>depends on where
+    you start</strong>. Some starts end with a neuron "dead" (its $z$ is negative on every data point, so ReLU passes zero
+    gradient and it never recovers). Unlike logistic regression, this objective is <strong>not convex</strong>. (3) Push
+    $\alpha$ toward 1.5 and training diverges.</div>
+  </div>
+
+  <p>In the code that drives Figure 3, starts #1–#20 (the one shown on load plus the next 19 presses of "New random start"),
+  each trained 3000 steps at $\alpha = 0.1$, ended with MSE ranging from $0.0018$ to $0.0315$; 8 of the 20 finished above $0.02$,
+  most of them with a dead neuron. The good fits all put one hinge at about 9 am. The quadratic regression's
+  MSE is $0.0090$ — and it is the same every time, because its objective is convex with a closed-form solution.</p>
+
+  <h3>The derivatives, by the chain rule</h3>
+  <p>Use squared error and one training point ($N = 1$), so $J = (y - \hat y)^2$ and $\frac{\partial J}{\partial\hat y} = -2(y - \hat y)$.
+  Follow each parameter's path to the output and multiply the local derivatives along it:</p>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Parameter</th><th>Chain</th><th>Evaluates to</th></tr></thead>
+    <tbody>
+      <tr><td>$b_{2,1}$</td><td>$\frac{\partial J}{\partial\hat y}\frac{\partial\hat y}{\partial b_{2,1}}$</td><td>$-2(y-\hat y)\cdot 1$</td></tr>
+      <tr><td>$w_{2,j}$</td><td>$\frac{\partial J}{\partial\hat y}\frac{\partial\hat y}{\partial w_{2,j}}$</td><td>$-2(y-\hat y)\cdot a_{1,j}$</td></tr>
+      <tr><td>$b_{1,j}$</td><td>$\frac{\partial J}{\partial\hat y}\frac{\partial\hat y}{\partial a_{1,j}}\frac{\partial a_{1,j}}{\partial z_{1,j}}\frac{\partial z_{1,j}}{\partial b_{1,j}}$</td><td>$-2(y-\hat y)\cdot w_{2,j}\cdot \1\{z_{1,j} &gt; 0\}\cdot 1$</td></tr>
+      <tr><td>$w_{1,j}$</td><td>$\frac{\partial J}{\partial\hat y}\frac{\partial\hat y}{\partial a_{1,j}}\frac{\partial a_{1,j}}{\partial z_{1,j}}\frac{\partial z_{1,j}}{\partial w_{1,j}}$</td><td>$-2(y-\hat y)\cdot w_{2,j}\cdot \1\{z_{1,j} &gt; 0\}\cdot x_1$</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Every update is then $\text{param} \leftarrow \text{param} - \alpha\,\frac{\partial J}{\partial\,\text{param}}$ — the same SGD rule as always,
+  just applied to 7 parameters.</p>
+
+  <div class="box intuition"><span class="label">Read the chain as a story</span>
+    <p>$\frac{\partial J}{\partial w_{1,j}}$ = (how wrong the output is) × (how much the output listens to neuron $j$) × (is
+    neuron $j$ switched on?) × (how big the input was). If the neuron is off ($z_{1,j} \le 0$), the whole product is zero — that's
+    the dead-ReLU effect from Figure 3, written as algebra.</p>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Guided problem</span>One SGD step through the network, by hand</div>
+    <div class="g-body">
+      <p>Parameters: $w_{1,1} = 1,\ b_{1,1} = -1,\ w_{1,2} = -1,\ b_{1,2} = 3,\ w_{2,1} = 2,\ w_{2,2} = 1,\ b_{2,1} = 0.5$. One training point
+      $x_1 = 2$, $y = 4$. Squared error. Compute the forward pass, the loss, all 7 gradients, and one SGD step with $\alpha = 0.02$. Did the loss go down?</p>
+    </div>
+    <details class="step"><summary>Step 1 — Forward pass</summary><div>
+      <p>$z_{1,1} = 1\cdot 2 - 1 = 1$, $a_{1,1} = 1$. $z_{1,2} = -1\cdot 2 + 3 = 1$, $a_{1,2} = 1$.</p>
+      <p>$\hat y = 0.5 + 2(1) + 1(1) = 3.5$. Loss $J = (4 - 3.5)^2 = 0.25$.</p></div></details>
+    <details class="step"><summary>Step 2 — The shared factor</summary><div>
+      <p>$\frac{\partial J}{\partial\hat y} = -2(4 - 3.5) = -1$. Every gradient starts with this. Both neurons are on ($z &gt; 0$), so both
+      ReLU factors are $1$.</p></div></details>
+    <details class="step"><summary>Step 3 — All seven gradients</summary><div>
+      <table class="tight center">
+        <thead><tr><th>param</th><th>gradient</th><th>new value ($\alpha = 0.02$)</th></tr></thead>
+        <tbody>
+          <tr><td>$b_{2,1}$</td><td>$-1$</td><td>$0.52$</td></tr>
+          <tr><td>$w_{2,1}$</td><td>$-1\cdot a_{1,1} = -1$</td><td>$2.02$</td></tr>
+          <tr><td>$w_{2,2}$</td><td>$-1\cdot a_{1,2} = -1$</td><td>$1.02$</td></tr>
+          <tr><td>$b_{1,1}$</td><td>$-1\cdot w_{2,1} = -2$</td><td>$-0.96$</td></tr>
+          <tr><td>$w_{1,1}$</td><td>$-1\cdot w_{2,1}\cdot x_1 = -4$</td><td>$1.08$</td></tr>
+          <tr><td>$b_{1,2}$</td><td>$-1\cdot w_{2,2} = -1$</td><td>$3.02$</td></tr>
+          <tr><td>$w_{1,2}$</td><td>$-1\cdot w_{2,2}\cdot x_1 = -2$</td><td>$-0.96$</td></tr>
+        </tbody>
+      </table></div></details>
+    <details class="step"><summary>Step 4 — Check the new loss</summary><div>
+      <p>$z_{1,1} = 1.08\cdot 2 - 0.96 = 1.2$; $z_{1,2} = -0.96\cdot 2 + 3.02 = 1.1$.</p>
+      <p>$\hat y = 0.52 + 2.02(1.2) + 1.02(1.1) = 0.52 + 2.424 + 1.122 = 4.066$. New loss $(4 - 4.066)^2 = 0.00436$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>Loss fell from $0.25$ to $0.00436$. Two lessons. <strong>(1) Layer-1 gradients are bigger here</strong> ($-4$ for $w_{1,1}$) because
+      they're multiplied by the downstream weight and the input — early layers can be very sensitive. <strong>(2) The step size
+      matters a lot:</strong> with $\alpha = 0.1$ the same gradients overshoot to $\hat y = 6.45$ and a loss of $6.0025$ — 24× worse than
+      where you started. <strong>(3)</strong> Now suppose instead $x_1 = 4$: then $z_{1,2} = -1\cdot 4 + 3 = -1 &lt; 0$, neuron 2 is off, and
+      <em>all</em> of $w_{1,2}, b_{1,2}$'s gradients are zero for that point.</p></div></details>
+  </div>
+
+  <h2 id="fully-connected">4. Fully connected networks</h2>
+
+  <p>Once you can build three neurons, you can build any number. A <strong>fully connected</strong> network organizes neurons into
+  $L$ layers, and each neuron in a layer takes <em>every</em> output of the previous layer as input (the first layer takes every
+  input feature). If the previous layer has $M$ values, each neuron's linear function has $M$ inputs.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 4 — architecture and parameter count</div>
+    <svg id="fcSvg" viewBox="0 0 640 300" role="img" aria-label="A fully connected network diagram drawn from the architecture entered below"></svg>
+    <div class="controls">
+      <label>Layer sizes (inputs first) <input type="text" id="fcArch" value="3,3,2,1" style="width:10em"></label>
+      <button class="btn" data-arch="3,3,2,1">3-3-2-1 (notes)</button>
+      <button class="btn" data-arch="1,2,1">1-2-1 (§3)</button>
+      <button class="btn" data-arch="784,128,64,10">784-128-64-10</button>
+    </div>
+    <div class="caption" id="fcOut"></div>
+    <div class="caption">Up to 8 nodes per layer are drawn; wider layers are shown with "⋮". What to notice: the count is dominated by
+    the widest <em>pair</em> of adjacent layers — for a 28×28 image classifier, almost all parameters live in the first layer.</div>
+  </div>
+
+  <div class="box defn"><span class="label">Notation — $w_{\text{layer},\,\text{output},\,\text{input}}$ and $b_{\text{layer},\,\text{output}}$</span>
+    <p>$w_{2,1,3}$ is the weight in layer 2, going <em>into</em> neuron 1 of that layer, <em>from</em> neuron 3 of the previous layer.
+    The model for the notes' 3-3-2-1 network, layer by layer:</p>
+    $$ a_{1,i} = g(z_{1,i}),\quad z_{1,i} = b_{1,i} + \sum_j w_{1,i,j}\,x_j $$
+    $$ a_{2,i} = g(z_{2,i}),\quad z_{2,i} = b_{2,i} + \sum_j w_{2,i,j}\,a_{1,j} $$
+    $$ \hat y = a_{3,1} = g(z_{3,1}),\quad z_{3,1} = b_{3,1} + \sum_j w_{3,1,j}\,a_{2,j} $$
+    <p>Substituted into one line: $\hat y = g\Bigl(b_{3,1} + \sum_k w_{3,1,k}\,g\bigl(b_{2,k} + \sum_i w_{2,k,i}\,g(b_{1,i} + \sum_j w_{1,i,j}x_j)\bigr)\Bigr)$.
+    Nested functions — which is why the derivatives will be long chain rules.</p>
+  </div>
+
+  <h3>Counting parameters</h3>
+  <p>A neuron with $M$ inputs has $M$ weights and $1$ bias. A fully connected layer of $K$ neurons on $M$ inputs therefore has</p>
+  $$ \underbrace{KM}_{\text{weights}} + \underbrace{K}_{\text{biases}} = K(M+1) \text{ parameters.} $$
+
+  <div class="box warn"><span class="label">Correction</span>
+    <p>The notes write "$KM + M = K(M+1)$". The middle expression is a typo: there is one bias <em>per neuron</em>, so $K$ of them,
+    not $M$. ($KM + M = M(K+1)$, which isn't equal to $K(M+1)$ unless $K = M$ — which is why the error is invisible in the notes'
+    3-input, 3-neuron first layer.)</p>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Count the 3-3-2-1 network</div>
+    <div class="g-body"><p>3 inputs → 3 neurons → 2 neurons → 1 output neuron. How many parameters?</p></div>
+    <details class="step"><summary>Layer by layer</summary><div>
+      <p>Layer 1: $3\cdot 3 + 3 = 12$. Layer 2: $2\cdot 3 + 2 = 8$. Layer 3: $1\cdot 2 + 1 = 3$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$12 + 8 + 3 = \mathbf{23}$ — matching the notes' table ($w_{1,i,j}$: 9, $b_{1,i}$: 3, $w_{2,i,j}$: 6, $b_{2,i}$: 2, $w_{3,1,j}$: 2,
+      $b_{3,1}$: 1). The notes' "Total: 21" is an arithmetic slip. And the §3 network is 1-2-1: $2(1+1) + 1(2+1) = 7$. ✓</p></div></details>
+  </div>
+
+  <h3>Vocabulary</h3>
+  <div class="scroll-x"><table>
+    <tbody>
+      <tr><td><strong>Output layer</strong></td><td>The last layer of neurons</td></tr>
+      <tr><td><strong>Hidden layers</strong></td><td>All layers of neurons before it</td></tr>
+      <tr><td><strong>"Input layer"</strong></td><td>The input data itself — careful: it's <em>not</em> a layer of neurons, and has no parameters</td></tr>
+      <tr><td><strong>Fully connected = linear = dense layer</strong></td><td>Three names for the same thing</td></tr>
+      <tr><td><strong>Multi-layer perceptron (MLP)</strong></td><td>A fully connected network. Slightly misleading: a <em>perceptron</em> is a single neuron with a hard threshold activation, while modern networks use smooth-ish activations like ReLU or sigmoid</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="quiz" data-answer="2">
+    <div class="q">A network has layers 4-5-1 (4 inputs). Someone says "it has 3 layers". How many layers of <em>neurons</em>, and how many parameters?</div>
+    <button class="opt">3 layers, 25 parameters</button>
+    <button class="opt">2 layers, 20 parameters</button>
+    <button class="opt">2 layers, 31 parameters</button>
+    <button class="opt">3 layers, 31 parameters</button>
+    <div class="why"><strong>Why:</strong> the 4 inputs are data, not neurons — so 2 layers (one hidden, one output). Parameters:
+    $5(4+1) + 1(5+1) = 25 + 6 = 31$. "20" forgets the biases; "25" forgets the output layer.</div>
+  </div>
+
+  <h2 id="deep-derivatives">5. Derivatives in a deeper network</h2>
+
+  <p>The notes show just the bias derivatives for the 3-3-2-1 network ("less crazy indexing"):</p>
+  $$ \frac{\partial J}{\partial b_{3,1}} = \frac{\partial\ell}{\partial\hat y}\frac{\partial a_{3,1}}{\partial z_{3,1}}\frac{\partial z_{3,1}}{\partial b_{3,1}} $$
+  $$ \frac{\partial J}{\partial b_{2,i}} = \frac{\partial\ell}{\partial\hat y}\frac{\partial a_{3,1}}{\partial z_{3,1}}\frac{\partial z_{3,1}}{\partial a_{2,i}}\frac{\partial a_{2,i}}{\partial z_{2,i}}\frac{\partial z_{2,i}}{\partial b_{2,i}} $$
+  $$ \frac{\partial J}{\partial b_{1,i}} = \frac{\partial\ell}{\partial\hat y}\frac{\partial a_{3,1}}{\partial z_{3,1}}\frac{\partial z_{3,1}}{\partial \mathbf a_{2}}\frac{\partial \mathbf a_{2}}{\partial \mathbf z_{2}}\frac{\partial \mathbf z_{2}}{\partial a_{1,i}}\frac{\partial a_{1,i}}{\partial z_{1,i}}\frac{\partial z_{1,i}}{\partial b_{1,i}} $$
+
+  <p>Look at the last line: the middle factors are in <strong>bold</strong> — vectors. Why? Because $b_{1,i}$ affects $a_{1,i}$, and
+  $a_{1,i}$ feeds <em>both</em> layer-2 neurons. There are two paths from $b_{1,i}$ to $\hat y$. The single-variable chain rule, which
+  multiplies along one path, isn't enough. The notes: "as we start to have <strong>cycles</strong> in our network diagram" (they mean
+  paths that split and rejoin) "we'll need the <strong>multivariate</strong> chain rule." That's §6.</p>
+
+  <h2 id="chain-rule">6. The chain rule on computation graphs</h2>
+
+  <h3>6.1 One path: multiply along the edges</h3>
+  <p>For $h(x) = f(g(x))$, the chain rule is $\frac{d}{dx}f(g(x)) = f'(g(x))\,g'(x)$, or in Leibniz notation $\frac{df}{dx} = \frac{df}{dg}\frac{dg}{dx}$.
+  Draw the computation as a graph $x \to g \to f$ and write each edge's local derivative on it: $\frac{dg}{dx}$ on the first edge,
+  $\frac{df}{dg}$ on the second. <strong>The derivative of the output with respect to the input is the product of the edge
+  derivatives along the path.</strong> It extends to any depth:</p>
+  $$ h(x) = f_4(f_3(f_2(f_1(x)))) \quad\Longrightarrow\quad \frac{df_4}{dx} = \frac{df_4}{df_3}\frac{df_3}{df_2}\frac{df_2}{df_1}\frac{df_1}{dx}. $$
+
+  <h3>6.2 Several paths: sum over them</h3>
+  <p>Now $h(x) = f(g_1(x), g_2(x))$ with $g_1, g_2 : \R\to\R$ and $f : \R^2 \to \R$. $x$ feeds <em>both</em> $g$'s, so there are two paths
+  from $x$ to the output. Each path's product is one way $x$ influences $h$; the total influence is their sum:</p>
+  $$ \frac{dh}{dx} = \frac{\partial f}{\partial g_1}\frac{dg_1}{dx} + \frac{\partial f}{\partial g_2}\frac{dg_2}{dx}. $$
+  <div class="box defn"><span class="label">Multivariate chain rule</span>
+    <p>For $f:\R^n\to\R$ and $g_1,\dots,g_n:\R\to\R$,
+    $$ \frac{d}{dx}f\bigl(g_1(x),\dots,g_n(x)\bigr) = \sum_{i=1}^{n}\frac{\partial f}{\partial g_i}\frac{dg_i}{dx}. $$
+    <strong>Multiply along each path, then add over paths.</strong> The one-path rule is the $n = 1$ case.</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 5 — two paths, checked numerically</div>
+    <svg id="crSvg" viewBox="0 0 640 230" role="img" aria-label="Computation graph from x through g1 = x squared and g2 = sin x into f = g1 times g2, with edge derivatives"></svg>
+    <div class="controls">
+      <label>$x$ <input type="range" id="crX" min="-3" max="3" step="0.05" value="1" data-out="crXv" data-dp="2"><span class="val" id="crXv"></span></label>
+      <label><input type="checkbox" id="crDrop"> Forget the second path</label>
+    </div>
+    <div class="caption" id="crOut" style="font-family:var(--mono)"></div>
+    <div class="caption">$g_1 = x^2$, $g_2 = \sin x$, $f = g_1 g_2$, so $h(x) = x^2\sin x$. The last line estimates $h'(x)$ by a finite difference,
+    $\frac{h(x + 10^{-6}) - h(x)}{10^{-6}}$, independently of the chain rule. What to notice: the sum over both paths matches it at every
+    $x$. Tick "forget the second path" — the mistake of multiplying along only one path — and the answer is wrong almost everywhere.</div>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Two paths by hand</div>
+    <div class="g-body"><p>$h(x) = f(g_1(x), g_2(x))$ with $g_1 = x^2$, $g_2 = \sin x$, $f(u, v) = uv$. Find $h'(1)$ using the multivariate chain rule.</p></div>
+    <details class="step"><summary>Step 1 — Edge derivatives</summary><div>
+      <p>$\frac{dg_1}{dx} = 2x = 2$. $\frac{dg_2}{dx} = \cos x = \cos 1 = 0.5403$. $\frac{\partial f}{\partial g_1} = g_2 = \sin 1 = 0.8415$.
+      $\frac{\partial f}{\partial g_2} = g_1 = 1$.</p></div></details>
+    <details class="step"><summary>Step 2 — Multiply along, add across</summary><div>
+      $$ h'(1) = (0.8415)(2) + (1)(0.5403) = 1.6829 + 0.5403 = 2.2232. $$</div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$2.2232$ — and the product rule on $x^2\sin x$ gives $2x\sin x + x^2\cos x = 2.2232$ too. The product rule <em>is</em> the
+      multivariate chain rule for $f(u,v) = uv$. A finite difference with step $10^{-6}$ gives $2.2232$ as well.</p></div></details>
+  </div>
+
+  <h3>6.3 Vector form</h3>
+  <p>Stack the inner functions into one vector-valued function $\mathbf g(x) = [g_1(x), \dots, g_n(x)]^\top$, so $h(x) = f(\mathbf g(x))$ — the
+  graph now has <em>one</em> path through a vector node. In <strong>denominator layout</strong>,
+  $\frac{\partial\mathbf g}{\partial x} = \bigl[\frac{\partial g_1}{\partial x}\ \cdots\ \frac{\partial g_n}{\partial x}\bigr]$ (a row) and
+  $\frac{\partial f}{\partial\mathbf g} = \bigl[\frac{\partial f}{\partial g_1}, \dots, \frac{\partial f}{\partial g_n}\bigr]^\top$ (a column). Multiplying
+  along the single edge-path:</p>
+  $$ \frac{d}{dx}f(\mathbf g(x)) = \frac{\partial\mathbf g}{\partial x}\,\frac{\partial f}{\partial\mathbf g} = \sum_{i=1}^n \frac{\partial f}{\partial g_i}\frac{dg_i}{dx}, $$
+  <p>— a <strong>dot product</strong>, which is exactly the sum over paths. Same computation, same derivative, but now written with vectors, which
+  is how the bold $\partial\mathbf a_2/\partial\mathbf z_2$ factors in §5 are handled.</p>
+  <div class="box warn"><span class="label">Common mistake</span>
+    <p>Once derivatives are vectors and matrices, <strong>order matters</strong>. In denominator layout the chain runs inner-to-outer, left to right
+    ($\frac{\partial\mathbf g}{\partial x}\frac{\partial f}{\partial\mathbf g}$); numerator layout runs the other way. Pick one layout, stick with it, and check
+    that the shapes of every product line up.</p>
+  </div>
+  <p class="muted">The notes' §2.2.3 ("chain rule with multiple inputs" — vector inputs and vector outputs) stops after its opening paragraph,
+  which says only that the general case is repeated application of the rule above. It will presumably be covered in lecture.</p>
+
+  <h2 id="recap">7. Recap</h2>
+  <ol>
+    <li>A <strong>neuron</strong> = linear function + nonlinear activation. Logistic regression is one neuron.</li>
+    <li>Activations: sigmoid, <strong>ReLU</strong> $\max(0,z)$; the historic threshold (perceptron) has zero gradient. Without nonlinearity, layers collapse to one linear map.</li>
+    <li>Three-neuron traffic network: two ReLU hinges + a combining neuron, 7 parameters, vs 3 for linear regression with $x_1^2$. The network learns its features; its objective is <strong>not convex</strong>, so the result depends on initialization.</li>
+    <li>Fully connected: every neuron sees every output of the previous layer. Notation $w_{\text{layer,output,input}}$.</li>
+    <li>A layer of $K$ neurons on $M$ inputs has $K(M+1)$ parameters; 3-3-2-1 has $12 + 8 + 3 = 23$.</li>
+    <li>Output layer / hidden layers; the "input layer" is data, not neurons. Fully connected = linear = dense; MLP.</li>
+    <li>Gradients: multiply local derivatives along each path from parameter to loss; <strong>sum over paths</strong> when paths split (multivariate chain rule); in vector form, a dot product.</li>
+  </ol>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  const T = (svg, x, y, s, a = {}) => { const t = SG.el("text", Object.assign({x, y, "text-anchor":"middle", fill:"var(--ink)", "font-size":13}, a)); t.textContent = s; svg.appendChild(t); return t; };
+  const arrowDefs = (svg, id) => { const d = SG.el("defs", {}), m = SG.el("marker", {id, viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto"}); m.appendChild(SG.el("path", {d:"M0,0 L10,5 L0,10 z", fill:"var(--ink-soft)"})); d.appendChild(m); svg.appendChild(d); };
+  const edge = (svg, x1, y1, x2, y2, id, lab, lx, ly) => { svg.appendChild(SG.el("line", {x1, y1, x2, y2, stroke:"var(--ink-soft)", "stroke-width":1.6, "marker-end":`url(#${id})`})); if (lab) T(svg, lx, ly, lab, {"font-size":12, fill:"var(--accent)"}); };
+  const node = (svg, x, y, s, fill) => { svg.appendChild(SG.el("circle", {cx:x, cy:y, r:18, fill: fill || "var(--panel)", stroke:"var(--ink-soft)", "stroke-width":1.6})); T(svg, x, y + 5, s, {"font-size":13}); };
+
+  // ---------- Figure 1: linear & logistic as networks ----------
+  (function () {
+    const s = document.getElementById("lrSvg"); arrowDefs(s, "a1");
+    [[0, "Linear regression", false], [330, "Logistic regression", true]].forEach(([ox, title, logi]) => {
+      T(s, ox + 150, 18, title, {"font-weight":700});
+      node(s, ox + 30, 60, "x₁"); node(s, ox + 30, 150, "x₂");
+      node(s, ox + 130, 105, "Σ", "var(--bg-soft)"); T(s, ox + 130, 145, "+ b", {"font-size":11, fill:"var(--ink-mute)"});
+      edge(s, ox + 48, 66, ox + 112, 98, "a1", "w₁", ox + 80, 70); edge(s, ox + 48, 144, ox + 112, 112, "a1", "w₂", ox + 80, 145);
+      let last = ox + 148;
+      if (logi) { node(s, ox + 205, 105, "g", "var(--bg-soft)"); edge(s, ox + 148, 105, ox + 187, 105, "a1", "z", ox + 167, 97); last = ox + 223; }
+      node(s, ox + 280, 105, "ℓ", "var(--bg-soft)"); edge(s, last, 105, ox + 262, 105, "a1", "ŷ", (last + ox + 262) / 2, 97);
+      T(s, ox + 280, 160, "y", {"font-size":13}); edge(s, ox + 280, 150, ox + 280, 125, "a1");
+    });
+  })();
+
+  // ---------- Figure 2: single neuron ----------
+  (function () {
+    const s = document.getElementById("actSvg"), G = document.getElementById("actG"), W = document.getElementById("actW"), B = document.getElementById("actB");
+    const sig = z => 1 / (1 + Math.exp(-z));
+    const g = {relu: z => Math.max(0, z), sig, step: z => z >= 0 ? 1 : 0, lin: z => z};
+    const dg = {relu: z => z > 0 ? 1 : 0, sig: z => sig(z) * (1 - sig(z)), step: () => 0, lin: () => 1};
+    function draw() {
+      s.innerHTML = ""; const w = +W.value, b = +B.value, k = G.value;
+      const X = x => 40 + (x + 4) / 8 * 580, Y = v => 150 - v * 45;
+      s.appendChild(SG.el("line", {x1:40, y1:Y(0), x2:620, y2:Y(0), stroke:"var(--ink-mute)"}));
+      s.appendChild(SG.el("line", {x1:X(0), y1:10, x2:X(0), y2:250, stroke:"var(--ink-mute)"}));
+      let d = "", dd = "";
+      for (let i = 0; i <= 400; i++) { const x = -4 + 8 * i / 400, z = w * x + b; const v = Math.max(-2.9, Math.min(2.9, g[k](z))), dv = Math.max(-2.9, Math.min(2.9, dg[k](z) * w)); d += (i ? "L" : "M") + X(x) + "," + Y(v); dd += (i ? "L" : "M") + X(x) + "," + Y(dv); }
+      s.appendChild(SG.el("path", {d:dd, fill:"none", stroke:"var(--accent-2)", "stroke-width":2, "stroke-dasharray":"6 4"}));
+      s.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width":3}));
+      if (w !== 0 && k !== "lin") { const xk = -b / w; if (xk > -4 && xk < 4) { s.appendChild(SG.el("line", {x1:X(xk), y1:20, x2:X(xk), y2:240, stroke:"var(--gold)", "stroke-dasharray":"3 3"})); T(s, X(xk), 18, "x = −b/w = " + xk.toFixed(2), {"font-size":11, fill:"var(--gold)"}); } }
+      T(s, 600, Y(0) + 16, "x", {fill:"var(--ink-mute)"});
+    }
+    [G, W, B].forEach(e => { e.addEventListener("input", draw); e.addEventListener("change", draw); }); draw();
+  })();
+
+  // ---------- Figure 3: three-neuron network ----------
+  (function () {
+    function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+    function gauss(r) { const u = Math.max(1e-12, r()), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+    const r = rng(5), X = [], Y = [];
+    for (let i = 0; i < 30; i++) { const h = 5 + 18 * (i + 0.5) / 30, x = (h - 14) / 4.5; const base = h < 9 ? 0.4 + 0.6 * (h - 5) / 4 : 1.0 - 0.55 * (h - 9) / 14; X.push(x); Y.push(base + 0.05 * gauss(r)); }
+    const relu = z => z > 0 ? z : 0;
+    const fwd = (p, x) => { const z1 = p.w11 * x + p.b11, z2 = p.w12 * x + p.b12, a1 = relu(z1), a2 = relu(z2); return {z1, z2, a1, a2, y: p.b2 + p.w21 * a1 + p.w22 * a2}; };
+    const loss = p => X.reduce((s, x, i) => s + (fwd(p, x).y - Y[i]) ** 2, 0) / X.length;
+    function step(p, al) {
+      const g = {w11:0, b11:0, w12:0, b12:0, w21:0, w22:0, b2:0};
+      X.forEach((x, i) => { const f = fwd(p, x), d = 2 * (f.y - Y[i]) / X.length; g.b2 += d; g.w21 += d * f.a1; g.w22 += d * f.a2;
+        const d1 = d * p.w21 * (f.z1 > 0 ? 1 : 0), d2 = d * p.w22 * (f.z2 > 0 ? 1 : 0); g.w11 += d1 * x; g.b11 += d1; g.w12 += d2 * x; g.b12 += d2; });
+      for (const k in p) p[k] -= al * g[k];
+    }
+    // closed-form quadratic regression
+    const quad = (() => { const A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0]; X.forEach((x, i) => { const f = [1, x, x * x]; for (let a = 0; a < 3; a++) { b[a] += f[a] * Y[i]; for (let c = 0; c < 3; c++) A[a][c] += f[a] * f[c]; } });
+      const M = A.map((row, i) => row.concat([b[i]])); for (let c = 0; c < 3; c++) for (let rr = 0; rr < 3; rr++) if (rr !== c) { const f = M[rr][c] / M[c][c]; for (let k = c; k < 4; k++) M[rr][k] -= f * M[c][k]; }
+      return M.map((row, i) => row[3] / row[i]); })();
+    const qf = x => quad[0] + quad[1] * x + quad[2] * x * x;
+    const qmse = X.reduce((s, x, i) => s + (qf(x) - Y[i]) ** 2, 0) / X.length;
+    let seed = 1, p, steps = 0;
+    function randStart() { const rr = rng(seed * 31); p = {w11:gauss(rr), b11:gauss(rr), w12:gauss(rr), b12:gauss(rr), w21:gauss(rr), w22:gauss(rr), b2:gauss(rr) * 0.1}; steps = 0; }
+    randStart();
+    const svg = document.getElementById("tnSvg"), out = document.getElementById("tnOut"), LR = document.getElementById("tnLR"), Q = document.getElementById("tnQuad");
+    function draw() {
+      svg.innerHTML = "";
+      const SX = x => 50 + (x + 2.05) / 4.1 * 570, SY = v => 250 - v * 190;
+      svg.appendChild(SG.el("line", {x1:50, y1:SY(0), x2:620, y2:SY(0), stroke:"var(--ink-mute)"}));
+      [6, 9, 12, 15, 18, 21].forEach(h => T(svg, SX((h - 14) / 4.5), 272, h + ":00", {"font-size":11, fill:"var(--ink-mute)"}));
+      T(svg, 335, 292, "hour of day", {"font-size":11, fill:"var(--ink-soft)"});
+      const path = f => { let d = ""; for (let i = 0; i <= 300; i++) { const x = -2 + 4 * i / 300; const v = Math.max(-0.25, Math.min(1.3, f(x))); d += (i ? "L" : "M") + SX(x) + "," + SY(v); } return d; };
+      const ok = Object.values(p).every(Number.isFinite);
+      if (Q.checked) svg.appendChild(SG.el("path", {d:path(qf), fill:"none", stroke:"var(--ink-mute)", "stroke-width":2}));
+      if (ok) {
+        svg.appendChild(SG.el("path", {d:path(x => p.w21 * fwd(p, x).a1), fill:"none", stroke:"var(--accent-2)", "stroke-width":2, "stroke-dasharray":"6 4"}));
+        svg.appendChild(SG.el("path", {d:path(x => p.w22 * fwd(p, x).a2), fill:"none", stroke:"var(--rose)", "stroke-width":2, "stroke-dasharray":"6 4"}));
+        svg.appendChild(SG.el("path", {d:path(x => fwd(p, x).y), fill:"none", stroke:"var(--accent-3)", "stroke-width":3.5}));
+      }
+      X.forEach((x, i) => svg.appendChild(SG.el("circle", {cx:SX(x), cy:SY(Y[i]), r:4.5, fill:"var(--accent)"})));
+      T(svg, 60, 20, "neuron 1: w₂,₁·a₁,₁", {"text-anchor":"start", "font-size":11, fill:"var(--accent-2)"});
+      T(svg, 60, 36, "neuron 2: w₂,₂·a₁,₂", {"text-anchor":"start", "font-size":11, fill:"var(--rose)"});
+      if (!ok) { out.textContent = `diverged (parameters overflowed) after ${steps} steps — α = ${LR.value} is too large. Press "New random start".`; return; }
+      const L = loss(p), dead = [["1", "z1"], ["2", "z2"]].filter(([, k]) => X.every(x => fwd(p, x)[k] <= 0)).map(([n]) => n);
+      out.textContent = `start #${seed} · steps ${steps} · network MSE ${L.toFixed(4)} · quadratic regression MSE ${qmse.toFixed(4)}` + (dead.length ? ` · dead neuron(s): ${dead.join(", ")}` : "");
+    }
+    function train(n) { const al = +LR.value; for (let t = 0; t < n; t++) { step(p, al); steps++; if (!Object.values(p).every(Number.isFinite)) break; } draw(); }
+    document.getElementById("tnTrain").onclick = () => train(3000);
+    document.getElementById("tnStep").onclick = () => train(10);
+    document.getElementById("tnRand").onclick = () => { seed++; randStart(); draw(); };
+    Q.addEventListener("change", draw); document.addEventListener("themechange", draw);
+    draw();
+  })();
+
+  // ---------- Figure 4: architecture & parameter count ----------
+  (function () {
+    const svg = document.getElementById("fcSvg"), inp = document.getElementById("fcArch"), out = document.getElementById("fcOut");
+    function draw() {
+      svg.innerHTML = "";
+      const arch = inp.value.split(/[,\s]+/).map(Number).filter(n => Number.isInteger(n) && n > 0);
+      if (arch.length < 2) { out.textContent = "Enter at least two layer sizes, e.g. 3,3,2,1"; return; }
+      const L = arch.length, xs = arch.map((_, i) => 60 + i * (520 / (L - 1)));
+      const shown = arch.map(n => Math.min(n, 8));
+      const ys = shown.map(n => [...Array(n).keys()].map(j => 150 + (j - (n - 1) / 2) * 32));
+      for (let l = 0; l < L - 1; l++) ys[l].forEach(y1 => ys[l + 1].forEach(y2 => svg.appendChild(SG.el("line", {x1:xs[l], y1, x2:xs[l + 1], y2, stroke:"var(--line-2)", "stroke-width":1}))));
+      ys.forEach((col, l) => { col.forEach(y => svg.appendChild(SG.el("circle", {cx:xs[l], cy:y, r:11, fill: l === 0 ? "var(--bg-soft)" : "var(--accent-3)", "fill-opacity": l === 0 ? 1 : 0.5, stroke:"var(--ink-soft)"}))); if (arch[l] > 8) T(svg, xs[l], 150 + 4.5 * 32, "⋮", {"font-size":16}); T(svg, xs[l], 290, (l === 0 ? "input: " : l === L - 1 ? "output: " : "hidden: ") + arch[l], {"font-size":12, fill:"var(--ink-soft)"}); });
+      let total = 0; const rows = [];
+      for (let l = 1; l < L; l++) { const K = arch[l], M = arch[l - 1], n = K * (M + 1); total += n; rows.push(`layer ${l}: ${K}·${M} weights + ${K} biases = ${n.toLocaleString()}`); }
+      out.innerHTML = rows.join(" · ") + ` · <strong>total ${total.toLocaleString()}</strong> · layers of neurons: ${L - 1}`;
+    }
+    inp.addEventListener("input", draw);
+    document.querySelectorAll("[data-arch]").forEach(b => b.onclick = () => { inp.value = b.dataset.arch; draw(); });
+    draw();
+  })();
+
+  // ---------- Figure 5: multivariate chain rule ----------
+  (function () {
+    const svg = document.getElementById("crSvg"), Xs = document.getElementById("crX"), drop = document.getElementById("crDrop"), out = document.getElementById("crOut");
+    function draw() {
+      svg.innerHTML = ""; arrowDefs(svg, "a5");
+      const x = +Xs.value, g1 = x * x, g2 = Math.sin(x), d1 = 2 * x, d2 = Math.cos(x), f1 = g2, f2 = g1;
+      node(svg, 60, 115, "x"); node(svg, 300, 50, "g₁"); node(svg, 300, 180, "g₂"); node(svg, 540, 115, "f", "var(--bg-soft)");
+      const off = drop.checked;
+      edge(svg, 78, 108, 282, 56, "a5", "dg₁/dx = 2x = " + d1.toFixed(3), 170, 62);
+      edge(svg, 318, 56, 522, 108, "a5", "∂f/∂g₁ = g₂ = " + f1.toFixed(3), 430, 62);
+      edge(svg, 78, 122, 282, 174, "a5", "dg₂/dx = cos x = " + d2.toFixed(3), 170, 175);
+      edge(svg, 318, 174, 522, 122, "a5", "∂f/∂g₂ = g₁ = " + f2.toFixed(3), 430, 175);
+      if (off) svg.appendChild(SG.el("line", {x1:90, y1:150, x2:510, y2:150, stroke:"var(--rose)", "stroke-width":3, "stroke-dasharray":"8 6"}));
+      const p1 = f1 * d1, p2 = f2 * d2, chain = off ? p1 : p1 + p2;
+      const h = t => t * t * Math.sin(t), fd = (h(x + 1e-6) - h(x)) / 1e-6;
+      out.innerHTML = `path via g₁: ${f1.toFixed(4)} × ${d1.toFixed(4)} = ${p1.toFixed(4)}<br>path via g₂: ${f2.toFixed(4)} × ${d2.toFixed(4)} = ${p2.toFixed(4)}${off ? " (ignored!)" : ""}<br>chain rule total: ${chain.toFixed(4)} · finite difference: ${fd.toFixed(4)} · ${Math.abs(chain - fd) < 1e-3 ? "✓ match" : "✗ mismatch"}`;
+    }
+    [Xs, drop].forEach(e => { e.addEventListener("input", draw); e.addEventListener("change", draw); }); document.addEventListener("themechange", draw); draw();
+  })();
+});
+</script>
+</body>
+</html>

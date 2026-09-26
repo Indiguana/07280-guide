@@ -488,9 +488,26 @@
     <div class="why"><strong>Why:</strong> the linear part models the log-odds, so adding $1$ to $x_j$ adds $\theta_j$ to the log-odds and therefore multiplies the <em>odds</em> by $e^{\theta_j} = e^{-0.3} = 0.7408$. Option A confuses odds with probability and also treats a multiplicative effect as additive. Option C multiplies the wrong quantity: odds and probability only agree when $p$ is tiny (then $p/(1-p)\approx p$), so C is a decent approximation for rare events and wrong otherwise. Option D is backwards — the sign is the most interpretable part of the whole model: negative coefficient, feature pushes toward class 0.</div>
   </div>
 
-  <h2 id="loss">7. Next step: measuring the model's error</h2>
+  <h2 id="loss">7. The loss: cross-entropy</h2>
 
-  <p>The notes close by saying: <em>"In lecture, we will investigate this model further by looking at how we can estimate the error of this model on a dataset, how we can use that information to train our model, and how we can apply this model to multi-class classification problems."</em> The rest of this page is those three things. They are the natural next step, and you will need every one of them for the homework.</p>
+  <p>The pre-reading closed by promising three things for lecture: how to measure this model's error, how to train it, and how to extend it to many classes. The <strong>Logistic Regression lecture notes</strong> deliver all three, and this section and the next two follow them.</p>
+
+  <h3>7.0 The lecture's framing: grading an LLM</h3>
+
+  <p>The lecture opens with a different motivating example. You evaluate an LLM on many tasks and record, for each, how easy the task is ($x \in \R$) and whether the LLM succeeded ($y \in \{0,1\}$). The catch: tasks of the same easiness sometimes succeed and sometimes fail — even <em>the same task, run twice</em>, can go either way. At an easiness where the LLM succeeds half the time, <strong>any</strong> prediction of $y$ is wrong half the time. Predicting the label is the wrong question.</p>
+
+  <div class="box key"><span class="label">Key idea</span>
+    <p>So estimate $P(y = 1)$ for each $x$ instead. That number is continuous, which turns classification into a <strong>regression problem on probabilities</strong> — the name "logistic <em>regression</em>" is literally accurate from this angle. The two design questions are then the usual ERM ones: <strong>which loss</strong> (0–1? squared? something else?) and <strong>which model class</strong> (trees? linear? — the sigmoid of a linear function, §4).</p>
+  </div>
+
+  <p>The lecture chooses the loss from two principles about grading a probability $\hat p$ for an event that then happens:</p>
+  <ol>
+    <li><strong>Monotone:</strong> a higher reported $\hat p$ should incur a lower loss.</li>
+    <li><strong>Confidence matters:</strong> a <em>certain</em> wrong prediction is worse than an <em>uncertain</em> wrong one.</li>
+  </ol>
+  <p>From information theory (<a href="information-theory.html">chapter 7</a>), the <strong>surprisal</strong> of an event you gave probability $\hat p$ is $\log\frac{1}{\hat p}$ — and it satisfies both: it falls as $\hat p$ rises, and it goes to $\infty$ as $\hat p \to 0$. That is the loss. The notes write it as</p>
+  $$ \ell(\hat p, y) = \1\{y=1\}\log\frac{1}{\hat p} + \1\{y=0\}\log\frac{1}{1-\hat p} = y\log\frac{1}{\hat p} + (1-y)\log\frac{1}{1-\hat p}, $$
+  <p>which is the same thing as the $-[\,y\log\hat y + (1-y)\log(1-\hat y)\,]$ form below ($\log\frac1a = -\log a$). §7.1 shows why the obvious alternative, squared loss, fails.</p>
 
   <h3>7.1 Why not squared loss?</h3>
 
@@ -620,7 +637,7 @@
       </div></details>
   </div>
 
-  <h3>7.3 Next step: training it — the gradient</h3>
+  <h3>7.3 Training it — the gradient</h3>
 
   <p>To run <a href="optimization.html">gradient descent</a> we need $\nabla_\theta J$. Derive it for a single sample first; the average comes along for free by linearity of differentiation.</p>
 
@@ -664,7 +681,7 @@
 
   <p>And note what this gradient does <em>not</em> have: the $\sigma'$ factor that crippled squared loss. Consider again the confidently-wrong point ($y=1$, $\hat y = 0.001$). The gradient contribution is $(0.001 - 1)x = -0.999\,x$ — essentially full strength. A confidently-<em>right</em> point ($y=1$, $\hat y = 0.999$) contributes $-0.001\,x$ — essentially nothing. <strong>The loss and the model were designed together so that the saturation cancels exactly.</strong> That is also the reason the far-away point at $x=10$ in Figure B left the logistic fit unchanged.</p>
 
-  <p><span class="pill">beyond syllabus</span> The Hessian works out to $\nabla^2 J = \frac{1}{N}\sum_i \sigma_i(1-\sigma_i)\,x^{(i)}x^{(i)\top}$, a non-negative combination of outer products, hence positive semi-definite — so <strong>$J$ is convex in $\theta$</strong>. No local minima, unlike squared loss. That is the formal justification for the whole §7.1 detour.</p>
+  <p>This gradient is exactly the lecture's $\nabla_\theta J^{(i)}(\theta) = \bigl(\hat p^{(i)}_\theta - y^{(i)}\bigr)x^{(i)}$. The lecture then asks the question that matters before running GD: <em>linear regression's objective was a parabola, so GD got close to the optimum — but this is not a parabola. So now what?</em> §7.5 answers it.</p>
 
   <h3>7.4 There is no closed form</h3>
 
@@ -780,7 +797,65 @@ repeat until converged:
     <div class="why"><strong>Why:</strong> cross-entropy's per-sample gradient is $(\hat y - y)x = (0.002 - 1)x = -0.998x$. Squared loss's is $-2(y-\hat y)\sigma(1-\sigma)x = -2(0.998)(0.002)(0.998)x = -0.00398x$ — about $250$ times smaller. Option C states the usual intuition about squared loss, which is right for linear regression and <em>wrong</em> here: squaring does amplify the error term, but the extra $\sigma'$ factor from the chain rule crushes it far harder. This is the single most important practical reason to use cross-entropy with a sigmoid.</div>
   </div>
 
-  <h2 id="multiclass">8. Next step: more than two classes</h2>
+  <h3 id="convexity-sub">7.5 Convexity: why GD still finds the global minimum</h3>
+
+  <p>Gradient descent only ever looks downhill locally. On a bumpy surface it can settle in a dent that isn't the lowest point (<a href="optimization.html">chapter 9</a>, local vs global minima). What made linear regression safe was not "being a parabola" as such — it was being <strong>bowl-shaped</strong>. Convexity is the precise version of "bowl-shaped".</p>
+
+  <div class="box defn"><span class="label">Definition</span>
+    <p>$f:\R\to\R$ is <strong>convex</strong> if the chord joining any two points on its graph never goes below the graph:</p>
+    $$ f\bigl(\lambda z_1 + (1-\lambda) z_2\bigr) \;\le\; \lambda f(z_1) + (1-\lambda) f(z_2) \qquad \forall\, z_1, z_2 \in \R,\ \lambda\in[0,1]. $$
+    <p>Read it left to right: $\lambda z_1 + (1-\lambda)z_2$ is a point <em>between</em> $z_1$ and $z_2$ (it is $z_2$ at $\lambda=0$, $z_1$ at $\lambda=1$); the left side is the <em>function</em> there; the right side is the same blend of the two endpoint <em>values</em> — the height of the chord. For twice-differentiable $f$ an equivalent test is $f''(z) \ge 0$ for all $z$: the slope never decreases. Both definitions extend to $f:\R^d \to \R$, with $f''$ replaced by the Hessian matrix (it must be positive semi-definite).</p>
+  </div>
+
+  <div class="box key"><span class="label">Key idea — the property that matters</span>
+    <p><strong>For a convex function, every local minimum is a global minimum.</strong> Why: suppose $z_1$ were a local minimum but some $z_2$ had $f(z_2) &lt; f(z_1)$. Points on the segment just next to $z_1$ lie under the chord from $(z_1, f(z_1))$ to $(z_2, f(z_2))$, which slopes <em>downward</em> from $z_1$ — so they are strictly lower than $f(z_1)$ arbitrarily close to $z_1$, contradicting "local minimum". So GD/SGD, which finds local minima, finds the global one.</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure F — test the chord condition yourself</div>
+    <svg id="cvxSvg" viewBox="0 0 640 300" role="img" aria-label="A function with a chord between two draggable points; regions where the chord dips below the curve are highlighted"></svg>
+    <div class="controls">
+      <label>Function
+        <select id="cvxF">
+          <option value="ce">cross-entropy J(w), logistic model</option>
+          <option value="sq">squared loss J(w), logistic model</option>
+          <option value="par">parabola (linear regression)</option>
+        </select></label>
+      <label>$z_1$ <input type="range" id="cvxA" min="-6" max="6" step="0.1" value="-3" data-out="cvxAv" data-dp="1"><span class="val" id="cvxAv"></span></label>
+      <label>$z_2$ <input type="range" id="cvxB" min="-6" max="6" step="0.1" value="4" data-out="cvxBv" data-dp="1"><span class="val" id="cvxBv"></span></label>
+    </div>
+    <div class="caption" id="cvxOut"></div>
+    <div class="caption">Both losses use the one-point dataset from §7.1 ($x = 1$, $y = 0$, no bias), so the curves are $-\log(1-\sigma(w))$ and $\sigma(w)^2$. What to notice: on cross-entropy and the parabola, no placement of the endpoints ever pulls the chord under the curve. On squared loss, put both endpoints to the right of $w = \log 2 \approx 0.69$ (e.g. $z_1 = 1$, $z_2 = 6$) and the chord dips below — the concave region found in §7.1.</div>
+  </div>
+
+  <div class="box proof"><span class="label">Proof — the lecture's exercise: logistic ERM is convex (scalar case)</span>
+    <p>Take $\mathcal X = \R$, parameters $(\omega, b)$, and one sample $(x, y)$. Write $z = \omega x + b$ and $\hat p = \sigma(z)$. It is enough to show one term is convex, because <strong>a sum of convex functions is convex</strong> (add the chord inequalities term by term).</p>
+    <p><strong>Step 1 — rewrite the loss without $\hat p$.</strong> Since $\frac{1}{\sigma(z)} = 1+e^{-z}$ and $\frac{1}{1-\sigma(z)} = 1 + e^{z}$,</p>
+    $$ \ell = y\log(1+e^{-z}) + (1-y)\log(1+e^{z}). $$
+    <p><strong>Step 2 — first derivative in $z$.</strong> $\frac{d}{dz}\log(1+e^{-z}) = \frac{-e^{-z}}{1+e^{-z}} = -(1-\sigma(z))$ and $\frac{d}{dz}\log(1+e^{z}) = \frac{e^{z}}{1+e^{z}} = \sigma(z)$. So</p>
+    $$ \frac{d\ell}{dz} = -y(1-\sigma) + (1-y)\sigma = \sigma(z) - y . $$
+    <p>(Same answer as §7.3, by a shorter route.)</p>
+    <p><strong>Step 3 — second derivative in $z$.</strong> $y$ is a constant, so $\frac{d^2\ell}{dz^2} = \sigma'(z) = \sigma(z)(1-\sigma(z)) &gt; 0$.</p>
+    <p><strong>Step 4 — back to the parameters.</strong> $z$ is linear in $(\omega, b)$ with $\partial z/\partial\omega = x$, $\partial z/\partial b = 1$. By the chain rule,</p>
+    $$ \frac{\partial^2 \ell}{\partial\omega^2} = \sigma(1-\sigma)\,x^2 \ge 0, \qquad \nabla^2_{(\omega,b)}\,\ell = \sigma(1-\sigma)\begin{bmatrix} x^2 &amp; x \\ x &amp; 1\end{bmatrix}. $$
+    <p>That matrix is $\sigma(1-\sigma)\,vv^\top$ with $v = [x,\ 1]^\top$, and for any $u$, $u^\top vv^\top u = (v^\top u)^2 \ge 0$ — positive semi-definite. So each term is convex in $(\omega,b)$, and the sum over $N$ samples is too. $\blacksquare$</p>
+    <p>The same argument in $\R^d$ gives the Hessian $\sum_i \sigma_i(1-\sigma_i)\,x^{(i)}x^{(i)\top}$ — a non-negative combination of such outer products, hence PSD.</p>
+  </div>
+
+  <div class="box intuition"><span class="label">Intuition — where the convexity comes from</span>
+    <p>The loss is "a convex function ($\log(1+e^{\pm z})$, a softened hinge) of a linear function of the parameters". Plugging a linear map into a convex function keeps it convex. Squared loss fails because $(y - \sigma(z))^2$ is <em>not</em> convex in $z$ — the sigmoid's flattening bends it the wrong way. That is the §7.1 counterexample, seen from the other side.</p>
+  </div>
+
+  <div class="quiz" data-answer="2">
+    <div class="q">Why does the lecture care that the logistic regression objective is convex?</div>
+    <button class="opt">Because convex functions have a closed-form minimiser.</button>
+    <button class="opt">Because convexity makes $\sigma$ differentiable.</button>
+    <button class="opt">Because every local minimum is then global, so GD/SGD can get arbitrarily close to the true optimum.</button>
+    <button class="opt">Because convex objectives cannot overfit.</button>
+    <div class="why"><strong>Why:</strong> logistic regression is convex <em>and</em> has no closed form (§7.4) — so option A is exactly the wrong lesson. Convexity is about the shape of the loss surface, not about differentiability of $\sigma$ (B) and not about generalisation (D: a convex model can overfit happily — see <a href="model-selection.html">chapter 12</a>).</div>
+  </div>
+
+  <h2 id="multiclass">8. More than two classes: softmax regression</h2>
 
   <p>The notes' third promise. Binary logistic regression outputs one number. For $K$ classes we want a whole distribution, $\hat y_1,\dots,\hat y_K$ with $\hat y_k \ge 0$ and $\sum_k \hat y_k = 1$. Give each class its own parameter vector $\theta_k \in \R^M$, compute $K$ scores $\theta_k^\top x$, and normalise them with the <strong>softmax</strong>:</p>
 
@@ -794,7 +869,7 @@ repeat until converged:
     $$ \hat y_1 = \frac{e^{\theta_1^\top x}}{e^{\theta_1^\top x} + e^{\theta_0^\top x}} . $$
     <p>Divide numerator and denominator by $e^{\theta_1^\top x}$ (non-zero, so legal):</p>
     $$ \hat y_1 = \frac{1}{1 + e^{\theta_0^\top x - \theta_1^\top x}} = \frac{1}{1 + e^{-(\theta_1 - \theta_0)^\top x}} = \sigma\bigl((\theta_1-\theta_0)^\top x\bigr). \qquad\blacksquare $$
-    <p>So binary logistic regression is the $K=2$ softmax with $\theta = \theta_1 - \theta_0$. Only the <em>difference</em> of the two parameter vectors is identifiable, which is why two classes need one vector, not two — and in general why softmax has $K$ vectors but only $K-1$ degrees of freedom (adding a constant vector to every $\theta_k$ cancels top and bottom and leaves all predictions unchanged).</p>
+    <p>This is the lecture's exercise ("set $K=2$ and let $\theta = \theta_1 - \theta_2$"), with the second class indexed $0$ here instead of $2$. So binary logistic regression is the $K=2$ softmax with $\theta = \theta_1 - \theta_0$. Only the <em>difference</em> of the two parameter vectors is identifiable, which is why two classes need one vector, not two — and in general why softmax has $K$ vectors but only $K-1$ degrees of freedom (adding a constant vector to every $\theta_k$ cancels top and bottom and leaves all predictions unchanged).</p>
   </div>
 
   <p>The loss generalises the same way. With the true class $y \in \{1,\dots,K\}$, <strong>multi-class cross-entropy</strong> is</p>
@@ -805,7 +880,7 @@ repeat until converged:
 
   $$ \nabla_{\theta_k} J = \frac{1}{N}\sum_{i=1}^{N}\Bigl(\hat y^{(i)}_k - \1\{y^{(i)} = k\}\Bigr)x^{(i)} $$
 
-  <p>— prediction minus truth, times the input, exactly as in §7.3, now once per class. <span class="pill">beyond syllabus</span> This model is variously called softmax regression, multinomial logistic regression, or (in a neural network) "a linear layer with a softmax output" — it is the last layer of essentially every classifier you will ever train.</p>
+  <p>— prediction minus truth, times the input, exactly as in §7.3, now once per class. The lecture names it <strong>softmax regression</strong> or <strong>multinomial logistic regression</strong>, and one trains it by ERM under this loss and model class. <span class="pill">beyond syllabus</span> This model is also called softmax regression, multinomial logistic regression, or (in a neural network) "a linear layer with a softmax output" — it is the last layer of essentially every classifier you will ever train.</p>
 
   <h2 id="mistakes">9. Common mistakes</h2>
 
@@ -851,6 +926,7 @@ repeat until converged:
     <li>$\log\frac{h}{1-h} = \theta^\top x$: a unit increase in $x_j$ multiplies the odds by $e^{\theta_j}$.</li>
     <li>Train with cross-entropy $\ell = -[y\log\hat y + (1-y)\log(1-\hat y)]$, not squared loss (non-convex, vanishing gradients).</li>
     <li>$\nabla_\theta J = \frac{1}{N}\sum_i(\sigma(\theta^\top x^{(i)}) - y^{(i)})x^{(i)}$ — same form as linear regression. No closed form, so run <a href="optimization.html">GD or SGD</a>.</li>
+    <li>The objective is <strong>convex</strong> (chord never below the graph; $\ell''(z) = \sigma(1-\sigma) \ge 0$), so every local minimum is global and GD/SGD gets close to the true optimum.</li>
     <li>$K$ classes: softmax $\hat y_k = e^{\theta_k^\top x}/\sum_j e^{\theta_j^\top x}$, which is the sigmoid when $K=2$, with multi-class cross-entropy $-\log\hat y_y$.</li>
   </ol>
 
@@ -1460,6 +1536,42 @@ document.addEventListener("shellready", () => {
   drawAll();
   document.addEventListener("themechange", drawAll);
   window.addEventListener("resize", draw2d);
+});
+</script>
+<script>
+document.addEventListener("shellready", () => {
+  const svg = document.getElementById("cvxSvg"), F = document.getElementById("cvxF"), A = document.getElementById("cvxA"), B = document.getElementById("cvxB"), out = document.getElementById("cvxOut");
+  const sig = z => 1 / (1 + Math.exp(-z));
+  const fns = {
+    ce:  {f: w => Math.log(1 + Math.exp(w)), lo: 0, hi: 6.2, name: "cross-entropy"},
+    sq:  {f: w => sig(w) ** 2,               lo: 0, hi: 1.05, name: "squared loss"},
+    par: {f: w => (w - 0.5) ** 2 / 6,         lo: 0, hi: 7.5, name: "parabola"}
+  };
+  function draw() {
+    const fn = fns[F.value], z1 = +A.value, z2 = +B.value;
+    svg.innerHTML = "";
+    const X = w => 50 + (w + 6) / 12 * 560, Y = v => 270 - (v - fn.lo) / (fn.hi - fn.lo) * 240;
+    svg.appendChild(SG.el("line", {x1:50, y1:270, x2:610, y2:270, stroke:"var(--ink-mute)"}));
+    svg.appendChild(SG.el("line", {x1:X(0), y1:20, x2:X(0), y2:270, stroke:"var(--line-2)", "stroke-dasharray":"3 3"}));
+    let d = ""; for (let i = 0; i <= 240; i++) { const w = -6 + i / 20; d += (i ? "L" : "M") + X(w) + "," + Y(fn.f(w)); }
+    svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width":3}));
+    // chord and violations
+    const f1 = fn.f(z1), f2 = fn.f(z2); let worst = 0, worstW = null;
+    for (let k = 1; k < 200; k++) {
+      const lam = k / 200, w = lam * z1 + (1 - lam) * z2, gap = fn.f(w) - (lam * f1 + (1 - lam) * f2);
+      if (gap > worst + 1e-12) { worst = gap; worstW = w; }
+      if (gap > 1e-9) svg.appendChild(SG.el("line", {x1:X(w), y1:Y(fn.f(w)), x2:X(w), y2:Y(lam * f1 + (1 - lam) * f2), stroke:"var(--rose)", "stroke-width":2, opacity:.7}));
+    }
+    svg.appendChild(SG.el("line", {x1:X(z1), y1:Y(f1), x2:X(z2), y2:Y(f2), stroke:"var(--accent-2)", "stroke-width":2.5}));
+    [[z1, f1], [z2, f2]].forEach(([w, v]) => svg.appendChild(SG.el("circle", {cx:X(w), cy:Y(v), r:6, fill:"var(--accent-2)"})));
+    const t = SG.el("text", {x:X(0) + 4, y:34, fill:"var(--ink-mute)", "font-size":12}); t.textContent = "w = 0"; svg.appendChild(t);
+    out.innerHTML = worstW === null
+      ? `<strong>${fn.name}:</strong> chord lies on or above the curve everywhere between the endpoints — condition satisfied for this pair.`
+      : `<strong>${fn.name}:</strong> the chord dips <strong>below</strong> the curve (pink) — worst at w ≈ ${worstW.toFixed(2)}, by ${worst.toFixed(4)}. One violating pair is enough: this function is <strong>not convex</strong>.`;
+  }
+  [F, A, B].forEach(e => { e.addEventListener("input", draw); e.addEventListener("change", draw); });
+  document.addEventListener("themechange", draw);
+  draw();
 });
 </script>
 </body>
