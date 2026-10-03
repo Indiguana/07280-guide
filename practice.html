@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guided problem set — Part I · 07-280 Field Guide</title>
+<title>Guided problem set — whole midterm · 07-280 Field Guide</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -11,12 +11,14 @@
 <main>
 
   <div class="eyebrow">Reference</div>
-  <h1>Guided problem set — Part&nbsp;I</h1>
-  <p class="subtitle">Twelve exam-shaped problems on the search half of the course, each one fully worked in progressive steps — every number on this page was computed and checked, not estimated.</p>
+  <h1>Guided problem set — the whole midterm</h1>
+  <p class="subtitle">Thirty exam-shaped problems covering every lecture on the midterm — search, games, CSPs, then the entire machine-learning half — each one fully worked in progressive steps. Every number on this page was computed and checked, not estimated.</p>
 
   <div class="box warn">
     <span class="label">Scope of this page</span>
-    <p style="margin-bottom:0">This set covers <strong>Part&nbsp;I only</strong> — search, A*, games and CSPs. There is no Part&nbsp;II section here. For machine-learning practice, use the guided problems inside each chapter: <a href="ml-formulation.html">ML formulation</a>, <a href="decision-trees.html">decision trees</a>, <a href="information-theory.html">entropy &amp; mutual information</a>, <a href="linear-regression.html">linear regression</a>, <a href="optimization.html">optimization</a>, <a href="feature-engineering.html">feature engineering</a> and <a href="logistic-regression.html">logistic regression</a> each carry three to four of their own, with the same step-by-step structure.</p>
+    <p>This set now covers the <strong>entire midterm scope</strong>: Part&nbsp;I (search, A*, games, CSPs) in sections&nbsp;1–4, and Part&nbsp;II (machine learning) in sections&nbsp;5–9 — ML problem formulation, decision trees and information theory, linear regression, optimization, and feature engineering with logistic regression and model selection. Part&nbsp;II is more than half the exam, so budget your revision accordingly.</p>
+    <p><strong>Neural networks are explicitly out of scope for this exam.</strong> The midterm covers lectures&nbsp;1–10; the <a href="neural-networks.html">neural networks chapter</a> is lecture&nbsp;11 and later, so nothing on this page asks about backpropagation, hidden layers or activation functions. Read that chapter after the midterm, not before.</p>
+    <p style="margin-bottom:0">Each section names its chapter, so if a problem exposes a gap you can go straight to the explanation: <a href="ml-formulation.html">ML formulation</a>, <a href="decision-trees.html">decision trees</a>, <a href="information-theory.html">entropy &amp; mutual information</a>, <a href="linear-regression.html">linear regression</a>, <a href="optimization.html">optimization</a>, <a href="feature-engineering.html">feature engineering</a>, <a href="logistic-regression.html">logistic regression</a> and <a href="model-selection.html">model selection</a> each carry further guided problems of their own.</p>
   </div>
 
   <div class="box key">
@@ -1061,6 +1063,1714 @@
     </div></details>
   </div>
 
+
+  <h2 id="ml-formulation">5. Machine learning: problem formulation</h2>
+
+  <p>Chapter reference: <a href="ml-formulation.html">Loss, risk, empirical risk and ERM</a>.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 13</span>Empirical risk under two losses — and a ranking that flips <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>A courier company wants to predict delivery time $y$ (minutes) from the number of items ordered $x$. The training set is five deliveries:</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
+        <tbody>
+          <tr><td>$x^{(i)}$</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td></tr>
+          <tr><td>$y^{(i)}$</td><td>4</td><td>6</td><td>8</td><td>10</td><td>17</td></tr>
+        </tbody>
+      </table>
+      <p>Two candidate hypotheses are on the table:</p>
+      $$h_A(x) = 2x + 2, \qquad h_B(x) = 2x + 3.$$
+      <p>Two candidate losses:</p>
+      $$\ell_{\text{sq}}(\hat y, y) = (\hat y - y)^2, \qquad \ell_{\text{abs}}(\hat y, y) = |\hat y - y|.$$
+      <ol>
+        <li><strong>(a)</strong> Compute the empirical risk $\hat R(h)$ of both hypotheses under both losses — four numbers.</li>
+        <li><strong>(b)</strong> Which hypothesis does ERM choose under each loss?</li>
+        <li><strong>(c)</strong> Explain, in terms of the data, <em>why</em> the two losses disagree.</li>
+      </ol>
+
+      <div class="viz">
+        <div class="viz-title">The five deliveries, the two candidate lines, and the residuals of $h_A$</div>
+        <svg viewBox="0 0 640 320" role="img" aria-label="Scatter of five points with two candidate lines; the fifth point is an outlier">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="70" y1="275" x2="600" y2="275"/>
+    <line x1="70" y1="234.2" x2="600" y2="234.2"/>
+    <line x1="70" y1="193.3" x2="600" y2="193.3"/>
+    <line x1="70" y1="152.5" x2="600" y2="152.5"/>
+    <line x1="70" y1="111.7" x2="600" y2="111.7"/>
+    <line x1="70" y1="70.8" x2="600" y2="70.8"/>
+    <line x1="70" y1="30" x2="600" y2="30"/>
+  </g>
+  <g stroke="var(--line-2)" stroke-width="1.5">
+    <line x1="70" y1="275" x2="600" y2="275"/>
+    <line x1="70" y1="30" x2="70" y2="275"/>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="62" y="279">0</text>
+    <text x="62" y="197.3">6</text>
+    <text x="62" y="115.7">12</text>
+    <text x="62" y="34">18</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="158.3" y="293">1</text>
+    <text x="246.7" y="293">2</text>
+    <text x="335" y="293">3</text>
+    <text x="423.3" y="293">4</text>
+    <text x="511.7" y="293">5</text>
+    <text x="335" y="311">items ordered  x</text>
+  </g>
+  <text x="36" y="152.5" fill="var(--ink-mute)" font-size="11" transform="rotate(-90 36 152.5)" text-anchor="middle">minutes  y</text>
+  <line x1="70" y1="247.8" x2="600" y2="84.4" stroke="var(--accent-2)" stroke-width="2.5"/>
+  <text x="596" y="74.4" fill="var(--accent-2)" font-size="13" font-weight="700" text-anchor="end">h_A = 2x + 2</text>
+  <line x1="70" y1="234.2" x2="600" y2="70.8" stroke="var(--accent-3)" stroke-width="2.5" stroke-dasharray="7 4"/>
+  <text x="596" y="54" fill="var(--accent-3)" font-size="13" font-weight="700" text-anchor="end">h_B = 2x + 3</text>
+  <g stroke="var(--c-warn)" stroke-width="2" stroke-dasharray="3 3">
+    <line x1="158.3" y1="220.6" x2="158.3" y2="220.6"/>
+    <line x1="246.7" y1="193.3" x2="246.7" y2="193.3"/>
+    <line x1="335" y1="166.1" x2="335" y2="166.1"/>
+    <line x1="423.3" y1="138.9" x2="423.3" y2="138.9"/>
+    <line x1="511.7" y1="43.6" x2="511.7" y2="111.7"/>
+  </g>
+  <g fill="var(--accent)">
+    <circle cx="158.3" cy="220.6" r="5.5"/>
+    <circle cx="246.7" cy="193.3" r="5.5"/>
+    <circle cx="335" cy="166.1" r="5.5"/>
+    <circle cx="423.3" cy="138.9" r="5.5"/>
+    <circle cx="511.7" cy="43.6" r="5.5"/>
+  </g>
+  <text x="437.7" y="33.6" fill="var(--accent)" font-size="12" font-weight="700">outlier (5, 17)</text>
+</svg>
+        <div class="caption">What to notice: the solid line $h_A$ passes <em>exactly</em> through the first four points, so four of its five residuals are zero and the only dashed residual segment visible is the one at $x=5$, of length 5. The dashed line $h_B$ sits one minute above every point of the straight run, trading four errors of size 1 for a smaller error on the outlier.</div>
+      </div>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Not "which line fits better". <em>Better</em> is not a property of a line; it is a property of a line <strong>and a loss</strong>. The question is asking you to apply the definition twice:</p>
+      $$\hat R(h) \;=\; \frac{1}{N}\sum_{i=1}^{N} \ell\big(h(x^{(i)}),\, y^{(i)}\big)$$
+      <p>with $N = 5$, once with $\ell_{\text{sq}}$ and once with $\ell_{\text{abs}}$. Nothing here involves fitting anything — both hypotheses are handed to you. This is pure evaluation, and ERM then means "pick the one with the smaller $\hat R$".</p>
+      <p>Get the residuals first, once, and reuse them for both losses. That is the whole trick: $e^{(i)} = h(x^{(i)}) - y^{(i)}$.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — The residuals</summary><div>
+      <p><strong>$h_A(x) = 2x+2$:</strong> predictions $4, 6, 8, 10, 12$.</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>$h_A(x^{(i)})$</th><th>$y^{(i)}$</th><th>$e^{(i)}$</th><th>$|e^{(i)}|$</th><th>$(e^{(i)})^2$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>4</td><td>4</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>2</td><td>6</td><td>6</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>3</td><td>8</td><td>8</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>4</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>5</td><td>12</td><td>17</td><td>$-5$</td><td>5</td><td>25</td></tr>
+          <tr><td></td><td></td><td></td><td><strong>sum</strong></td><td><strong>5</strong></td><td><strong>25</strong></td></tr>
+        </tbody>
+      </table>
+      <p><strong>$h_B(x) = 2x+3$:</strong> predictions $5, 7, 9, 11, 13$.</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>$h_B(x^{(i)})$</th><th>$y^{(i)}$</th><th>$e^{(i)}$</th><th>$|e^{(i)}|$</th><th>$(e^{(i)})^2$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>5</td><td>4</td><td>$+1$</td><td>1</td><td>1</td></tr>
+          <tr><td>2</td><td>7</td><td>6</td><td>$+1$</td><td>1</td><td>1</td></tr>
+          <tr><td>3</td><td>9</td><td>8</td><td>$+1$</td><td>1</td><td>1</td></tr>
+          <tr><td>4</td><td>11</td><td>10</td><td>$+1$</td><td>1</td><td>1</td></tr>
+          <tr><td>5</td><td>13</td><td>17</td><td>$-4$</td><td>4</td><td>16</td></tr>
+          <tr><td></td><td></td><td></td><td><strong>sum</strong></td><td><strong>8</strong></td><td><strong>20</strong></td></tr>
+        </tbody>
+      </table>
+    </div></details>
+    <details class="step"><summary>Step 3 — Divide by $N$ and compare</summary><div>
+      $$\hat R_{\text{abs}}(h_A) = \tfrac{5}{5} = 1.0, \qquad \hat R_{\text{abs}}(h_B) = \tfrac{8}{5} = 1.6$$
+      $$\hat R_{\text{sq}}(h_A) = \tfrac{25}{5} = 5.0, \qquad \hat R_{\text{sq}}(h_B) = \tfrac{20}{5} = 4.0$$
+      <p>Under absolute loss $h_A$ wins ($1.0 &lt; 1.6$). Under squared loss $h_B$ wins ($4.0 &lt; 5.0$). <strong>The ranking flips.</strong></p>
+      <p>Do not divide by $N-1$, and do not forget to divide at all. Dividing by a constant cannot flip a ranking, so the <em>comparison</em> survives either slip — but the reported risk is a specific number and the definition says $\frac1N$.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) Why they disagree</summary><div>
+      <p>Squaring is convex and steeply increasing: it converts a residual of 5 into a penalty of 25, while five residuals of 1 cost only 5 in total. So squared loss will happily take on <em>many small</em> errors to shave anything off its <em>one large</em> one. Absolute loss is linear, so one error of 5 and five errors of 1 are priced at exactly the same rate per minute; it has no incentive to move toward the outlier and so keeps the line that nails the straight run.</p>
+      <div class="box key"><span class="label">Key idea</span>
+        <p style="margin-bottom:0">The loss function is not a technicality you pick to make the calculus work. <strong>It is a statement about which mistakes you are willing to make.</strong> Squared loss says "one catastrophic miss is worse than many near-misses" and is therefore <em>outlier-sensitive</em>; absolute loss says "a minute is a minute" and is therefore <em>robust</em>. Changing the loss changes which hypothesis is optimal, with the data held completely fixed.</p>
+      </div>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th></th><th>$\hat R_{\text{abs}}$</th><th>$\hat R_{\text{sq}}$</th></tr></thead>
+        <tbody>
+          <tr><td>$h_A = 2x+2$</td><td><strong>1.0</strong> ✓ wins</td><td>5.0</td></tr>
+          <tr><td>$h_B = 2x+3$</td><td>1.6</td><td><strong>4.0</strong> ✓ wins</td></tr>
+        </tbody>
+      </table>
+      <p><strong>(b)</strong> ERM under absolute loss returns $h_A$; ERM under squared loss returns $h_B$.</p>
+      <p><strong>(c)</strong> The point $(5,17)$ is an outlier. Squared loss prices it at $25$ and will accept four unit errors (total cost 4) to reduce it, so it drags the line upward. Absolute loss prices errors linearly, gains nothing from the trade, and stays with the exact fit on the other four points.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>The trap is believing that $\hat R$ ranks hypotheses.</strong> It doesn't — $\hat R_\ell$ does. Hand in a sentence like "$h_B$ has lower empirical risk" with no loss named and you have written something that is half wrong whatever the marking scheme, because here it is true of one loss and false of the other. Any time a question says "empirical risk" without naming a loss, that omission is the question.</p>
+      <p><strong>Second trap — the argument order.</strong> These notes write $\ell(\hat y, y)$: <em>guess first, truth second</em>. Squared and absolute loss are symmetric, so it never changes an answer here. It changes everything the moment the loss is asymmetric, which is exactly Problem 15.</p>
+      <p><strong>Third trap — "the outlier is a data error, delete it".</strong> Maybe. But the exam is asking about the loss, not about data cleaning, and you are not told the point is wrong. A 17-minute delivery of 5 items may be perfectly real. The honest answer is to say which loss you would pick <em>and why</em>, not to edit the dataset.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 14</span>Classification, regression or unsupervised? <span class="pill">warm-up</span></div>
+    <div class="g-body">
+      <p>For each scenario, say whether it is <strong>classification</strong>, <strong>regression</strong> or <strong>unsupervised learning</strong>, and justify it by naming $\mathcal{X}$, $\mathcal{Y}$ and whether labels exist in the training data.</p>
+      <ol>
+        <li><strong>(a)</strong> From a chest X-ray, output one of {normal, pneumonia, tuberculosis}. 40,000 X-rays each already read by a radiologist.</li>
+        <li><strong>(b)</strong> From a flat's area, age and postcode, output its sale price in dollars. 12,000 past sales with recorded prices.</li>
+        <li><strong>(c)</strong> From 2 million customers' purchase histories, group them into segments nobody has named in advance.</li>
+        <li><strong>(d)</strong> From an email's text, output the probability that it is spam, using 50,000 emails that users marked as spam or not.</li>
+        <li><strong>(e)</strong> From today's weather measurements, output tomorrow's rainfall in millimetres. 30 years of daily records.</li>
+        <li><strong>(f)</strong> From a handwritten character image, output which of the 26 letters it is. 60,000 labelled images.</li>
+        <li><strong>(g)</strong> You have the 60,000 labelled images from (f), but you throw the letter labels away and ask the algorithm to find clusters of similar shapes.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Two independent questions, answered in this order:</p>
+      <ol>
+        <li><strong>Are there labels $y^{(i)}$ in the training data?</strong> No labels $\Rightarrow$ <strong>unsupervised</strong>, and you stop there. Labels $\Rightarrow$ supervised, continue.</li>
+        <li><strong>What kind of set is $\mathcal{Y}$?</strong> A finite set of categories $\Rightarrow$ <strong>classification</strong>. A continuum, i.e. $\mathcal{Y} \subseteq \mathbb{R}$ $\Rightarrow$ <strong>regression</strong>.</li>
+      </ol>
+      <p>Note what is <em>not</em> in the test: the algorithm. "Logistic regression" does not make something regression, and a decision tree can do either. And note that supervision is a property of <em>your data</em>, not of the world — (f) and (g) are the same images.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — Work through (a)–(d)</summary><div>
+      <p><strong>(a) Classification.</strong> $\mathcal{X}$ = X-ray images (pixel arrays), $\mathcal{Y} = \{\text{normal}, \text{pneumonia}, \text{TB}\}$, $|\mathcal{Y}| = 3$ — a finite unordered set. Labels exist (the radiologist's reading). Multi-class classification.</p>
+      <p><strong>(b) Regression.</strong> $\mathcal{X} = \mathbb{R}^3$-ish (area, age, postcode — though postcode is really categorical and wants one-hot encoding), $\mathcal{Y} = \mathbb{R}_{&gt;0}$, dollars. Labels exist. A price is a continuum: between 400,000 dollars and 400,001 dollars there is 400,000.50.</p>
+      <p><strong>(c) Unsupervised.</strong> There is no $y$ at all, and "segments nobody has named in advance" is the giveaway — if the segments were named you would have labels and it would be classification. This is clustering.</p>
+      <p><strong>(d) Classification.</strong> The <em>output</em> is a probability in $[0,1]$, which looks continuous and is the single most common wrong answer here. But $\mathcal{Y} = \{\text{spam}, \text{not spam}\}$: the <em>label you are trying to recover</em> is binary. A probability is a graded answer to a yes/no question, not a real-valued quantity in its own right. This is binary classification, done with logistic regression.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (e)–(g)</summary><div>
+      <p><strong>(e) Regression.</strong> $\mathcal{Y} = \mathbb{R}_{\ge 0}$, millimetres of rain. Labels exist (tomorrow's actual measurement, known for every historical day). Note that "will it rain tomorrow? yes/no" would be classification on the same inputs — the <em>question</em> determines the type, not the data source.</p>
+      <p><strong>(f) Classification.</strong> $|\mathcal{Y}| = 26$. The classes have no meaningful order or distance: "the answer was R and we said S" is not a near-miss worth half credit, which is exactly why zero-one loss is the natural loss here and squared loss is not.</p>
+      <p><strong>(g) Unsupervised.</strong> Same $\mathcal{X}$ as (f), same images, same pixels — and the labels are gone. Supervised versus unsupervised is a fact about the training set in front of you.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <div class="scroll-x">
+      <table class="center">
+        <thead><tr><th></th><th>Type</th><th>$\mathcal{Y}$</th><th>The deciding observation</th></tr></thead>
+        <tbody>
+          <tr><td>(a)</td><td>classification</td><td>$\{$normal, pneumonia, TB$\}$</td><td>3 unordered categories, labelled by radiologists</td></tr>
+          <tr><td>(b)</td><td>regression</td><td>$\mathbb{R}_{&gt;0}$ (dollars)</td><td>price is a continuum</td></tr>
+          <tr><td>(c)</td><td>unsupervised</td><td>— none —</td><td>no labels; groups not named in advance</td></tr>
+          <tr><td>(d)</td><td>classification</td><td>$\{$spam, not spam$\}$</td><td>a probability is a soft answer to a binary question</td></tr>
+          <tr><td>(e)</td><td>regression</td><td>$\mathbb{R}_{\ge 0}$ (mm)</td><td>rainfall is a continuum</td></tr>
+          <tr><td>(f)</td><td>classification</td><td>26 letters</td><td>finite, unordered, no distance between classes</td></tr>
+          <tr><td>(g)</td><td>unsupervised</td><td>— none —</td><td>labels discarded, same inputs as (f)</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — (d), the continuous output.</strong> Logistic regression outputs a number in $[0,1]$ and its name contains "regression", and both facts are decoys. $\mathcal{Y}$ is what you are predicting, not what your model happens to emit on the way there.</p>
+      <p><strong>Trap 2 — (f) versus (g).</strong> The pair exists to force the point that the <em>same raw data</em> supports both a supervised and an unsupervised problem. "Is this dataset supervised?" is a question about whether someone wrote labels down.</p>
+      <p><strong>Trap 3 — ordinal outputs.</strong> A star rating in $\{1,2,3,4,5\}$ is the standard follow-up. It is finite (so classification is defensible) but ordered (so regression is defensible, and treating 1-vs-5 as the same mistake as 4-vs-5 is clearly wrong). The marks are in the justification: name $\mathcal{Y}$, say it is finite but ordered, and say which loss you would use. A question with two defensible answers is testing whether you can say <em>why</em>.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 15</span>Asymmetric loss: when 85% accuracy is the worse model <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>A hospital screens for a disease. $y = 1$ means the patient has it, $\hat y = 1$ means the model flags them. A missed case leads to late treatment; a false flag leads to one extra confirmatory test. The hospital writes down this loss table, in units of "cost of one extra confirmatory test":</p>
+      <table class="tight center">
+        <thead><tr><th>$\ell(\hat y, y)$</th><th>$y = 1$ (has it)</th><th>$y = 0$ (healthy)</th></tr></thead>
+        <tbody>
+          <tr><td>$\hat y = 1$ (flag)</td><td>0</td><td>1 &nbsp;<span class="tiny muted">false positive</span></td></tr>
+          <tr><td>$\hat y = 0$ (clear)</td><td>10 &nbsp;<span class="tiny muted">false negative</span></td><td>0</td></tr>
+        </tbody>
+      </table>
+      <p>Two classifiers are evaluated on the same 20 held-out patients (8 of whom have the disease):</p>
+      <table class="tight center">
+        <thead><tr><th>Classifier</th><th>TP</th><th>FN</th><th>FP</th><th>TN</th></tr></thead>
+        <tbody>
+          <tr><td>$h_1$</td><td>6</td><td>2</td><td>1</td><td>11</td></tr>
+          <tr><td>$h_2$</td><td>8</td><td>0</td><td>5</td><td>7</td></tr>
+        </tbody>
+      </table>
+      <ol>
+        <li><strong>(a)</strong> Compute the empirical risk of each classifier under <strong>zero-one loss</strong>, and state the accuracy of each.</li>
+        <li><strong>(b)</strong> Compute the empirical risk of each under the <strong>hospital's loss table</strong>.</li>
+        <li><strong>(c)</strong> Which should the hospital deploy?</li>
+        <li><strong>(d)</strong> A third model outputs a probability $p = P(y = 1 \mid x)$. Above what $p$ should it flag the patient, to minimise expected loss under this table?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Still just $\hat R(h) = \frac1N\sum_i \ell(h(x^{(i)}), y^{(i)})$ — but now $\ell$ is a <em>table</em>, read as "row = what we guessed, column = the truth". Two of the four cells are zero, so the sum only has two live terms:</p>
+      $$\hat R(h) \;=\; \frac{1}{N}\Big[\,\underbrace{\#\text{FN}}_{\hat y=0,\,y=1}\cdot 10 \;+\; \underbrace{\#\text{FP}}_{\hat y=1,\,y=0}\cdot 1 \,\Big].$$
+      <p>Zero-one loss is the special case where both off-diagonal cells are 1, so $\hat R_{0/1} = (\#\text{FN} + \#\text{FP})/N$ — the error rate, and $1 - \hat R_{0/1}$ is the accuracy.</p>
+      <p>Part (d) is a different kind of question: not "evaluate a classifier" but "given a probability, what is the cost-minimising <em>decision</em>?" Compare two expected losses and find where they cross.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) zero-one loss</summary><div>
+      <p><strong>$h_1$:</strong> errors $= \text{FN} + \text{FP} = 2 + 1 = 3$. $\ \hat R_{0/1} = 3/20 = 0.15$, accuracy $85\%$.</p>
+      <p><strong>$h_2$:</strong> errors $= 0 + 5 = 5$. $\ \hat R_{0/1} = 5/20 = 0.25$, accuracy $75\%$.</p>
+      <p>By accuracy, $h_1$ is clearly the better model — ten percentage points better.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) the hospital's loss</summary><div>
+      <p><strong>$h_1$:</strong> $\ \hat R = \dfrac{2 \cdot 10 + 1 \cdot 1}{20} = \dfrac{20 + 1}{20} = \dfrac{21}{20} = \mathbf{1.05}$.</p>
+      <p><strong>$h_2$:</strong> $\ \hat R = \dfrac{0 \cdot 10 + 5 \cdot 1}{20} = \dfrac{5}{20} = \dfrac{1}{4} = \mathbf{0.25}$.</p>
+      <p>$h_2$ costs the hospital about one quarter of what $h_1$ costs. The ranking has reversed, and not narrowly — by a factor of four.</p>
+      <p>Sanity check on the units: $h_1$'s risk exceeds 1, which is fine. The risk is an average cost measured in confirmatory-test units, and a single missed case costs ten of those, so averages above 1 are entirely possible. Only <em>zero-one</em> risk is forced into $[0,1]$.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) the decision threshold</summary><div>
+      <p>Suppose the model tells you $P(y=1 \mid x) = p$. You have two actions.</p>
+      <p><strong>Flag ($\hat y = 1$):</strong> expected loss $= p \cdot \ell(1,1) + (1-p)\cdot \ell(1,0) = p\cdot 0 + (1-p)\cdot 1 = 1 - p$.</p>
+      <p><strong>Clear ($\hat y = 0$):</strong> expected loss $= p \cdot \ell(0,1) + (1-p)\cdot \ell(0,0) = p \cdot 10 + 0 = 10p$.</p>
+      <p>Flag when flagging is cheaper:</p>
+      $$1 - p &lt; 10p \iff 1 &lt; 11p \iff p &gt; \frac{1}{11} \approx 0.0909.$$
+      <p>So flag any patient with more than a $9.1\%$ chance of disease — nowhere near the default threshold of $0.5$. In general, with false-negative cost $c_{\text{FN}}$ and false-positive cost $c_{\text{FP}}$, the break-even point is</p>
+      $$p^{*} = \frac{c_{\text{FP}}}{c_{\text{FP}} + c_{\text{FN}}},$$
+      <p>which gives $1/(1+10) = 1/11$ here, and $1/2$ exactly when the two costs are equal — which is the only reason $0.5$ is ever the right threshold.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th></th><th>$\hat R_{0/1}$</th><th>accuracy</th><th>$\hat R_{\text{hospital}}$</th></tr></thead>
+        <tbody>
+          <tr><td>$h_1$</td><td><strong>0.15</strong> ✓</td><td>85%</td><td>1.05</td></tr>
+          <tr><td>$h_2$</td><td>0.25</td><td>75%</td><td><strong>0.25</strong> ✓</td></tr>
+        </tbody>
+      </table>
+      <p><strong>(c)</strong> Deploy $h_2$. It is the less accurate model and the cheaper one, because the hospital's own loss table says a missed case is worth ten false alarms, and $h_2$ misses none.</p>
+      <p><strong>(d)</strong> Flag whenever $p &gt; 1/11 \approx 0.091$.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>The trap is reading accuracy as a measure of quality.</strong> Accuracy is $\hat R$ under one specific loss — the one that says every mistake costs the same — and that loss is almost never the one the application has. The exam builds the numbers so that the higher-accuracy model is the worse model, because if you have internalised $\hat R_\ell$ you cannot get this wrong, and if you have memorised "accuracy good" you cannot get it right.</p>
+      <p><strong>Second trap — transposing the table.</strong> Rows are predictions, columns are truth. If you read $\ell(\hat y{=}0, y{=}1) = 10$ as "flagging a healthy patient costs 10", you compute $(1\cdot 10 + 2\cdot 1)/20 = 0.6$ for $h_1$ and $(5\cdot 10+0)/20 = 2.5$ for $h_2$, conclude $h_1$ wins, and have produced a fluent, wrong answer. Write the words "false negative" and "false positive" into the cells before you multiply anything.</p>
+      <p><strong>Third trap — the threshold of $0.5$.</strong> $0.5$ is not a principled threshold; it is the break-even point of a symmetric loss. With a $10{:}1$ cost ratio it moves to $1/11$. Any screening, fraud or safety question is asking you to notice this.</p>
+      <p><strong>Fourth trap — class imbalance.</strong> Here 8 of 20 are positive. Push that to 1 in 1000 and the constant classifier "nobody is ill" scores $99.9\%$ accuracy with risk $10 \cdot 1/1000 = 0.01$ under this table, while catching nothing. Always compute what the trivial classifier scores before claiming a number is good.</p>
+    </div></details>
+  </div>
+
+  <h2 id="decision-trees">6. Decision trees and information theory</h2>
+
+  <p>Chapter references: <a href="decision-trees.html">Decision trees &amp; ERM</a> and <a href="information-theory.html">Entropy &amp; mutual information</a>.</p>
+
+  <div class="box key">
+    <span class="label">The $\log_2$ values these problems need</span>
+    <p style="margin-bottom:0">Every entropy on this page can be built from these, so you never need a calculator. $\log_2 2 = 1$, $\log_2 3 = 1.585$, $\log_2 4 = 2$, $\log_2 5 = 2.322$, $\log_2 6 = 2.585$, $\log_2 8 = 3$. Binary entropies: $H(1/2) = 1$, $H(1/3) = H(2/3) = 0.918$, $H(1/4) = H(3/4) = 0.811$, $H(1/5) = H(4/5) = 0.722$, $H(2/5) = H(3/5) = 0.971$, and $H(0) = H(1) = 0$.</p>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 16</span>Choose the root split by training error <span class="pill">warm-up</span></div>
+    <div class="g-body">
+      <p>Eight emails, labelled spam ($y=1$) or not ($y=0$). Two binary attributes and one numeric attribute:</p>
+      <table class="tight center">
+        <thead><tr><th>id</th><th>$f_1$: contains “FREE”</th><th>$f_2$: sender not in contacts</th><th>$L$: number of links</th><th>$y$: spam</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>0</td><td>2</td><td>1</td></tr>
+          <tr><td>2</td><td>1</td><td>1</td><td>0</td><td>1</td></tr>
+          <tr><td>3</td><td>1</td><td>1</td><td>5</td><td>1</td></tr>
+          <tr><td>4</td><td>1</td><td>1</td><td>7</td><td>1</td></tr>
+          <tr><td>5</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+          <tr><td>6</td><td>0</td><td>0</td><td>4</td><td>0</td></tr>
+          <tr><td>7</td><td>0</td><td>0</td><td>6</td><td>0</td></tr>
+          <tr><td>8</td><td>0</td><td>1</td><td>9</td><td>0</td></tr>
+        </tbody>
+      </table>
+      <p>The three candidate root tests are $f_1 = 1$?, $f_2 = 1$?, and $L \ge 4$?.</p>
+      <ol>
+        <li><strong>(a)</strong> What is the training error of the best <em>depth-0</em> tree (a single leaf, no split)?</li>
+        <li><strong>(b)</strong> For each candidate test, build the depth-1 stump that labels each child with its majority class, and compute its training error.</li>
+        <li><strong>(c)</strong> Which test does the training-error criterion choose? Which test would a “stop if the split doesn't reduce training error” rule reject outright?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>The training error of a stump is the empirical risk under zero-one loss, and for a majority-vote leaf that is just the count of the <strong>minority</strong> class in the leaf. So for every candidate test the recipe is:</p>
+      <ol>
+        <li>Split the 8 rows into the two children.</li>
+        <li>In each child, count $(\#y{=}1, \#y{=}0)$.</li>
+        <li>The leaf predicts the majority; its mistakes are the minority count, $\min(\#1, \#0)$.</li>
+        <li>Stump error $= \dfrac{\text{minority of left} + \text{minority of right}}{8}$.</li>
+      </ol>
+      <p>You never need to compute an entropy, a probability or a weighted average here. Count, take minima, add, divide by 8.</p>
+      <p>Overall label counts first, because (a) needs them: $y=1$ for ids 1,2,3,4,5 — <strong>5 spam</strong>; $y=0$ for ids 6,7,8 — <strong>3 not spam</strong>.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the depth-0 baseline</summary><div>
+      <p>A single leaf must predict one class for all 8 emails. Majority is spam (5 vs 3), so it predicts spam and is wrong on the 3 non-spam emails:</p>
+      $$\text{error}(\text{depth-0}) = \tfrac{3}{8} = 0.375.$$
+      <p>Compute this <em>before</em> the splits, always. It is the number every split has to beat, and it is the number a tie-breaking or stopping rule is compared against.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) the three stumps</summary><div>
+      <p><strong>Test $f_1 = 1$?</strong></p>
+      <p>$f_1 = 1$: ids 1,2,3,4 — all spam, $(4, 0)$. Predict spam, minority $= 0$ mistakes. <em>Pure leaf.</em><br>
+      $f_1 = 0$: ids 5,6,7,8 — $(1, 3)$. Predict not-spam, minority $= 1$ mistake (id 5).</p>
+      $$\text{error} = \tfrac{0 + 1}{8} = \tfrac{1}{8} = 0.125.$$
+      <p><strong>Test $f_2 = 1$?</strong></p>
+      <p>$f_2 = 1$: ids 2,3,4,8 — $(3, 1)$. Predict spam, 1 mistake (id 8).<br>
+      $f_2 = 0$: ids 1,5,6,7 — $(2, 2)$. Tie; predict either, 2 mistakes.</p>
+      $$\text{error} = \tfrac{1 + 2}{8} = \tfrac{3}{8} = 0.375.$$
+      <p><strong>Test $L \ge 4$?</strong></p>
+      <p>$L \ge 4$: ids 3 ($L{=}5$), 4 ($L{=}7$), 6 ($L{=}4$), 7 ($L{=}6$), 8 ($L{=}9$) — $(2, 3)$. Predict not-spam, 2 mistakes.<br>
+      $L &lt; 4$: ids 1 ($L{=}2$), 2 ($L{=}0$), 5 ($L{=}1$) — $(3, 0)$. Predict spam, 0 mistakes. <em>Pure leaf.</em></p>
+      $$\text{error} = \tfrac{2 + 0}{8} = \tfrac{2}{8} = 0.25.$$
+      <p>Note that $L \ge 4$ puts <strong>five</strong> rows on the left and three on the right — children do not have to be the same size, and the $L=4$ row goes with the “$\ge$” side. Decide which way the boundary rounds before you count, and write it down.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th>Test</th><th>left child $(1,0)$</th><th>right child $(1,0)$</th><th>mistakes</th><th>error</th><th>reduction vs $3/8$</th></tr></thead>
+        <tbody>
+          <tr><td>$f_1 = 1$?</td><td>$(4,0)$</td><td>$(1,3)$</td><td>$0+1$</td><td><strong>$1/8 = 0.125$</strong> ✓</td><td>$2/8$</td></tr>
+          <tr><td>$L \ge 4$?</td><td>$(2,3)$</td><td>$(3,0)$</td><td>$2+0$</td><td>$2/8 = 0.25$</td><td>$1/8$</td></tr>
+          <tr><td>$f_2 = 1$?</td><td>$(3,1)$</td><td>$(2,2)$</td><td>$1+2$</td><td>$3/8 = 0.375$</td><td><strong>$0$</strong></td></tr>
+        </tbody>
+      </table>
+      <p><strong>(a)</strong> $3/8$. &nbsp; <strong>(b)</strong> as tabulated. &nbsp; <strong>(c)</strong> Training error chooses <strong>$f_1$</strong>. A “stop unless the split reduces training error” rule rejects <strong>$f_2$</strong>, whose stump is exactly as wrong as the single leaf it replaced.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — summing errors instead of error rates, or averaging rates instead of summing counts.</strong> Both children divide by the same $N = 8$, so you may add raw mistake counts and divide once at the end. What you may <em>not</em> do is average the two children's error <em>rates</em> unweighted: for $f_1$ that would give $\frac12(0) + \frac12(1/4) = 1/8$ by luck (the children are the same size), but for $L \ge 4$ it gives $\frac12(2/5) + \frac12(0) = 1/5 \ne 1/4$. Weight by child size, or just count mistakes.</p>
+      <p><strong>Trap 2 — the $(2,2)$ tie.</strong> A tied leaf is wrong on half its examples no matter which way you break the tie. Predicting "spam" there does not make the error 0.</p>
+      <p><strong>Trap 3 — the threshold row.</strong> Id 6 has exactly $L = 4$, and the test is $L \ge 4$, so it goes left. Exams put a point exactly on the threshold every time.</p>
+      <p><strong>Trap 4 — thinking a pure child means a good split.</strong> Both $f_1$ and $L \ge 4$ produce a pure leaf; their errors differ by a factor of two. And in Problem 17 a split that produces a pure leaf has the <em>worse</em> training error of the two candidates.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 17</span>Information gain and training error pick different splits <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Ten flats went on the market. $y = 1$ means “sold within 30 days”. Attributes: $R$ = recently renovated, $M$ = on a main road, and $d$ = distance to the station in km.</p>
+      <table class="tight center">
+        <thead><tr><th>id</th><th>$R$</th><th>$M$</th><th>$d$ (km)</th><th>$y$: sold</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>0</td><td>0.5</td><td>1</td></tr>
+          <tr><td>2</td><td>1</td><td>0</td><td>1.0</td><td>1</td></tr>
+          <tr><td>3</td><td>1</td><td>0</td><td>3.0</td><td>1</td></tr>
+          <tr><td>4</td><td>1</td><td>0</td><td>1.5</td><td>0</td></tr>
+          <tr><td>5</td><td>1</td><td>0</td><td>4.0</td><td>0</td></tr>
+          <tr><td>6</td><td>0</td><td>0</td><td>2.5</td><td>1</td></tr>
+          <tr><td>7</td><td>0</td><td>0</td><td>2.0</td><td>0</td></tr>
+          <tr><td>8</td><td>0</td><td>0</td><td>5.0</td><td>0</td></tr>
+          <tr><td>9</td><td>0</td><td>1</td><td>1.2</td><td>0</td></tr>
+          <tr><td>10</td><td>0</td><td>1</td><td>3.5</td><td>0</td></tr>
+        </tbody>
+      </table>
+      <p>The three candidate root tests are $R = 1$?, $M = 1$?, and $d \le 2$?.</p>
+      <ol>
+        <li><strong>(a)</strong> Compute the training error of each stump.</li>
+        <li><strong>(b)</strong> Compute $H(Y)$ at the root, then $H(Y \mid \cdot)$ and the information gain $I(Y; \cdot)$ for each test, to three decimals.</li>
+        <li><strong>(c)</strong> The two criteria choose different tests. Say which chooses what, and explain what each criterion can see that the other cannot.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Two scores for the same three splits. The counts you need are identical for both, so <strong>build the count table once</strong> and read both scores off it.</p>
+      <p>For each test, for each child, you want the pair $(\#y{=}1,\ \#y{=}0)$ and the child size. Then:</p>
+      $$\text{error} = \frac{\sum_{\text{children}} \min(\#1, \#0)}{N}, \qquad H(Y \mid W) = \sum_{\text{children}} \frac{|S_c|}{N}\,H(Y \mid W = c), \qquad I(Y;W) = H(Y) - H(Y\mid W).$$
+      <p>$H(Y)$ is the same for all three tests, so whichever test minimises $H(Y \mid W)$ maximises the gain. You can rank by $H(Y\mid W)$ alone and only subtract once.</p>
+      <p>Overall labels: sold = ids 1,2,3,6 — <strong>4 sold</strong>, 6 unsold.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — The count table</summary><div>
+      <p><strong>$R = 1$?</strong> $\ R{=}1$: ids 1–5, sold 1,2,3 $\Rightarrow (3,2)$, size 5. $\ R{=}0$: ids 6–10, sold 6 only $\Rightarrow (1,4)$, size 5.</p>
+      <p><strong>$M = 1$?</strong> $\ M{=}1$: ids 9,10, neither sold $\Rightarrow (0,2)$, size 2. $\ M{=}0$: ids 1–8, sold 1,2,3,6 $\Rightarrow (4,4)$, size 8.</p>
+      <p><strong>$d \le 2$?</strong> $\ d \le 2$: ids 1 (0.5), 2 (1.0), 4 (1.5), 7 (2.0), 9 (1.2), sold 1,2 $\Rightarrow (2,3)$, size 5. $\ d &gt; 2$: ids 3 (3.0), 5 (4.0), 6 (2.5), 8 (5.0), 10 (3.5), sold 3,6 $\Rightarrow (2,3)$, size 5.</p>
+      <table class="tight center">
+        <thead><tr><th>Test</th><th>child 1 $(1,0)$</th><th>size</th><th>child 2 $(1,0)$</th><th>size</th></tr></thead>
+        <tbody>
+          <tr><td>$R = 1$?</td><td>$(3,2)$</td><td>5</td><td>$(1,4)$</td><td>5</td></tr>
+          <tr><td>$M = 1$?</td><td>$(0,2)$</td><td>2</td><td>$(4,4)$</td><td>8</td></tr>
+          <tr><td>$d \le 2$?</td><td>$(2,3)$</td><td>5</td><td>$(2,3)$</td><td>5</td></tr>
+        </tbody>
+      </table>
+      <p>Check every row sums to $(4,6)$ and to 10. All three do.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (a) Training errors</summary><div>
+      <p>Root as a single leaf: majority is unsold (6 vs 4), so 4 mistakes, error $4/10$.</p>
+      <p><strong>$R$:</strong> $\min(3,2) + \min(1,4) = 2 + 1 = 3$, error $= 3/10 = 0.3$.</p>
+      <p><strong>$M$:</strong> $\min(0,2) + \min(4,4) = 0 + 4 = 4$, error $= 4/10 = 0.4$.</p>
+      <p><strong>$d \le 2$:</strong> $\min(2,3) + \min(2,3) = 2 + 2 = 4$, error $= 4/10 = 0.4$.</p>
+      <p>So training error says: $R$ is the best test, and $M$ and $d\le 2$ are tied — and both are <em>worthless</em>, since neither beats the $4/10$ of not splitting at all.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (b) Entropies and gains</summary><div>
+      <p><strong>Root.</strong> 4 sold out of 10, so $H(Y) = H(2/5) = \mathbf{0.971}$ bits.</p>
+      <p><strong>$R = 1$?</strong></p>
+      $$H(Y \mid R{=}1) = H(3/5) = 0.971, \qquad H(Y \mid R{=}0) = H(1/5) = 0.722$$
+      $$H(Y \mid R) = \tfrac{5}{10}(0.971) + \tfrac{5}{10}(0.722) = 0.4855 + 0.3610 = \mathbf{0.846}$$
+      $$I(Y;R) = 0.971 - 0.846 = \mathbf{0.125}\ \text{bits}$$
+      <p><strong>$M = 1$?</strong></p>
+      $$H(Y \mid M{=}1) = H(0) = 0 \quad\text{(pure: both unsold)}, \qquad H(Y \mid M{=}0) = H(1/2) = 1$$
+      $$H(Y \mid M) = \tfrac{2}{10}(0) + \tfrac{8}{10}(1) = \mathbf{0.800}$$
+      $$I(Y;M) = 0.971 - 0.800 = \mathbf{0.171}\ \text{bits}$$
+      <p><strong>$d \le 2$?</strong></p>
+      $$H(Y \mid d{\le}2) = H(2/5) = 0.971, \qquad H(Y \mid d{&gt;}2) = H(2/5) = 0.971$$
+      $$H(Y \mid d) = \tfrac{5}{10}(0.971) + \tfrac{5}{10}(0.971) = 0.971 = H(Y), \qquad I(Y;d) = \mathbf{0.000}\ \text{bits}$$
+      <p>Zero gain, exactly. Both children have the same class proportions as the parent, so knowing $d \le 2$ tells you <em>nothing at all</em> about whether the flat sold. (Exact values, for the record: $I(Y;R) = 0.124511$, $I(Y;M) = 0.170951$, $I(Y;d) = 0$.)</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th>Test</th><th>training error</th><th>$H(Y\mid W)$</th><th>$I(Y;W)$</th></tr></thead>
+        <tbody>
+          <tr><td>$R = 1$?</td><td><strong>$0.3$</strong> ✓ error's pick</td><td>$0.846$</td><td>$0.125$</td></tr>
+          <tr><td>$M = 1$?</td><td>$0.4$</td><td>$\mathbf{0.800}$</td><td><strong>$0.171$</strong> ✓ gain's pick</td></tr>
+          <tr><td>$d \le 2$?</td><td>$0.4$</td><td>$0.971$</td><td>$0.000$</td></tr>
+        </tbody>
+      </table>
+      <p><strong>(c)</strong> Training error picks $R$; information gain picks $M$. This is a genuine reversal, not a tie-break.</p>
+      <p><strong>What gain sees that error cannot.</strong> Splitting on $M$ carves out a <em>pure</em> group of two flats — on a main road, neither sold, zero remaining uncertainty, a finished leaf. Training error cannot score that, because those two flats were already being predicted correctly by the root's majority vote, so isolating them changes nothing it measures. Error only ever notices a change that <em>flips a majority</em>; it is a step function of the counts and is flat everywhere else.</p>
+      <p><strong>What error sees that gain undervalues.</strong> $R$ genuinely makes fewer mistakes right now — 3 instead of 4. If you were forced to stop at depth 1 and be graded on accuracy, $R$ is the better stump. Gain is optimising a surrogate (expected number of yes/no questions still needed), not accuracy.</p>
+      <p><strong>And both agree on $d$.</strong> Error says it reduces nothing; gain says $0.000$ bits. When both criteria agree a split is useless, it is useless.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>The trap is assuming the two criteria agree, so you compute the cheap one and report it.</strong> They are different objectives and they really do disagree. If a question asks for "the best split" without saying by which criterion, that omission is the question — and if it asks for both, expect the answers to differ, because that is the only reason to ask for both.</p>
+      <p><strong>Second trap — forgetting the size weights in $H(Y\mid W)$.</strong> For $M$ the children are sizes 2 and 8, and the unweighted average $\frac12(0) + \frac12(1) = 0.5$ would give a gain of $0.471$ — nearly four times the truth, and it would still have picked $M$, so the answer "looks" right while the method is wrong. Conditional entropy is an expectation over $P(W = \omega) = |S_\omega|/N$.</p>
+      <p><strong>Third trap — a pure child is not a finished job.</strong> $M$ gives one pure leaf of size 2 and leaves a perfectly balanced node of size 8 behind, which still needs work. Purity is per-leaf; the split is scored over all leaves.</p>
+      <p><strong>Fourth trap — reading $I(Y;d) = 0$ as “$d$ is irrelevant”.</strong> It means <em>this threshold</em> is uninformative. A different cut on the same attribute can have positive gain; real-valued attributes are retested at every threshold, which is also why you do not remove an attribute from $A$ in the recursive call once thresholds are allowed.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 18</span>$H(Y)$, $H(Y \mid W)$ and $I(Y;W)$ to three decimals <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Eight students. $W$ is how much lab practice they did (low / medium / high) and $Y$ is whether they passed. The joint counts:</p>
+      <table class="tight center">
+        <thead><tr><th>counts</th><th>$W = $ low</th><th>$W = $ med</th><th>$W = $ high</th><th>row total</th></tr></thead>
+        <tbody>
+          <tr><td>$Y = 1$ (passed)</td><td>3</td><td>1</td><td>2</td><td>6</td></tr>
+          <tr><td>$Y = 0$ (failed)</td><td>1</td><td>1</td><td>0</td><td>2</td></tr>
+          <tr><td><strong>column total</strong></td><td>4</td><td>2</td><td>2</td><td>8</td></tr>
+        </tbody>
+      </table>
+      <ol>
+        <li><strong>(a)</strong> $H(Y)$.</li>
+        <li><strong>(b)</strong> $H(Y \mid W = \omega)$ for each of the three values of $\omega$.</li>
+        <li><strong>(c)</strong> $H(Y \mid W)$ and $I(Y;W)$.</li>
+        <li><strong>(d)</strong> <span class="pill">stretch</span> Compute $H(W)$ and $H(W \mid Y)$, and verify that $H(W) - H(W \mid Y)$ equals your answer to (c).</li>
+      </ol>
+      <p class="tiny muted">All to three decimals, using the $\log_2$ table above. Use $0 \log_2 \frac{1}{0} := 0$.</p>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Three different distributions, so be explicit about which one each entropy is taken over.</p>
+      <ul>
+        <li>$H(Y)$ uses the <strong>row totals</strong>: $P(Y{=}1) = 6/8$, $P(Y{=}0) = 2/8$.</li>
+        <li>$H(Y \mid W = \omega)$ uses <strong>one column, normalised by that column's total</strong> — not by 8.</li>
+        <li>$H(Y \mid W)$ averages those three numbers, weighted by the <strong>column totals over 8</strong>.</li>
+      </ul>
+      <p>The single most common error in this whole topic is dividing a cell by $N$ when computing a conditional. Inside column "med" the probabilities are $1/2, 1/2$, not $1/8, 1/8$.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) and (b)</summary><div>
+      <p><strong>(a)</strong> $P(Y{=}1) = 6/8 = 3/4$, $P(Y{=}0) = 1/4$:</p>
+      $$H(Y) = \tfrac34 \log_2 \tfrac43 + \tfrac14\log_2 4 = \tfrac34(2 - 1.585) + \tfrac14(2) = \tfrac34(0.415) + 0.5 = 0.311 + 0.5 = \mathbf{0.811}$$
+      <p>(This is $H(1/4) = H(3/4) = 0.811$ from the table; the long form is shown so you can see where it comes from. $\log_2\frac43 = 2 - \log_2 3 = 2 - 1.585 = 0.415$.)</p>
+      <p><strong>(b)</strong> One column at a time.</p>
+      <p>$W = $ low: column is $(3, 1)$, total 4, so $P(Y{=}1 \mid \text{low}) = 3/4$:</p>
+      $$H(Y \mid W = \text{low}) = H(3/4) = \mathbf{0.811}$$
+      <p>$W = $ med: column is $(1,1)$, total 2, so $P = 1/2$ each — maximum uncertainty:</p>
+      $$H(Y \mid W = \text{med}) = H(1/2) = \mathbf{1.000}$$
+      <p>$W = $ high: column is $(2,0)$, total 2, so $P(Y{=}1 \mid \text{high}) = 1$ — pure:</p>
+      $$H(Y \mid W = \text{high}) = H(1) = \mathbf{0.000}$$
+    </div></details>
+    <details class="step"><summary>Step 3 — (c) the weighted average, and the gain</summary><div>
+      <p>Weights are $P(W{=}\omega) = $ column total $/\,8$: low $4/8 = 1/2$, med $2/8 = 1/4$, high $2/8 = 1/4$.</p>
+      $$H(Y \mid W) = \tfrac12(0.811278) + \tfrac14(1.000000) + \tfrac14(0.000000) = 0.405639 + 0.250000 + 0 = \mathbf{0.656}$$
+      $$I(Y;W) = H(Y) - H(Y\mid W) = 0.811278 - 0.655639 = \mathbf{0.156}\ \text{bits}$$
+      <p>Two sanity checks worth doing every time:</p>
+      <ul>
+        <li>$H(Y \mid W) \le H(Y)$: $0.656 \le 0.811$ ✓. Conditioning never increases entropy on average, so a negative gain is always an arithmetic error.</li>
+        <li>$H(Y\mid W)$ lies between the smallest and largest of $\{0, 0.811, 1\}$ ✓. It is an average of them.</li>
+      </ul>
+      <p>Note that $H(Y\mid W=\text{med}) = 1 &gt; H(Y) = 0.811$. That is allowed: conditioning on a <em>particular</em> value can increase uncertainty. Only the average is guaranteed not to.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) the symmetry check <span class="pill">stretch</span></summary><div>
+      <p><strong>$H(W)$</strong> from the column totals $4/8, 2/8, 2/8 = \frac12, \frac14, \frac14$:</p>
+      $$H(W) = \tfrac12\log_2 2 + \tfrac14 \log_2 4 + \tfrac14\log_2 4 = 0.5 + 0.5 + 0.5 = \mathbf{1.500}$$
+      <p><strong>$H(W \mid Y)$</strong> — now condition the other way, using the <em>rows</em>.</p>
+      <p>Row $Y{=}1$ is $(3,1,2)$, total 6, so $P(W \mid Y{=}1) = \frac12, \frac16, \frac13$:</p>
+      $$H(W \mid Y{=}1) = \tfrac12\log_2 2 + \tfrac16\log_2 6 + \tfrac13\log_2 3 = 0.5 + \tfrac{2.585}{6} + \tfrac{1.585}{3} = 0.5 + 0.4308 + 0.5283 = 1.459$$
+      <p>Row $Y{=}0$ is $(1,1,0)$, total 2, so $P = \frac12, \frac12, 0$:</p>
+      $$H(W \mid Y{=}0) = H(1/2) = 1.000$$
+      $$H(W \mid Y) = \tfrac68(1.459148) + \tfrac28(1.000000) = 1.094361 + 0.250000 = \mathbf{1.344}$$
+      $$H(W) - H(W\mid Y) = 1.500000 - 1.344361 = \mathbf{0.156}\ \text{bits} \quad\checkmark$$
+      <p>Same number as (c), to six decimals. Mutual information is symmetric — $I(Y;W) = I(W;Y)$ — even though the conditional entropies going each way ($0.656$ and $1.344$) are nothing like each other.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th>quantity</th><th>value (bits)</th></tr></thead>
+        <tbody>
+          <tr><td>$H(Y)$</td><td>$0.811$</td></tr>
+          <tr><td>$H(Y \mid W = \text{low})$</td><td>$0.811$</td></tr>
+          <tr><td>$H(Y \mid W = \text{med})$</td><td>$1.000$</td></tr>
+          <tr><td>$H(Y \mid W = \text{high})$</td><td>$0.000$</td></tr>
+          <tr><td>$H(Y \mid W)$</td><td>$0.656$</td></tr>
+          <tr><td>$I(Y;W)$</td><td>$\mathbf{0.156}$</td></tr>
+          <tr><td>$H(W)$ &nbsp;<span class="tiny muted">(d)</span></td><td>$1.500$</td></tr>
+          <tr><td>$H(W \mid Y)$ &nbsp;<span class="tiny muted">(d)</span></td><td>$1.344$</td></tr>
+          <tr><td>$H(W) - H(W\mid Y)$</td><td>$\mathbf{0.156}$ ✓</td></tr>
+        </tbody>
+      </table>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — normalising a conditional by $N$.</strong> In column "med" the cells are 1 and 1. If you use $1/8$ and $1/8$ you get $2 \cdot \frac18 \log_2 8 = 0.75$ instead of $1.000$, and the error propagates into both $H(Y\mid W)$ and the gain. A conditional distribution must sum to 1 <em>within the condition</em>. Check that before computing any logarithm.</p>
+      <p><strong>Trap 2 — the pure column.</strong> $W=\text{high}$ has a zero cell. $0\log_2\frac10$ is defined to be 0, so $H = 0$, not undefined and not "skip the column" — the column still carries weight $2/8$ into the average, it just contributes $0$ to the sum.</p>
+      <p><strong>Trap 3 — forgetting the weights.</strong> The unweighted mean of $0.811, 1.000, 0.000$ is $0.604$, which would give a gain of about $0.208$. Plausible-looking and wrong. Weight by $P(W = \omega)$.</p>
+      <p><strong>Trap 4 — being surprised that $H(Y \mid W = \text{med}) &gt; H(Y)$.</strong> That is not an error. "Conditioning reduces entropy" is a statement about the average $H(Y\mid W)$, never about individual values. The medium-practice students are genuinely harder to call than the class as a whole.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 19</span>Axis-aligned decision boundaries <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Eight points in $\mathbb{R}^2$ with real-valued features $x_1, x_2$:</p>
+      <table class="tight center">
+        <thead><tr><th>$y = 1$ &nbsp;(● teal)</th><th>$(1,1)$</th><th>$(2,2)$</th><th>$(4,4)$</th><th>$(5,5)$</th></tr></thead>
+        <tbody><tr><td>$y = 0$ &nbsp;(✕ rose)</td><td>$(1,5)$</td><td>$(2,4)$</td><td>$(4,2)$</td><td>$(5,1)$</td></tr></tbody>
+      </table>
+
+      <div class="viz">
+        <div class="viz-title">The eight points, with the two threshold tests $x_1 = 3$ and $x_2 = 3$ drawn</div>
+        <svg viewBox="0 0 640 330" role="img" aria-label="Eight points in an XOR arrangement with the splits x1 = 3 and x2 = 3 drawn">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="120" y1="40" x2="120" y2="290"/>
+    <line x1="176.7" y1="40" x2="176.7" y2="290"/>
+    <line x1="233.3" y1="40" x2="233.3" y2="290"/>
+    <line x1="290" y1="40" x2="290" y2="290"/>
+    <line x1="346.7" y1="40" x2="346.7" y2="290"/>
+    <line x1="403.3" y1="40" x2="403.3" y2="290"/>
+    <line x1="460" y1="40" x2="460" y2="290"/>
+    <line x1="120" y1="290" x2="460" y2="290"/>
+    <line x1="120" y1="248.3" x2="460" y2="248.3"/>
+    <line x1="120" y1="206.7" x2="460" y2="206.7"/>
+    <line x1="120" y1="165" x2="460" y2="165"/>
+    <line x1="120" y1="123.3" x2="460" y2="123.3"/>
+    <line x1="120" y1="81.7" x2="460" y2="81.7"/>
+    <line x1="120" y1="40" x2="460" y2="40"/>
+  </g>
+  <g stroke="var(--line-2)" stroke-width="1.5"><line x1="120" y1="290" x2="460" y2="290"/><line x1="120" y1="40" x2="120" y2="290"/></g>
+  <g stroke="var(--accent)" stroke-width="2.5">
+    <line x1="290" y1="40" x2="290" y2="290"/>
+    <line x1="120" y1="165" x2="460" y2="165"/>
+  </g>
+  <g fill="var(--accent-2)">
+    <circle cx="176.7" cy="248.3" r="7"/>
+    <circle cx="233.3" cy="206.7" r="7"/>
+    <circle cx="346.7" cy="123.3" r="7"/>
+    <circle cx="403.3" cy="81.7" r="7"/>
+  </g>
+  <g fill="none" stroke="var(--rose)" stroke-width="2.5">
+    <line x1="170.7" y1="75.7" x2="182.7" y2="87.7"/>
+    <line x1="170.7" y1="87.7" x2="182.7" y2="75.7"/>
+    <line x1="227.3" y1="117.3" x2="239.3" y2="129.3"/>
+    <line x1="227.3" y1="129.3" x2="239.3" y2="117.3"/>
+    <line x1="340.7" y1="200.7" x2="352.7" y2="212.7"/>
+    <line x1="340.7" y1="212.7" x2="352.7" y2="200.7"/>
+    <line x1="397.3" y1="242.3" x2="409.3" y2="254.3"/>
+    <line x1="397.3" y1="254.3" x2="409.3" y2="242.3"/>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="176.7" y="307">1</text>
+    <text x="233.3" y="307">2</text>
+    <text x="290" y="307">3</text>
+    <text x="346.7" y="307">4</text>
+    <text x="403.3" y="307">5</text>
+    <text x="290" y="324" font-size="12">x_1</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="112" y="252.3">1</text>
+    <text x="112" y="210.7">2</text>
+    <text x="112" y="169">3</text>
+    <text x="112" y="127.3">4</text>
+    <text x="112" y="85.7">5</text>
+  </g>
+  <text x="88" y="165" fill="var(--ink-mute)" font-size="12" transform="rotate(-90 88 165)" text-anchor="middle">x_2</text>
+  <text x="298" y="54" fill="var(--accent)" font-size="12" font-weight="700">x_1 = 3</text>
+  <text x="466" y="159" fill="var(--accent)" font-size="12" font-weight="700">x_2 = 3</text>
+  <g font-size="12" font-weight="700">
+    <text x="500" y="230" fill="var(--accent-2)">&#9679; y = 1</text>
+    <text x="500" y="252" fill="var(--rose)">&#10005; y = 0</text>
+  </g>
+</svg>
+        <div class="caption">What to notice: the two drawn tests cut the plane into four quadrants, and each quadrant contains exactly two points of one class. The positives sit in the bottom-left and top-right; the negatives in the top-left and bottom-right. No single straight line of any slope can separate them.</div>
+      </div>
+
+      <ol>
+        <li><strong>(a)</strong> What is the training error of the best single threshold test (a depth-1 stump) on this data?</li>
+        <li><strong>(b)</strong> Write a decision tree with zero training error. What is its depth, and how many leaves does it have?</li>
+        <li><strong>(c)</strong> Can a single linear boundary $\theta_0 + \theta_1 x_1 + \theta_2 x_2 = 0$ achieve zero training error here? Justify it.</li>
+        <li><strong>(d)</strong> Now suppose instead the true rule is $y = 1 \iff x_1 + x_2 \ge 6$. Can a decision tree with axis-aligned threshold tests represent this boundary <em>exactly</em>? What happens as you add depth?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>A decision tree with real-valued features asks tests of the form “is $x_j \le t$?”. Each such test is a single <strong>axis-aligned</strong> cut — a line perpendicular to one coordinate axis — so every region a tree can carve out is a box (an axis-aligned rectangle, possibly unbounded), and the decision boundary is always a union of horizontal and vertical segments.</p>
+      <p>That is the entire content of this problem. Parts (a)–(c) ask what that buys you on this dataset; part (d) asks what it costs you on a boundary that isn't axis-aligned.</p>
+      <p>Do not assume the drawn tests $x_1 = 3$, $x_2 = 3$ are the only candidates. For (a) you must argue about <em>all</em> single tests.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the best stump</summary><div>
+      <p>Take any vertical cut $x_1 \le t$. Scan the possible $t$: the points' $x_1$ values are $1,1,2,2,4,4,5,5$, and at every $x_1$ value there is exactly one positive and one negative. So whatever $t$ you choose, each side receives equal numbers of each class — a side holding $k$ points holds $k/2$ of each. Majority vote in a tied leaf is wrong half the time, so the error is $\frac12$.</p>
+      <p>By the symmetry of the data under swapping $x_1 \leftrightarrow x_2$, the same holds for every horizontal cut.</p>
+      $$\text{error of the best depth-1 stump} = \tfrac{4}{8} = \mathbf{0.5}$$
+      <p>Which is exactly the error of not splitting at all ($4$ positives, $4$ negatives, so a single leaf is wrong 4 times). <strong>No single test helps at all</strong> — and the information gain of every single test is $0$ bits for the same reason.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) a perfect tree</summary><div>
+      <p>Split on $x_1 \le 3$, then on $x_2 \le 3$ in <em>both</em> children:</p>
+<pre><code>if x1 &lt;= 3:
+    if x2 &lt;= 3:  predict 1     # (1,1), (2,2)
+    else:        predict 0     # (1,5), (2,4)
+else:
+    if x2 &lt;= 3:  predict 0     # (4,2), (5,1)
+    else:        predict 1     # (4,4), (5,5)</code></pre>
+      <p>Every leaf is pure, so training error is $\mathbf{0}$. <strong>Depth 2, four leaves.</strong></p>
+      <p>Any threshold strictly between 2 and 4 works for both cuts, so $x_1 \le 3$ and $x_2 \le 3$ are representative rather than special. And note that $x_2$ is tested <em>again</em> below a node — reusing an attribute is required once thresholds are in play, which is why the greedy algorithm does not delete the chosen attribute from $A$ in its recursive call.</p>
+      <p>The sting: the first split, $x_1 \le 3$, has <strong>zero</strong> training error reduction and <strong>zero</strong> information gain. A greedy algorithm scoring one split at a time has no reason to prefer it over any other, yet it is the first half of a perfect tree. This is exactly what "greedy is suboptimal, but it buys computational efficiency" means in practice.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) and (d) linear versus axis-aligned</summary><div>
+      <p><strong>(c) No.</strong> This is XOR. Suppose some line gave zero error. Then the signed value $g(x) = \theta_0 + \theta_1x_1 + \theta_2x_2$ would be positive at $(1,1)$ and $(5,5)$ and negative at $(1,5)$ and $(5,1)$. Add up:</p>
+      $$g(1,1) + g(5,5) = 2\theta_0 + 6\theta_1 + 6\theta_2, \qquad g(1,5) + g(5,1) = 2\theta_0 + 6\theta_1 + 6\theta_2.$$
+      <p>The two sums are <em>identical</em> — both pairs have the same midpoint $(3,3)$. But the first must be $&gt; 0$ (sum of two positives) and the second $&lt; 0$ (sum of two negatives). Contradiction, so no such line exists. A depth-2 axis-aligned tree solves what no linear model can.</p>
+      <p><strong>(d) No — not exactly, ever.</strong> The boundary $x_1 + x_2 = 6$ is a diagonal line. A tree's boundary is a union of axis-parallel segments, so it can only approximate a diagonal with a <strong>staircase</strong>. Adding depth adds steps: each extra level halves the step width, so the error region shrinks toward zero but never reaches it. With a finite tree you always misclassify some sliver next to the diagonal.</p>
+      <p>Two honest footnotes. On a <em>finite training set</em> you can of course reach zero <em>training</em> error — in the worst case with one leaf per point. The impossibility is about representing the boundary over all of $\mathbb{R}^2$, which is what controls test error. And the fix is the one from Section 9: engineer the feature $x_3 = x_1 + x_2$ and a single test $x_3 \ge 6$ is exact. Axis-aligned is a property of the tree <em>in the coordinates you give it</em>.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $4/8 = 0.5$ — no single threshold test on either feature does better than a single leaf, and every one has zero information gain.</p>
+      <p><strong>(b)</strong> Split $x_1 \le 3$, then $x_2 \le 3$ on both branches: depth 2, 4 leaves, all pure, training error 0.</p>
+      <p><strong>(c)</strong> No. $(1,1),(5,5)$ and $(1,5),(5,1)$ share the midpoint $(3,3)$, so any linear function has the same sum on both pairs; one pair needs a positive sum and the other a negative one.</p>
+      <p><strong>(d)</strong> No. Axis-aligned tests give a staircase boundary; a diagonal needs infinitely many steps. Depth buys a finer staircase and a monotonically smaller error, never an exact fit — unless you add the feature $x_1 + x_2$.</p>
+      <div class="box key"><span class="label">Key idea</span>
+        <p style="margin-bottom:0">Trees and linear models fail on <em>different</em> datasets. Trees shrug off XOR and struggle with diagonals; linear models shrug off diagonals and cannot do XOR at all. "Which model class?" is a question about the shape of the boundary, and the honest answer usually starts with "what do the features look like?".</p>
+      </div>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — answering (a) from the figure.</strong> The drawn lines are at $3$ and $3$, so it is tempting to evaluate only those. The question says "the best single threshold test", which requires an argument over all thresholds on both features. The argument here is a symmetry argument and takes one sentence; a case-by-case scan of nine thresholds takes a page and earns the same marks.</p>
+      <p><strong>Trap 2 — "greedy would find the depth-2 tree".</strong> It might, by tie-breaking, but nothing in the criterion points at it: every first split scores zero on both training error and information gain. This dataset is the standard counterexample to "greedy top-down induction finds the optimal tree".</p>
+      <p><strong>Trap 3 — confusing "cannot represent" with "cannot fit the training set".</strong> In (d), a deep enough tree gets zero training error on any finite sample with no contradictory labels. The claim being tested is about the boundary over the whole input space.</p>
+      <p><strong>Trap 4 — forgetting that you may re-test a feature.</strong> In (b), $x_2$ is tested in both subtrees. Students who learned "remove the attribute from $A$" from the binary-attribute version of the algorithm conclude that no depth-2 tree exists here.</p>
+    </div></details>
+  </div>
+
+  <h2 id="linear-regression">7. Linear regression</h2>
+
+  <p>Chapter reference: <a href="linear-regression.html">Linear regression &amp; the normal equations</a>.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 20</span>The scalar closed form by hand <span class="pill">warm-up</span></div>
+    <div class="g-body">
+      <p>Fit $h(x) = wx$ — one weight, <strong>no intercept</strong> — by minimising</p>
+      $$J(w) = \frac{1}{N}\sum_{i=1}^{N}\big(w\,x^{(i)} - y^{(i)}\big)^2$$
+      <p>on these four points:</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+        <tbody>
+          <tr><td>$x^{(i)}$</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+          <tr><td>$y^{(i)}$</td><td>1</td><td>4</td><td>5</td><td>9</td></tr>
+        </tbody>
+      </table>
+      <ol>
+        <li><strong>(a)</strong> Derive the closed form by setting $J'(w) = 0$. Do not quote it — derive it.</li>
+        <li><strong>(b)</strong> Compute $w^{*}$.</li>
+        <li><strong>(c)</strong> Compute $J(w^{*})$.</li>
+        <li><strong>(d)</strong> A classmate proposes $w = \bar y / \bar x$ ("the line through the average point"). Compute that $w$ and its $J$. Which is smaller, and by how much?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>One parameter, one convex parabola in that parameter, so the minimum is wherever the derivative vanishes. "Derive it" means: write $J(w)$, differentiate with respect to $w$, set to zero, solve. The two sums $\sum x^{(i)}y^{(i)}$ and $\sum (x^{(i)})^2$ will appear by themselves — that is the point of the exercise, and once you have seen them appear you will never again mis-remember which one is on top.</p>
+      <p>Part (d) is the actual exam content: it offers a plausible-sounding alternative and asks you to show, numerically, that it is worse. "Show it is worse" means compute both objective values.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the derivation</summary><div>
+      $$J(w) = \frac{1}{N}\sum_{i}\big(wx^{(i)} - y^{(i)}\big)^2$$
+      <p>Differentiate term by term, using the chain rule ($\frac{d}{dw}(wx - y)^2 = 2(wx-y)\cdot x$):</p>
+      $$J'(w) = \frac{2}{N}\sum_{i}\big(wx^{(i)} - y^{(i)}\big)x^{(i)} = \frac{2}{N}\Big(w\sum_i (x^{(i)})^2 - \sum_i x^{(i)}y^{(i)}\Big)$$
+      <p>Set $J'(w) = 0$. The $\frac2N$ is a nonzero constant, so it drops out:</p>
+      $$w\sum_i (x^{(i)})^2 = \sum_i x^{(i)}y^{(i)} \qquad\Longrightarrow\qquad \boxed{\;w^{*} = \frac{\sum_i x^{(i)}y^{(i)}}{\sum_i (x^{(i)})^2}\;}$$
+      <p>It <em>is</em> the minimum, not a maximum or a saddle: $J''(w) = \frac2N\sum_i (x^{(i)})^2 &gt; 0$ whenever some $x^{(i)} \ne 0$, so $J$ is a strictly convex parabola and its one stationary point is the global minimum.</p>
+      <p>Note where the data enters: only through two numbers, $\sum xy$ and $\sum x^2$. Also note the denominator cannot be $\sum x^{(i)}$ or $(\sum x^{(i)})^2$ — the derivation leaves no room for doubt, which is why deriving beats memorising.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) and (c) the arithmetic</summary><div>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>$x$</th><th>$y$</th><th>$xy$</th><th>$x^2$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+          <tr><td>2</td><td>2</td><td>4</td><td>8</td><td>4</td></tr>
+          <tr><td>3</td><td>3</td><td>5</td><td>15</td><td>9</td></tr>
+          <tr><td>4</td><td>4</td><td>9</td><td>36</td><td>16</td></tr>
+          <tr><td></td><td></td><td></td><td><strong>60</strong></td><td><strong>30</strong></td></tr>
+        </tbody>
+      </table>
+      $$w^{*} = \frac{60}{30} = \mathbf{2}$$
+      <p><strong>(c)</strong> With $w^{*} = 2$ the predictions are $2, 4, 6, 8$ and the residuals $\hat y - y$ are</p>
+      $$2-1 = +1,\quad 4-4 = 0,\quad 6-5 = +1,\quad 8-9 = -1$$
+      $$J(2) = \frac{1^2 + 0^2 + 1^2 + (-1)^2}{4} = \frac{3}{4} = \mathbf{0.75}$$
+      <p>Note the residuals do <strong>not</strong> sum to zero here ($+1$): with no intercept there is nothing in the model that can shift the line vertically, so there is no reason for them to. What <em>is</em> zero is $\sum_i x^{(i)}\,(\hat y^{(i)} - y^{(i)}) = 1(1) + 2(0) + 3(1) + 4(-1) = 0$ — exactly the stationarity condition you derived in Step 2, and the fastest possible check that $w^{*}$ is right.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) the tempting wrong answer</summary><div>
+      $$\bar x = \frac{1+2+3+4}{4} = \frac{10}{4} = 2.5, \qquad \bar y = \frac{1+4+5+9}{4} = \frac{19}{4} = 4.75$$
+      $$\frac{\bar y}{\bar x} = \frac{4.75}{2.5} = \frac{19}{10} = 1.9$$
+      <p>To compare objectives cleanly, expand $J$ once as a quadratic in $w$. With $\sum x^2 = 30$, $\sum xy = 60$ and $\sum y^2 = 1 + 16 + 25 + 81 = 123$:</p>
+      $$J(w) = \frac{1}{4}\big(30w^2 - 120w + 123\big)$$
+      <p>Check it at $w^{*}$: $\frac14(120 - 240 + 123) = \frac34$ ✓, and the vertex is at $w = \frac{120}{60} = 2$ ✓.</p>
+      $$J(1.9) = \tfrac14\big(30(3.61) - 228 + 123\big) = \tfrac14(108.3 - 105) = \tfrac{3.3}{4} = \tfrac{33}{40} = \mathbf{0.825}$$
+      <p>So $w = 1.9$ costs $0.825$ against the optimum's $0.75$ — worse by $0.075$, about $10\%$. And because $J$ is a parabola centred at $2$, $w = 2.1$ costs exactly the same $0.825$. Equal distance from the optimum, equal penalty: the symmetry is a free check on your algebra.</p>
+      <p>Why does the "average point" rule fail? It forces the line through $(\bar x, \bar y)$, which is the right instinct for the model <em>with</em> an intercept ($b = \bar y - w\bar x$ does exactly that). With no intercept the line is pinned through the origin instead, and the best such line weights each point by its own $x$ — that is what $\sum xy / \sum x^2$ is: a leverage-weighted slope, in which the point at $x=4$ counts sixteen times as much as the point at $x=1$.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $J'(w) = \frac2N\big(w\sum x^2 - \sum xy\big) = 0 \Rightarrow w^{*} = \sum xy / \sum x^2$, a minimum since $J'' = \frac2N\sum x^2 &gt; 0$.</p>
+      <p><strong>(b)</strong> $w^{*} = 60/30 = 2$.</p>
+      <p><strong>(c)</strong> $J(2) = 3/4 = 0.75$.</p>
+      <p><strong>(d)</strong> $\bar y/\bar x = 1.9$, with $J = 33/40 = 0.825$. The optimum is lower by $0.075$.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — inverting the fraction.</strong> $\sum x^2 / \sum xy = 30/60 = 0.5$ is a number you can write down in one slip, and nothing about it looks wrong. Deriving the formula, or sanity-checking that a slope of $0.5$ predicts $\hat y = 2$ when $y = 9$, catches it instantly.</p>
+      <p><strong>Trap 2 — using the with-intercept formula.</strong> $\frac{\sum(x-\bar x)(y - \bar y)}{\sum (x - \bar x)^2}$ is a different model. On this data it gives $\frac{12.5}{5} = 2.5$ with $b = \bar y - w\bar x = 4.75 - 6.25 = -1.5$, and that line reaches $J = 3/8 = 0.375$ — <em>better</em> than the $0.75$ above, because it has a second parameter to spend. But $h(x) = wx$ is the model you were given and it must pass through the origin, so $0.375$ is the answer to a different question. Read which model is being fitted before picking a formula.</p>
+      <p><strong>Trap 3 — forgetting the $\frac1N$ in the reported risk.</strong> $\sum$ of squared residuals is 3; $J$ is $0.75$. Both appear in textbooks as "the objective"; the $\frac1N$ (and sometimes a $\frac1{2N}$, chosen to cancel the 2 from differentiating) never changes $w^{*}$, but it does change the number you write on the line marked $J(w^{*})$.</p>
+      <p><strong>Trap 4 — "the residuals must sum to zero".</strong> True only when the model has an intercept, because the intercept's own stationarity condition <em>is</em> $\sum_i(\hat y - y) = 0$. Here they sum to $+1$. The condition that does hold is $\sum_i x^{(i)}(\hat y^{(i)} - y^{(i)}) = 0$, one equation per parameter.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 21</span>The normal equations with an explicit $2\times 2$ inverse <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Fit $h(x) = \theta_0 + \theta_1 x$ to four points by solving the normal equations $\theta^{*} = (X^{\top}X)^{-1}X^{\top}y$ <strong>by hand</strong>.</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+        <tbody>
+          <tr><td>$x^{(i)}$</td><td>0</td><td>1</td><td>2</td><td>3</td></tr>
+          <tr><td>$y^{(i)}$</td><td>2</td><td>0</td><td>4</td><td>4</td></tr>
+        </tbody>
+      </table>
+      <p>You will need the $2\times2$ inverse:</p>
+      $$\begin{pmatrix} a & b \\ c & d\end{pmatrix}^{-1} = \frac{1}{ad - bc}\begin{pmatrix} d & -b \\ -c & a\end{pmatrix}$$
+      <ol>
+        <li><strong>(a)</strong> Write the design matrix $X$ and say its shape. Where does the intercept live?</li>
+        <li><strong>(b)</strong> Compute $X^{\top}X$, its determinant, and $(X^{\top}X)^{-1}$ explicitly.</li>
+        <li><strong>(c)</strong> Compute $X^{\top}y$ and then $\theta^{*}$.</li>
+        <li><strong>(d)</strong> Report the residuals and $J(\theta^{*})$, and check two stationarity conditions.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>A mechanical computation with four places to go wrong, so the order matters. Build $X$, then $X^{\top}X$ (a $2\times2$), then its determinant (a scalar — stop and look at it; if it is 0, see Problem 22), then the inverse, then $X^{\top}y$ (a $2$-vector), then multiply.</p>
+      <p>The intercept is not a special case in the algebra. You handle it by adding a <strong>column of ones</strong> to $X$, after which $\theta_0$ is just the weight on a feature that is always 1. That is the whole trick, and it is why the vector formula covers the with-intercept case for free.</p>
+      <p>Know what each object's shape is before you compute it: $X \in \mathbb{R}^{4\times2}$, $X^{\top}X \in \mathbb{R}^{2\times2}$, $X^{\top}y \in \mathbb{R}^{2}$, $\theta^{*} \in \mathbb{R}^{2}$. $X^{\top}X$ is $d \times d$, never $N \times N$ — that is the whole reason this is tractable.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) and (b)</summary><div>
+      $$X = \begin{pmatrix} 1 & 0 \\ 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{pmatrix} \in \mathbb{R}^{4\times 2}, \qquad y = \begin{pmatrix} 2 \\ 0 \\ 4 \\ 4\end{pmatrix}$$
+      <p>The first column is all ones; $\theta_0$ is its weight. Rows are examples, columns are features.</p>
+      <p>Now $X^{\top}X$. Its four entries are exactly the sums you would write by hand:</p>
+      $$X^{\top}X = \begin{pmatrix} N & \sum x \\ \sum x & \sum x^2 \end{pmatrix} = \begin{pmatrix} 4 & 6 \\ 6 & 14\end{pmatrix}$$
+      <p>since $\sum x = 0+1+2+3 = 6$ and $\sum x^2 = 0+1+4+9 = 14$. It is symmetric, as $X^{\top}X$ always is.</p>
+      $$\det(X^{\top}X) = 4\cdot 14 - 6 \cdot 6 = 56 - 36 = \mathbf{20} \ne 0 \ \checkmark$$
+      $$(X^{\top}X)^{-1} = \frac{1}{20}\begin{pmatrix} 14 & -6 \\ -6 & 4\end{pmatrix} = \begin{pmatrix} 0.7 & -0.3 \\ -0.3 & 0.2 \end{pmatrix}$$
+      <p>Check the inverse before using it — one multiplication, and it catches every sign slip:</p>
+      $$\frac{1}{20}\begin{pmatrix} 14 & -6 \\ -6 & 4\end{pmatrix}\begin{pmatrix} 4 & 6 \\ 6 & 14\end{pmatrix} = \frac{1}{20}\begin{pmatrix} 56 - 36 & 84 - 84 \\ -24+24 & -36+56\end{pmatrix} = \frac{1}{20}\begin{pmatrix}20 & 0\\ 0 & 20\end{pmatrix} = I \ \checkmark$$
+    </div></details>
+    <details class="step"><summary>Step 3 — (c) $X^{\top}y$ and $\theta^{*}$</summary><div>
+      $$X^{\top}y = \begin{pmatrix} \sum y \\ \sum xy\end{pmatrix} = \begin{pmatrix} 2+0+4+4 \\ 0\cdot2 + 1\cdot 0 + 2\cdot 4 + 3\cdot 4\end{pmatrix} = \begin{pmatrix} 10 \\ 20 \end{pmatrix}$$
+      $$\theta^{*} = \frac{1}{20}\begin{pmatrix} 14 & -6 \\ -6 & 4\end{pmatrix}\begin{pmatrix}10 \\ 20\end{pmatrix} = \frac{1}{20}\begin{pmatrix} 140 - 120 \\ -60 + 80 \end{pmatrix} = \frac{1}{20}\begin{pmatrix}20\\20\end{pmatrix} = \begin{pmatrix} \mathbf{1} \\ \mathbf{1}\end{pmatrix}$$
+      $$h(x) = 1 + x$$
+      <p>Independent cross-check with the scalar with-intercept formulas. $\bar x = 6/4 = 1.5$, $\bar y = 10/4 = 2.5$:</p>
+      $$\theta_1 = \frac{\sum(x - \bar x)(y - \bar y)}{\sum (x-\bar x)^2} = \frac{(-1.5)(-0.5) + (-0.5)(-2.5) + (0.5)(1.5) + (1.5)(1.5)}{2.25 + 0.25 + 0.25 + 2.25} = \frac{0.75 + 1.25 + 0.75 + 2.25}{5} = \frac{5}{5} = 1$$
+      $$\theta_0 = \bar y - \theta_1 \bar x = 2.5 - 1(1.5) = 1 \ \checkmark$$
+      <p>Two completely different routes, same answer. On an exam this is worth the ninety seconds.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) residuals, risk and the two checks</summary><div>
+      <p>Predictions $\hat y = 1 + x$: $\ 1, 2, 3, 4$. Residuals $r^{(i)} = y^{(i)} - \hat y^{(i)}$:</p>
+      <table class="tight center">
+        <thead><tr><th>$x$</th><th>$y$</th><th>$\hat y$</th><th>$r = y - \hat y$</th><th>$r^2$</th><th>$x\,r$</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>2</td><td>1</td><td>$+1$</td><td>1</td><td>0</td></tr>
+          <tr><td>1</td><td>0</td><td>2</td><td>$-2$</td><td>4</td><td>$-2$</td></tr>
+          <tr><td>2</td><td>4</td><td>3</td><td>$+1$</td><td>1</td><td>$+2$</td></tr>
+          <tr><td>3</td><td>4</td><td>4</td><td>$0$</td><td>0</td><td>$0$</td></tr>
+          <tr><td></td><td></td><td><strong>sum</strong></td><td><strong>0</strong></td><td><strong>6</strong></td><td><strong>0</strong></td></tr>
+        </tbody>
+      </table>
+      $$J(\theta^{*}) = \frac{6}{4} = \frac{3}{2} = \mathbf{1.5}$$
+      <p>Both stationarity conditions hold, and they are exactly the two rows of $X^{\top}(y - X\theta) = 0$:</p>
+      <ul>
+        <li>$\sum_i r^{(i)} = 0$ — the ones-column row. This is why the fitted line passes through $(\bar x, \bar y) = (1.5, 2.5)$: indeed $1 + 1.5 = 2.5$ ✓.</li>
+        <li>$\sum_i x^{(i)} r^{(i)} = 0$ — the $x$-column row. The residuals are <em>orthogonal</em> to the feature.</li>
+      </ul>
+      <p>This is the geometric content of least squares: $X\theta^{*}$ is the projection of $y$ onto the column space of $X$, so whatever is left over is perpendicular to every column.</p>
+
+      <div class="viz">
+        <div class="viz-title">The fit $h(x) = 1 + x$, with the four residuals drawn</div>
+        <svg viewBox="0 0 640 310" role="img" aria-label="Four points with the least squares line y equals 1 plus x and the four residuals drawn">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="80" y1="270" x2="560" y2="270"/>
+    <line x1="80" y1="224" x2="560" y2="224"/>
+    <line x1="80" y1="178" x2="560" y2="178"/>
+    <line x1="80" y1="132" x2="560" y2="132"/>
+    <line x1="80" y1="86" x2="560" y2="86"/>
+    <line x1="80" y1="40" x2="560" y2="40"/>
+  </g>
+  <g stroke="var(--line-2)" stroke-width="1.5"><line x1="80" y1="270" x2="560" y2="270"/><line x1="80" y1="40" x2="80" y2="270"/></g>
+  <line x1="80" y1="247" x2="560" y2="63" stroke="var(--accent-2)" stroke-width="2.5"/>
+  <g stroke="var(--c-warn)" stroke-width="2.5" stroke-dasharray="4 3">
+    <line x1="140" y1="178" x2="140" y2="224"/>
+    <line x1="260" y1="270" x2="260" y2="178"/>
+    <line x1="380" y1="86" x2="380" y2="132"/>
+  </g>
+  <g fill="var(--accent)">
+    <circle cx="140" cy="178" r="6"/>
+    <circle cx="260" cy="270" r="6"/>
+    <circle cx="380" cy="86" r="6"/>
+    <circle cx="500" cy="86" r="6"/>
+  </g>
+  <g fill="none" stroke="var(--accent-2)" stroke-width="2">
+    <circle cx="140" cy="224" r="4.5"/>
+    <circle cx="260" cy="178" r="4.5"/>
+    <circle cx="380" cy="132" r="4.5"/>
+    <circle cx="500" cy="86" r="4.5"/>
+  </g>
+  <g fill="var(--c-warn)" font-size="12" font-weight="700" text-anchor="middle">
+    <text x="174" y="205">r = +1</text>
+    <text x="294" y="228">r = -2</text>
+    <text x="414" y="113">r = +1</text>
+  </g>
+  <text x="534" y="76" fill="var(--ink-mute)" font-size="12" font-weight="700" text-anchor="middle">r = 0</text>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="140" y="287">0</text>
+    <text x="260" y="287">1</text>
+    <text x="380" y="287">2</text>
+    <text x="500" y="287">3</text>
+    <text x="320" y="304" font-size="12">x</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="72" y="274">0</text>
+    <text x="72" y="228">1</text>
+    <text x="72" y="182">2</text>
+    <text x="72" y="136">3</text>
+    <text x="72" y="90">4</text>
+    <text x="72" y="44">5</text>
+  </g>
+  <text x="440" y="49" fill="var(--accent-2)" font-size="13" font-weight="700">h(x) = 1 + x</text>
+</svg>
+        <div class="caption">What to notice: the filled circles are the data, the hollow circles are the predictions on the line, and the dashed segments are the three nonzero residuals $+1, -2, +1$ — which sum to zero, as the ones-column stationarity condition requires. The point at $x=3$ sits exactly on the line, so its residual segment has zero length.</div>
+      </div>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $X \in \mathbb{R}^{4\times2}$ with a leading column of ones; $\theta_0$ is the weight on that column.</p>
+      <p><strong>(b)</strong> $X^{\top}X = \begin{pmatrix}4&6\\6&14\end{pmatrix}$, $\det = 20$, $(X^{\top}X)^{-1} = \frac{1}{20}\begin{pmatrix}14&-6\\-6&4\end{pmatrix}$.</p>
+      <p><strong>(c)</strong> $X^{\top}y = (10, 20)^{\top}$ and $\theta^{*} = (1, 1)^{\top}$, i.e. $h(x) = 1 + x$.</p>
+      <p><strong>(d)</strong> Residuals $(+1, -2, +1, 0)$, $J(\theta^{*}) = 6/4 = 1.5$. Both $\sum r = 0$ and $\sum x r = 0$ ✓.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — forgetting the column of ones.</strong> Without it you are fitting $h(x) = \theta_1 x$, $X^{\top}X$ becomes the $1\times1$ matrix $(14)$, and you get $\theta_1 = 20/14 = 10/7$ with a much larger risk. If a question says "with an intercept" or writes $\theta_0$, the ones column is mandatory — and if it says "through the origin", it is forbidden.</p>
+      <p><strong>Trap 2 — the adjugate's signs and positions.</strong> $\begin{pmatrix}a&b\\c&d\end{pmatrix}^{-1}$ swaps $a$ and $d$ and negates $b$ and $c$. Swapping $b$ and $c$ as well, or negating $a$ and $d$, are the two standard slips; here the matrix is symmetric so swapping $b,c$ silently does nothing, which makes it a <em>great</em> exam matrix and a terrible one to practise on. Always verify $A^{-1}A = I$.</p>
+      <p><strong>Trap 3 — multiplying in the wrong order.</strong> $\theta^{*} = (X^{\top}X)^{-1}X^{\top}y$, not $X^{\top}y(X^{\top}X)^{-1}$. Shapes rule it out — $(2\times2)(2\times1)$ is the only legal product — so check shapes before you compute.</p>
+      <p><strong>Trap 4 — residual sign conventions.</strong> $y - \hat y$ or $\hat y - y$: squared loss does not care, but the stationarity check $\sum x r = 0$ and anything you say about "over-predicting" do. Fix a convention in writing at the top of your answer.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 22</span>When $X^{\top}X$ is singular — and what that actually means <span class="pill">stretch</span></div>
+    <div class="g-body">
+      <p>A dataset has two features: $x_1$ = a room's area in square metres, and $x_2$ = the same area recorded in half-square-metres, so $x_2 = 2x_1$ in every row. Fit $h(x) = \theta_1 x_1 + \theta_2 x_2$ (no intercept) to:</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>$x_1$</th><th>$x_2$</th><th>$y$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>2</td><td>2</td></tr>
+          <tr><td>2</td><td>2</td><td>4</td><td>4</td></tr>
+          <tr><td>3</td><td>3</td><td>6</td><td>6</td></tr>
+        </tbody>
+      </table>
+      <ol>
+        <li><strong>(a)</strong> Compute $X^{\top}X$ and its determinant.</li>
+        <li><strong>(b)</strong> The normal equations cannot be solved by inversion. Does that mean no minimiser exists? Find <em>all</em> $\theta$ achieving the minimum empirical risk, and state that minimum.</li>
+        <li><strong>(c)</strong> $N = 3$ and $d = 2$, so there are more examples than parameters. Why is $X^{\top}X$ singular anyway? State the general condition.</li>
+        <li><strong>(d)</strong> Ridge regression solves $(X^{\top}X + \lambda I)\theta = X^{\top}y$. Take $\lambda = 2$: show the matrix is now invertible and compute $\theta_{\text{ridge}}$.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Three different questions wearing one coat.</p>
+      <ul>
+        <li><strong>Mechanical:</strong> compute a determinant and watch it vanish.</li>
+        <li><strong>Conceptual:</strong> "not invertible" and "no solution" are different claims. A convex function with a flat valley floor has infinitely many minimisers and no unique one. Distinguish <em>the minimum value</em> (always exists and is unique) from <em>the minimiser</em> (may not be unique).</li>
+        <li><strong>Diagnostic:</strong> say what causes it, in terms of the columns of $X$, and what to do about it.</li>
+      </ul>
+      <p>Keep the shapes straight: $X \in \mathbb{R}^{3\times2}$, $X^{\top}X \in \mathbb{R}^{2\times2}$.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the determinant</summary><div>
+      $$X = \begin{pmatrix} 1 & 2 \\ 2 & 4 \\ 3 & 6\end{pmatrix}, \qquad X^{\top}X = \begin{pmatrix} \sum x_1^2 & \sum x_1x_2 \\ \sum x_1 x_2 & \sum x_2^2 \end{pmatrix}$$
+      $$\sum x_1^2 = 1 + 4 + 9 = 14, \quad \sum x_1x_2 = 2 + 8 + 18 = 28, \quad \sum x_2^2 = 4 + 16 + 36 = 56$$
+      $$X^{\top}X = \begin{pmatrix} 14 & 28 \\ 28 & 56\end{pmatrix}, \qquad \det = 14 \cdot 56 - 28 \cdot 28 = 784 - 784 = \mathbf{0}$$
+      <p>No inverse. Notice the structure: the second column of $X^{\top}X$ is exactly twice the first, inherited from $x_2 = 2x_1$. Also, for later, $X^{\top}y = (1\cdot2 + 2\cdot4 + 3\cdot6,\; 2\cdot2+4\cdot4+6\cdot6)^{\top} = (28, 56)^{\top}$ — itself a multiple of the same direction.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) all the minimisers</summary><div>
+      <p>Write the predictions out. For any $\theta$:</p>
+      $$h(x^{(i)}) = \theta_1 x_1^{(i)} + \theta_2 x_2^{(i)} = \theta_1 x_1^{(i)} + 2\theta_2 x_1^{(i)} = (\theta_1 + 2\theta_2)\,x_1^{(i)}$$
+      <p>So the model <strong>cannot tell $\theta$ apart from $\theta' $ whenever $\theta_1 + 2\theta_2 = \theta_1' + 2\theta_2'$.</strong> It only ever sees the single number $k = \theta_1 + 2\theta_2$, and the hypothesis is $h(x) = k\,x_1$. Two parameters, one degree of freedom — this is what rank deficiency <em>is</em>.</p>
+      <p>Now fit $k$: the data is $y^{(i)} = 2x_1^{(i)}$ exactly $(1\!\to\!2,\ 2\!\to\!4,\ 3\!\to\!6)$, so $k = 2$ gives zero residuals, and the minimum empirical risk is $\mathbf{0}$.</p>
+      $$\text{argmin} = \{(\theta_1, \theta_2) : \theta_1 + 2\theta_2 = 2\}$$
+      <p>— an entire line in parameter space. For example $(2, 0)$, $(0, 1)$, $(4, -1)$ and $(\tfrac23, \tfrac23)$ all achieve risk exactly 0 (check $(4,-1)$: $4 - 2 = 2$ ✓). So a minimiser certainly exists; what fails is <em>uniqueness</em>, and with it the inversion step, since $(X^{\top}X)^{-1}$ would have had to name one particular point on that line.</p>
+      <p>Geometrically: $J$ is a convex paraboloid in $(\theta_1, \theta_2)$ that is a parabola in the direction $(1,2)$ and perfectly <strong>flat</strong> in the direction $(2,-1)$. A flat valley floor, not a bowl, so no unique bottom.</p>
+      <p>The practical reading: $\theta_1 = 4,\ \theta_2 = -1$ fits the data perfectly and says "area helps a lot, half-area hurts". That sentence is meaningless, and any interpretation of individual weights under collinearity is meaningless in exactly this way.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) the general condition</summary><div>
+      <p>$X^{\top}X$ is invertible $\iff$ $\operatorname{rank}(X) = d$ $\iff$ <strong>the columns of $X$ are linearly independent</strong>.</p>
+      <p>Here $\operatorname{rank}(X) = 1$: the two columns are parallel, so one direction in feature space is simply absent from the data. $N = 3 \ge d = 2$ is necessary but nowhere near sufficient — $N \ge d$ counts rows, and rank is about columns. The two ways to fail:</p>
+      <ul>
+        <li><strong>Exact collinearity</strong> (this problem): one feature is a linear combination of the others. Duplicated features, unit conversions, a one-hot encoding that keeps all $k$ categories <em>and</em> an intercept (the dummy-variable trap — the $k$ indicator columns sum to the ones column), or an engineered feature like $x_3 = x_1 + x_2$.</li>
+        <li><strong>$N &lt; d$</strong>: fewer examples than parameters. Then $\operatorname{rank}(X) \le N &lt; d$ and $X^{\top}X$ is singular automatically, with a whole subspace of perfect fits. This is the high-dimensional regime, and it is why a degree-12 polynomial fitted to 10 points has no unique solution.</li>
+      </ul>
+      <p>Near-singular is the case you actually meet: $\det$ tiny rather than exactly 0, so the inverse exists but has huge entries, and $\theta^{*}$ swings wildly on a rounding error in $y$. That instability, not the literal failure to invert, is what collinearity costs you in practice.</p>
+    </div></details>
+    <details class="step"><summary>Step 5 — (d) the ridge fix</summary><div>
+      $$X^{\top}X + 2I = \begin{pmatrix} 14 + 2 & 28 \\ 28 & 56 + 2\end{pmatrix} = \begin{pmatrix} 16 & 28 \\ 28 & 58\end{pmatrix}$$
+      $$\det = 16\cdot 58 - 28 \cdot 28 = 928 - 784 = \mathbf{144} \ne 0$$
+      <p>Invertible. $\ (X^{\top}X + 2I)^{-1} = \dfrac{1}{144}\begin{pmatrix} 58 & -28 \\ -28 & 16\end{pmatrix}$, and with $X^{\top}y = (28,56)^{\top}$:</p>
+      $$\theta_{\text{ridge}} = \frac{1}{144}\begin{pmatrix}58 & -28\\ -28 & 16\end{pmatrix}\begin{pmatrix}28\\56\end{pmatrix} = \frac{1}{144}\begin{pmatrix} 1624 - 1568 \\ -784 + 896\end{pmatrix} = \frac{1}{144}\begin{pmatrix}56 \\ 112\end{pmatrix} = \begin{pmatrix} 7/18 \\ 7/9 \end{pmatrix}$$
+      <p>$\theta_{\text{ridge}} \approx (0.389,\ 0.778)$ — a single, unique answer. Three things to read off it:</p>
+      <ul>
+        <li>$\theta_1 + 2\theta_2 = \frac{7}{18} + \frac{14}{9} = \frac{7 + 28}{18} = \frac{35}{18} \approx 1.944$, slightly <em>less</em> than the unpenalised $2$. Ridge shrinks: it no longer fits the data perfectly, trading a little risk for a unique, small-norm solution.</li>
+        <li>Of all the points on the line $\theta_1 + 2\theta_2 = k$, ridge picks the one nearest the origin, which is why the collinear pair ends up <em>sharing</em> the weight ($\theta_2 = 2\theta_1$ here) instead of one taking $+4$ and the other $-1$.</li>
+        <li>Adding $\lambda I$ raises every eigenvalue by $\lambda &gt; 0$. Since $X^{\top}X$ is always positive semi-definite, its eigenvalues are $\ge 0$, so they all become $\ge \lambda &gt; 0$ and the matrix is invertible <em>for any dataset at all</em>. This is a guarantee, not a trick that happened to work on these numbers.</li>
+      </ul>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $X^{\top}X = \begin{pmatrix}14&28\\28&56\end{pmatrix}$, $\det = 0$.</p>
+      <p><strong>(b)</strong> Minimisers exist but are not unique: every $\theta$ with $\theta_1 + 2\theta_2 = 2$ attains the minimum empirical risk of $0$ — a line in parameter space, e.g. $(2,0)$, $(0,1)$, $(4,-1)$.</p>
+      <p><strong>(c)</strong> Because $\operatorname{rank}(X) = 1 &lt; d = 2$: the columns are linearly dependent ($x_2 = 2x_1$). The condition is that $X^{\top}X$ is invertible iff the columns of $X$ are linearly independent; $N \ge d$ is necessary, not sufficient.</p>
+      <p><strong>(d)</strong> $X^{\top}X + 2I = \begin{pmatrix}16&28\\28&58\end{pmatrix}$ with $\det = 144$, giving the unique $\theta_{\text{ridge}} = (7/18,\ 7/9)^{\top} \approx (0.389, 0.778)$.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — "singular means no solution".</strong> It means no <em>unique</em> solution. The empirical risk here is minimised exactly, at infinitely many places. Writing "the problem is infeasible" loses the marks; writing "the minimiser is not unique; the set of minimisers is the line $\theta_1 + 2\theta_2 = 2$" gets all of them.</p>
+      <p><strong>Trap 2 — "just add more data".</strong> Does nothing. Every new row obeys $x_2 = 2x_1$ too, so rank stays 1 no matter how many rows you have. Collinearity is a property of the <em>feature definitions</em>, and the fixes are to drop a feature, combine them, or regularize.</p>
+      <p><strong>Trap 3 — $N \ge d$ as the invertibility test.</strong> It is the condition people remember and it is not the condition. Here $N &gt; d$ and the matrix is still singular. Rank is about columns.</p>
+      <p><strong>Trap 4 — interpreting weights under collinearity.</strong> $(4, -1)$ and $(0,1)$ are equally optimal and tell opposite stories about whether area matters. If two features are nearly collinear, the sign of either weight is noise; that is the honest thing to say about it.</p>
+    </div></details>
+  </div>
+
+  <h2 id="optimization">8. Optimization: gradient descent</h2>
+
+  <p>Chapter reference: <a href="optimization.html">Gradient descent, SGD, convexity</a>.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 23</span>Three steps by hand, then the range of $\alpha$ that converges <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Minimise $J(w) = 2w^2$ by gradient descent from $w^{(0)} = 8$, using the update</p>
+      $$w^{(t)} = w^{(t-1)} - \alpha\,J'\big(w^{(t-1)}\big).$$
+      <ol>
+        <li><strong>(a)</strong> Run three iterations with $\alpha = \tfrac18$. Report $w^{(1)}, w^{(2)}, w^{(3)}$ and $J$ at each.</li>
+        <li><strong>(b)</strong> Derive a closed form for $w^{(t)}$ in terms of $\alpha$, $t$ and $w^{(0)}$.</li>
+        <li><strong>(c)</strong> For which $\alpha$ does gradient descent converge to the minimiser? Give the exact range.</li>
+        <li><strong>(d)</strong> Describe the behaviour at $\alpha = \tfrac14$, $\alpha = \tfrac12$ and $\alpha = \tfrac34$, with the first few iterates in each case.</li>
+      </ol>
+
+      <div class="viz">
+        <div class="viz-title">$J(w) = 2w^2$ with the $\alpha = \tfrac18$ iterates $8 \to 4 \to 2 \to 1$</div>
+        <svg viewBox="0 0 640 330" role="img" aria-label="The parabola J of w equals 2 w squared with the gradient descent iterates 8, 4, 2, 1 marked">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="70" y1="280" x2="600" y2="280"/>
+    <line x1="70" y1="218.8" x2="600" y2="218.8"/>
+    <line x1="70" y1="157.5" x2="600" y2="157.5"/>
+    <line x1="70" y1="96.3" x2="600" y2="96.3"/>
+    <line x1="70" y1="35" x2="600" y2="35"/>
+  </g>
+  <line x1="70" y1="280" x2="600" y2="280" stroke="var(--line-2)" stroke-width="1.5"/>
+  <line x1="335" y1="35" x2="335" y2="280" stroke="var(--line-2)" stroke-width="1.5"/>
+  <polyline points="70,35 83.2,58.9 96.5,81.5 109.8,103 123,123.2 136.2,142.2 149.5,159.9 162.8,176.5 176,191.8 189.2,205.9 202.5,218.8 215.8,230.4 229,240.8 242.2,250 255.5,257.9 268.8,264.7 282,270.2 295.2,274.5 308.5,277.6 321.8,279.4 335,280 348.2,279.4 361.5,277.6 374.8,274.5 388,270.2 401.2,264.7 414.5,257.9 427.8,250 441,240.8 454.2,230.4 467.5,218.8 480.8,205.9 494,191.8 507.2,176.5 520.5,159.9 533.8,142.2 547,123.2 560.2,103 573.5,81.5 586.8,58.9 600,35" fill="none" stroke="var(--accent-2)" stroke-width="2.5"/>
+  <g stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 3">
+    <line x1="547" y1="123.2" x2="547" y2="280"/>
+    <line x1="441" y1="240.8" x2="441" y2="280"/>
+    <line x1="388" y1="270.2" x2="388" y2="280"/>
+    <line x1="361.5" y1="277.6" x2="361.5" y2="280"/>
+  </g>
+  <g fill="var(--accent)">
+    <circle cx="547" cy="123.2" r="6"/>
+    <circle cx="441" cy="240.8" r="6"/>
+    <circle cx="388" cy="270.2" r="6"/>
+    <circle cx="361.5" cy="277.6" r="6"/>
+  </g>
+  <g fill="var(--accent)" font-size="12" font-weight="700" text-anchor="middle">
+    <text x="547" y="110">w(0) = 8, J = 128</text>
+    <text x="462" y="228">w(1) = 4, J = 32</text>
+    <text x="400" y="258">w(2) = 2</text>
+    <text x="372" y="302">w(3) = 1</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="123" y="297">-8</text>
+    <text x="229" y="297">-4</text>
+    <text x="441" y="297">4</text>
+    <text x="547" y="297">8</text>
+    <text x="590" y="297">w</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="62" y="222.8">50</text>
+    <text x="62" y="161.5">100</text>
+    <text x="62" y="100.3">150</text>
+    <text x="98" y="37" font-size="12">J(w)</text>
+  </g>
+  <text x="80" y="55" fill="var(--rose)" font-size="12" font-weight="700">alpha = 3/4: 8 &#8594; -16, off the chart</text>
+</svg>
+        <div class="caption">What to notice: at $\alpha = \tfrac18$ each iterate is exactly <em>half</em> the previous one, so the horizontal gaps shrink geometrically while $J$ falls by a factor of four each step — $128, 32, 8, 2$. The iterates approach $0$ from one side and never overshoot, because the multiplier $1 - 4\alpha = \tfrac12$ is positive. The annotation records where the <em>other</em> runs go: at $\alpha = \tfrac34$ the first step lands at $w = -16$, which is outside the plotted range entirely.</div>
+      </div>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Part (a) is arithmetic; parts (b)–(d) are the reason the problem exists. For a quadratic the update is <em>linear</em>, so it can be solved in closed form and the stability condition read off exactly — no hand-waving about "too big a step".</p>
+      <p>First, the gradient. $J(w) = 2w^2 \Rightarrow J'(w) = 4w$. So the update is</p>
+      $$w^{(t)} = w^{(t-1)} - \alpha \cdot 4w^{(t-1)} = (1 - 4\alpha)\,w^{(t-1)}.$$
+      <p>Everything in this problem follows from that one bracket. Call it the <strong>multiplier</strong> $\rho = 1 - 4\alpha$. Each step multiplies $w$ by $\rho$ — so convergence is a question about $|\rho|$, and nothing else.</p>
+      <p>Note it is $4w$, not $2w$: the constant $2$ in $2w^2$ doubles the gradient and therefore halves the usable step sizes. The general rule for $J = cw^2$ is $\rho = 1 - 2\alpha c$, and here $c = 2$.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) three iterations at $\alpha = \tfrac18$</summary><div>
+      <p>$\rho = 1 - 4\cdot\tfrac18 = 1 - \tfrac12 = \tfrac12$. Each step halves $w$.</p>
+      <table class="tight center">
+        <thead><tr><th>$t$</th><th>$w^{(t)}$</th><th>$J'(w^{(t)}) = 4w$</th><th>$J(w^{(t)}) = 2w^2$</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>$8$</td><td>$32$</td><td>$128$</td></tr>
+          <tr><td>1</td><td>$8 - \tfrac18(32) = \mathbf{4}$</td><td>$16$</td><td>$32$</td></tr>
+          <tr><td>2</td><td>$4 - \tfrac18(16) = \mathbf{2}$</td><td>$8$</td><td>$8$</td></tr>
+          <tr><td>3</td><td>$2 - \tfrac18(8) = \mathbf{1}$</td><td>$4$</td><td>$2$</td></tr>
+        </tbody>
+      </table>
+      <p>Two things to notice, both examinable. The steps get <em>smaller</em> ($4, 2, 1$) even though $\alpha$ never changes, because the gradient itself shrinks as you approach the minimum — gradient descent slows down automatically near a flat region. And $J$ falls by a factor of $\rho^2 = \tfrac14$ per step, not $\rho$: $128 \to 32 \to 8 \to 2$.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) and (c) the closed form and the range</summary><div>
+      <p><strong>(b)</strong> Apply the multiplier $t$ times:</p>
+      $$w^{(t)} = \rho\,w^{(t-1)} = \rho^2 w^{(t-2)} = \dots = (1-4\alpha)^{t}\,w^{(0)}.$$
+      <p>Check against (a): $(\tfrac12)^3 \cdot 8 = 1$ ✓.</p>
+      <p><strong>(c)</strong> The minimiser is $w^{*} = 0$. So $w^{(t)} \to 0$ for every starting point exactly when $|\rho|^t \to 0$, i.e. when</p>
+      $$|1 - 4\alpha| &lt; 1 \iff -1 &lt; 1 - 4\alpha &lt; 1 \iff -2 &lt; -4\alpha &lt; 0 \iff \boxed{\;0 &lt; \alpha &lt; \tfrac12\;}$$
+      <p>Solve both inequalities, not just the right-hand one: $1 - 4\alpha &lt; 1$ gives $\alpha &gt; 0$ and $1 - 4\alpha &gt; -1$ gives $\alpha &lt; \tfrac12$. The upper limit is $1/c$ with $c = 2$, matching the general rule $0 &lt; \alpha &lt; 1/c$ for $J = cw^2$.</p>
+      <p>The endpoints are <em>excluded</em>, and both are instructive: $\alpha = 0$ never moves, $\alpha = \tfrac12$ oscillates forever at constant $|w|$. Strict inequalities, both ends.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) the three regimes</summary><div>
+      <table class="tight center">
+        <thead><tr><th>$\alpha$</th><th>$\rho = 1-4\alpha$</th><th>$w^{(0..3)}$</th><th>$J^{(0..3)}$</th><th>behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>$\tfrac18$</td><td>$+\tfrac12$</td><td>$8, 4, 2, 1$</td><td>$128, 32, 8, 2$</td><td>monotone convergence, one side</td></tr>
+          <tr><td>$\tfrac14$</td><td>$0$</td><td>$8, 0, 0, 0$</td><td>$128, 0, 0, 0$</td><td><strong>exact minimum in one step</strong></td></tr>
+          <tr><td>$\tfrac12$</td><td>$-1$</td><td>$8, -8, 8, -8$</td><td>$128, 128, 128, 128$</td><td>oscillates forever, no progress</td></tr>
+          <tr><td>$\tfrac34$</td><td>$-2$</td><td>$8, -16, 32, -64$</td><td>$128, 512, 2048, 8192$</td><td>diverges, alternating sign</td></tr>
+        </tbody>
+      </table>
+      <p><strong>$\alpha = \tfrac14$</strong> gives $\rho = 0$: one step lands exactly on $w^{*} = 0$. For a one-dimensional quadratic the perfect step size is $\alpha = \frac{1}{2c} = \frac{1}{J''}$ — which is Newton's method, and the reason second-order methods exist.</p>
+      <p><strong>$\alpha = \tfrac12$</strong> sits exactly on the boundary. $|\rho| = 1$, so $|w|$ is preserved exactly: it ping-pongs between $8$ and $-8$ with $J = 128$ every single iteration. Not divergence, but no convergence either — which is why the range is open at $\tfrac12$.</p>
+      <p><strong>$\alpha = \tfrac34$</strong> overshoots past the minimum by more than it started: each step doubles $|w|$ and flips its sign. $J$ quadruples per iteration. This is the failure mode you see in practice as a loss curve that climbs to infinity or NaN within a few steps, and the fix is always the same: lower $\alpha$.</p>
+      <div class="box key"><span class="label">Key idea</span>
+        <p style="margin-bottom:0">The sign of $\rho$ tells you the <em>shape</em> of the trajectory and $|\rho|$ tells you whether it converges. $0 &lt; \rho &lt; 1$: approach from one side. $\rho = 0$: one step. $-1 &lt; \rho &lt; 0$: converge while alternating sides. $|\rho| \ge 1$: never converges. Alternating signs in a trajectory are the symptom of $\alpha$ being over half its maximum, long before anything actually diverges.</p>
+      </div>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $w^{(1)} = 4$, $w^{(2)} = 2$, $w^{(3)} = 1$, with $J = 32, 8, 2$ (from $J(8) = 128$).</p>
+      <p><strong>(b)</strong> $w^{(t)} = (1 - 4\alpha)^t\,w^{(0)}$.</p>
+      <p><strong>(c)</strong> $|1-4\alpha| &lt; 1 \iff 0 &lt; \alpha &lt; \tfrac12$.</p>
+      <p><strong>(d)</strong> $\alpha = \tfrac14$: lands on $w^{*} = 0$ in one step. $\alpha = \tfrac12$: oscillates $8, -8, 8, -8$ with $J$ stuck at 128. $\alpha = \tfrac34$: diverges as $8, -16, 32, -64$, with $J$ quadrupling each step.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — differentiating $2w^2$ as $2w$.</strong> Then $\rho = 1 - 2\alpha$, you get $w^{(1)} = 6$ at $\alpha = \tfrac18$, and the convergence range comes out as $0 &lt; \alpha &lt; 1$ — double the truth. The leading constant on the quadratic is there precisely to catch this, and it is the single most common error in the topic.</p>
+      <p><strong>Trap 2 — solving only one half of $|1-4\alpha| &lt; 1$.</strong> Dropping the absolute value gives $\alpha &lt; 0$ or some other nonsense. Expand it into the two-sided inequality and solve both ends.</p>
+      <p><strong>Trap 3 — "a bigger $\alpha$ is always faster".</strong> False in both directions: $\alpha = \tfrac14$ beats $\alpha = \tfrac18$ (one step versus infinitely many), and $\alpha = \tfrac12$ is worse than both while being bigger still. Speed is governed by $|\rho|$, which is $0$ in the middle of the range and rises toward $1$ at <em>both</em> ends.</p>
+      <p><strong>Trap 4 — expecting to reach $w^{*}$ exactly.</strong> At $\alpha = \tfrac18$ the iterates are $8, 4, 2, 1, \tfrac12, \dots$ — they halve forever and never equal 0. Gradient descent converges <em>in the limit</em>; you stop on a tolerance or an iteration budget. Writing "$w^{(3)} = 0$" because "it converges" is answering a different question.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 24</span>Differentiating a quadratic form, with a non-symmetric $A$ <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>You are given the identity</p>
+      $$\nabla_\theta\big(\theta^{\top}A\theta\big) = (A + A^{\top})\,\theta,$$
+      <p>valid for any square $A$. Take</p>
+      $$A = \begin{pmatrix} 2 & 4 \\ 0 & 3\end{pmatrix}, \qquad \theta = \begin{pmatrix}1 \\ 2\end{pmatrix}, \qquad J(\theta) = \theta^{\top}A\theta.$$
+      <ol>
+        <li><strong>(a)</strong> Compute $J(\theta)$ at this $\theta$.</li>
+        <li><strong>(b)</strong> Compute $\nabla_\theta J$ at this $\theta$ using the identity.</li>
+        <li><strong>(c)</strong> Verify it by writing $J$ out as a polynomial in $\theta_1, \theta_2$ and taking two partial derivatives by hand.</li>
+        <li><strong>(d)</strong> A classmate writes $\nabla_\theta J = 2A\theta$. Compute that too. When is it right, and what is it here?</li>
+        <li><strong>(e)</strong> Take one gradient descent step from this $\theta$ with $\alpha = \tfrac14$.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Mostly: can you keep the shapes straight, and do you know why the identity has $A + A^{\top}$ in it rather than $2A$?</p>
+      <p>Shapes first. $\theta \in \mathbb{R}^2$, $A \in \mathbb{R}^{2\times2}$, so $\theta^{\top}A\theta$ is $(1\times2)(2\times2)(2\times1) = 1\times1$ — a <strong>scalar</strong>. Its gradient has the same shape as $\theta$, so $\nabla_\theta J \in \mathbb{R}^2$ — a <strong>column vector</strong>, in the denominator-layout convention these notes use. If you produce a matrix, you have made an error of kind, not of arithmetic.</p>
+      <p>And compute $A\theta$ once; (a), (b) and (d) all reuse it.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) and (b)</summary><div>
+      $$A\theta = \begin{pmatrix}2 & 4\\0&3\end{pmatrix}\begin{pmatrix}1\\2\end{pmatrix} = \begin{pmatrix}2(1) + 4(2) \\ 0(1) + 3(2)\end{pmatrix} = \begin{pmatrix}10 \\ 6\end{pmatrix}$$
+      $$J(\theta) = \theta^{\top}(A\theta) = (1)(10) + (2)(6) = 10 + 12 = \mathbf{22}$$
+      <p><strong>(b)</strong> Build $A^{\top}$ by reflecting across the diagonal, then add:</p>
+      $$A^{\top} = \begin{pmatrix}2 & 0\\4&3\end{pmatrix}, \qquad A + A^{\top} = \begin{pmatrix}4 & 4\\4&6\end{pmatrix}$$
+      <p>($A + A^{\top}$ is always symmetric — a useful check before you multiply.)</p>
+      $$\nabla_\theta J = (A+A^{\top})\theta = \begin{pmatrix}4&4\\4&6\end{pmatrix}\begin{pmatrix}1\\2\end{pmatrix} = \begin{pmatrix}4 + 8 \\ 4 + 12\end{pmatrix} = \begin{pmatrix}\mathbf{12} \\ \mathbf{16}\end{pmatrix}$$
+    </div></details>
+    <details class="step"><summary>Step 3 — (c) verify by hand</summary><div>
+      <p>Expand the quadratic form symbolically. In general $\theta^{\top}A\theta = \sum_{i}\sum_{j} A_{ij}\theta_i\theta_j$, so here</p>
+      $$J = A_{11}\theta_1^2 + A_{12}\theta_1\theta_2 + A_{21}\theta_2\theta_1 + A_{22}\theta_2^2 = 2\theta_1^2 + 4\theta_1\theta_2 + 0 + 3\theta_2^2$$
+      <p>Sanity check at $\theta = (1,2)$: $2(1) + 4(2) + 3(4) = 2 + 8 + 12 = 22$ ✓ — matches (a).</p>
+      $$\frac{\partial J}{\partial \theta_1} = 4\theta_1 + 4\theta_2 = 4(1) + 4(2) = 12 \ \checkmark$$
+      $$\frac{\partial J}{\partial \theta_2} = 4\theta_1 + 6\theta_2 = 4(1) + 6(2) = 16 \ \checkmark$$
+      <p>And now you can <em>see</em> where $A + A^{\top}$ comes from. The cross terms $A_{12}\theta_1\theta_2$ and $A_{21}\theta_2\theta_1$ are the same monomial, so only the <strong>sum</strong> $A_{12} + A_{21} = 4 + 0 = 4$ ever appears in $J$. The function cannot distinguish $A$ from its symmetric part $\frac12(A + A^{\top})$, so the derivative can only depend on $A + A^{\top}$.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) and (e)</summary><div>
+      <p><strong>(d)</strong> $2A\theta = 2\begin{pmatrix}10\\6\end{pmatrix} = \begin{pmatrix}20\\12\end{pmatrix}$ — not $(12, 16)^{\top}$. Both components are wrong, and the first is wrong by a lot.</p>
+      <p>$2A\theta$ is correct exactly when $A = A^{\top}$, because then $A + A^{\top} = 2A$. Our $A$ has $A_{12} = 4$ and $A_{21} = 0$, so it is not symmetric and the shortcut fails. It is a safe shortcut in the one place it is used most — $X^{\top}X$ in the normal equations is symmetric by construction, giving $\nabla_\theta(\theta^{\top}X^{\top}X\theta) = 2X^{\top}X\theta$ — and that is precisely why people reach for it when it does not apply.</p>
+      <p><strong>(e)</strong> One step with $\alpha = \tfrac14$:</p>
+      $$\theta^{(1)} = \theta - \alpha\nabla_\theta J = \begin{pmatrix}1\\2\end{pmatrix} - \tfrac14\begin{pmatrix}12\\16\end{pmatrix} = \begin{pmatrix}1 - 3\\ 2 - 4\end{pmatrix} = \begin{pmatrix}\mathbf{-2}\\ \mathbf{-2}\end{pmatrix}$$
+      <p>Both coordinates update simultaneously, from the <em>same</em> old $\theta$. Do not feed the new $\theta_1$ into the computation of $\theta_2$ — that is a different algorithm (coordinate descent).</p>
+      <p>Worth noticing: $J(-2,-2) = 2(4) + 4(4) + 3(4) = 8 + 16 + 12 = 36 &gt; 22$. The step made things <em>worse</em>, because $\alpha = \tfrac14$ is too large here and because this $J$ is not even bounded below — $A$'s symmetric part $\begin{pmatrix}2&2\\2&3\end{pmatrix}$ happens to be positive definite ($\det = 2 &gt; 0$, trace $&gt; 0$), so $J \ge 0$ with its minimum at the origin, and $\theta = (-2,-2)$ overshot straight past it. A step can increase the objective; that is information about $\alpha$, not a mistake in the gradient.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $J(\theta) = 22$. &nbsp; <strong>(b)</strong> $\nabla_\theta J = (A+A^{\top})\theta = \begin{pmatrix}4&4\\4&6\end{pmatrix}\begin{pmatrix}1\\2\end{pmatrix} = (12, 16)^{\top}$.</p>
+      <p><strong>(c)</strong> $J = 2\theta_1^2 + 4\theta_1\theta_2 + 3\theta_2^2$, so $\partial J/\partial\theta_1 = 4\theta_1 + 4\theta_2 = 12$ and $\partial J/\partial\theta_2 = 4\theta_1 + 6\theta_2 = 16$ ✓.</p>
+      <p><strong>(d)</strong> $2A\theta = (20, 12)^{\top}$, which is wrong. It is valid only for symmetric $A$.</p>
+      <p><strong>(e)</strong> $\theta^{(1)} = (-2, -2)^{\top}$, at which $J = 36$ — an increase, because $\alpha = \tfrac14$ overshoots.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>The trap is the non-symmetric $A$.</strong> Every quadratic form you meet in linear regression is built from $X^{\top}X$, which is symmetric, so $2A\theta$ works every time you have practised it. The exam hands you an $A$ with a zero in one off-diagonal slot, which is a deliberate flag: $A_{12} \ne A_{21}$ means you must use $A + A^{\top}$.</p>
+      <p><strong>Second trap — transposing wrongly, or forgetting the $\theta$.</strong> $A + A^{\top}$ is a matrix, not the gradient. The gradient is that matrix <em>times</em> $\theta$. Reporting $\begin{pmatrix}4&4\\4&6\end{pmatrix}$ as "the gradient" is a shape error.</p>
+      <p><strong>Third trap — updating coordinates sequentially.</strong> Gradient descent evaluates the whole gradient at $\theta^{(t-1)}$ and then moves. Using the freshly-updated $\theta_1$ when computing $\theta_2$ gives $(-2, -3)$ here, which is Gauss–Seidel-style coordinate descent, not gradient descent.</p>
+      <p><strong>Fourth trap — assuming $J$ must decrease.</strong> Descent is only guaranteed for small enough $\alpha$. Seeing $J$ rise from 22 to 36 is the diagnostic from Problem 23 appearing in two dimensions.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 25</span>Batch gradient descent versus SGD, on four points <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Fit $h(x) = wx$ to four points by minimising $J(w) = \frac14\sum_{i=1}^{4}(wx^{(i)} - y^{(i)})^2$, so that the per-example loss is $\ell_i(w) = (wx^{(i)} - y^{(i)})^2$ with $\ell_i'(w) = 2(wx^{(i)} - y^{(i)})x^{(i)}$.</p>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+        <tbody>
+          <tr><td>$x^{(i)}$</td><td>1</td><td>1</td><td>2</td><td>2</td></tr>
+          <tr><td>$y^{(i)}$</td><td>2</td><td>0</td><td>2</td><td>6</td></tr>
+        </tbody>
+      </table>
+      <p>Start every run at $w^{(0)} = 0$ with $\alpha = \tfrac14$.</p>
+      <ol>
+        <li><strong>(a)</strong> Compute the exact optimum $w^{*}$ in closed form, and $J(w^{*})$ and $J(0)$.</li>
+        <li><strong>(b)</strong> Take <strong>one batch</strong> gradient step. Where do you land, and what is $J$ there?</li>
+        <li><strong>(c)</strong> Instead take <strong>four SGD steps</strong>, visiting the examples in the order $1,2,3,4$. Report $w$ after each step and $J$ at the end.</li>
+        <li><strong>(d)</strong> Repeat (c) in the order $4,1,2,3$. Compare.</li>
+        <li><strong>(e)</strong> With $N = 10^6$ examples and $d = 50$ features, how many SGD updates can you make for the arithmetic cost of one batch update? State the tradeoff in both directions.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>The distinction is exactly one thing — <em>how many examples contribute to each step</em>:</p>
+      $$\textbf{batch: } \ w \leftarrow w - \alpha\,\nabla J(w) = w - \alpha\cdot\frac{2}{N}\sum_{i=1}^{N}(wx^{(i)} - y^{(i)})x^{(i)}$$
+      $$\textbf{SGD: } \ w \leftarrow w - \alpha\,\ell_j'(w) = w - \alpha\cdot 2(wx^{(j)} - y^{(j)})x^{(j)} \quad \text{for one } j$$
+      <p>Note the $\frac1N$: the batch gradient is an <em>average</em> of per-example gradients, which is why a batch step is not the same size as a typical SGD step even with the same $\alpha$. Four SGD steps are one <strong>epoch</strong>, not one step — the fair comparison in (b)–(d) is one batch step against one epoch of SGD, which costs the same arithmetic.</p>
+      <p>Compute the per-example gradients fresh at each SGD step, because $w$ has already moved.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the optimum and the baseline</summary><div>
+      $$\sum x y = 1(2) + 1(0) + 2(2) + 2(6) = 2 + 0 + 4 + 12 = 18, \qquad \sum x^2 = 1 + 1 + 4 + 4 = 10$$
+      $$w^{*} = \frac{18}{10} = \mathbf{1.8}$$
+      <p>$J(1.8)$: predictions $1.8, 1.8, 3.6, 3.6$, residuals $-0.2, +1.8, +1.6, -2.4$, squares $0.04, 3.24, 2.56, 5.76$, total $11.6$:</p>
+      $$J(w^{*}) = \tfrac{11.6}{4} = \mathbf{2.9}$$
+      <p>$J(0)$: residuals are just $-y$, giving $4 + 0 + 4 + 36 = 44$, so $J(0) = \tfrac{44}{4} = \mathbf{11}$.</p>
+      <p>Note that the best achievable risk is $2.9$, not $0$ — the two points at $x = 2$ have $y = 2$ and $y = 6$, so no function of $x$ alone can fit both. Keep $2.9$ in mind as the floor; it is what makes the later numbers interpretable.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) one batch step</summary><div>
+      $$\nabla J(0) = \frac{2}{4}\sum_i (0\cdot x^{(i)} - y^{(i)})x^{(i)} = \frac12\Big[(-2)(1) + (0)(1) + (-2)(2) + (-6)(2)\Big] = \frac12(-2 - 0 - 4 - 12) = \frac{-18}{2} = -9$$
+      $$w^{(1)} = 0 - \tfrac14(-9) = \mathbf{2.25}$$
+      <p>$J(2.25)$: predictions $2.25, 2.25, 4.5, 4.5$, residuals $0.25, 2.25, 2.5, -1.5$, squares $0.0625 + 5.0625 + 6.25 + 2.25 = 13.625$:</p>
+      $$J(2.25) = \tfrac{13.625}{4} = \mathbf{3.40625}$$
+      <p>One step took $J$ from $11$ down to $3.41$, against a floor of $2.9$. It slightly overshot $w^{*} = 1.8$ (landing at $2.25$) but the direction was unambiguous: a batch gradient is the average over all four examples, so no single point can hijack it.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) and (d) one epoch of SGD, twice</summary><div>
+      <p><strong>Order $1,2,3,4$.</strong> Each step uses $\ell_j'(w) = 2(wx_j - y_j)x_j$ and $\alpha = \tfrac14$, so $w \leftarrow w - \tfrac12(wx_j - y_j)x_j$.</p>
+      <table class="tight center">
+        <thead><tr><th>step</th><th>$(x_j, y_j)$</th><th>$w$ before</th><th>$\ell_j'$</th><th>$w$ after</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>$(1,2)$</td><td>$0$</td><td>$2(0-2)(1) = -4$</td><td>$0 + 1 = 1$</td></tr>
+          <tr><td>2</td><td>$(1,0)$</td><td>$1$</td><td>$2(1-0)(1) = +2$</td><td>$1 - 0.5 = 0.5$</td></tr>
+          <tr><td>3</td><td>$(2,2)$</td><td>$0.5$</td><td>$2(1-2)(2) = -4$</td><td>$0.5 + 1 = 1.5$</td></tr>
+          <tr><td>4</td><td>$(2,6)$</td><td>$1.5$</td><td>$2(3-6)(2) = -12$</td><td>$1.5 + 3 = \mathbf{4.5}$</td></tr>
+        </tbody>
+      </table>
+      <p>$J(4.5)$: predictions $4.5, 4.5, 9, 9$, residuals $2.5, 4.5, 7, 3$, squares $6.25 + 20.25 + 49 + 9 = 84.5$, so $J = \mathbf{21.125}$ — <em>worse than where it started</em> ($J(0) = 11$). After three sensible steps that hovered near $w^{*}$, the fourth example ($x=2, y=6$, the one no line can fit) produced a gradient of $-12$ and threw $w$ to $4.5$.</p>
+      <p><strong>Order $4,1,2,3$.</strong> Same four examples, same $\alpha$, same start.</p>
+      <table class="tight center">
+        <thead><tr><th>step</th><th>$(x_j, y_j)$</th><th>$w$ before</th><th>$\ell_j'$</th><th>$w$ after</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>$(2,6)$</td><td>$0$</td><td>$2(0-6)(2) = -24$</td><td>$0 + 6 = 6$</td></tr>
+          <tr><td>2</td><td>$(1,2)$</td><td>$6$</td><td>$2(6-2)(1) = +8$</td><td>$6 - 2 = 4$</td></tr>
+          <tr><td>3</td><td>$(1,0)$</td><td>$4$</td><td>$2(4-0)(1) = +8$</td><td>$4 - 2 = 2$</td></tr>
+          <tr><td>4</td><td>$(2,2)$</td><td>$2$</td><td>$2(4-2)(2) = +8$</td><td>$2 - 2 = \mathbf{0}$</td></tr>
+        </tbody>
+      </table>
+      <p>It ends at $w = 0$, exactly back at the start, with $J = \mathbf{11}$.</p>
+      <table class="tight center">
+        <thead><tr><th>run</th><th>final $w$</th><th>final $J$</th></tr></thead>
+        <tbody>
+          <tr><td>batch, 1 step</td><td>$2.25$</td><td>$3.40625$</td></tr>
+          <tr><td>SGD, order $1,2,3,4$</td><td>$4.5$</td><td>$21.125$</td></tr>
+          <tr><td>SGD, order $4,1,2,3$</td><td>$0$</td><td>$11$</td></tr>
+          <tr><td>optimum</td><td>$1.8$</td><td>$2.9$</td></tr>
+        </tbody>
+      </table>
+      <p>Identical data, identical $\alpha$, identical arithmetic cost — and three completely different answers. <strong>SGD's iterates depend on the order of the examples; batch's do not.</strong> That is the variance the "S" refers to, and it is why SGD needs a smaller $\alpha$ than batch (or a decaying one, e.g. $\alpha_t = 1/\sqrt{t}$), and why you quote the <em>average</em> of recent iterates rather than the last one.</p>
+    </div></details>
+    <details class="step"><summary>Step 5 — (e) the cost accounting, and the real tradeoff</summary><div>
+      <p>One per-example gradient $(\hat y^{(i)} - y^{(i)})\,x^{(i)}$ costs $O(d)$ — here about $50$ multiply-adds. A batch gradient averages $N$ of them: $O(Nd) = 10^6 \times 50 = 5\times10^{7}$ operations <strong>per single update to $\theta$</strong>.</p>
+      $$\frac{\text{cost of one batch step}}{\text{cost of one SGD step}} = \frac{Nd}{d} = N = \mathbf{10^6}$$
+      <p>So in the time batch takes to move $\theta$ <em>once</em>, SGD moves it a million times. Even if each of those steps is in a mildly wrong direction, a million mediocre steps beat one perfect one by a wide margin, and that — not any statistical subtlety — is why large-scale learning uses SGD.</p>
+      <table class="tight center">
+        <thead><tr><th></th><th>Batch GD</th><th>SGD</th></tr></thead>
+        <tbody>
+          <tr><td>cost per update</td><td>$O(Nd)$</td><td>$O(d)$</td></tr>
+          <tr><td>gradient direction</td><td>exact $\nabla J$; descent guaranteed for small $\alpha$</td><td>unbiased estimate of $\nabla J$; individual steps may increase $J$</td></tr>
+          <tr><td>trajectory</td><td>deterministic, smooth</td><td>noisy; depends on the ordering (see (c) vs (d))</td></tr>
+          <tr><td>usable $\alpha$</td><td>larger</td><td>smaller, usually decayed</td></tr>
+          <tr><td>memory</td><td>needs the whole dataset per step</td><td>one example at a time — works on a stream</td></tr>
+          <tr><td>near the optimum</td><td>settles</td><td>keeps rattling in a noise ball of radius $\propto \alpha$</td></tr>
+        </tbody>
+      </table>
+      <p>"Unbiased" is the precise statement that rescues SGD: picking $j$ uniformly gives $\mathbb{E}_j[\ell_j'(w)] = \frac1N\sum_i \ell_i'(w) \propto \nabla J(w)$. On average SGD moves downhill, which is why it works at all despite runs like (c). Mini-batching (say 32 examples per step) averages 32 per-example gradients instead of $10^6$, buying most of the noise reduction at $32/N$ of the cost of a full batch step — which is what everyone actually does.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $w^{*} = 18/10 = 1.8$, $J(w^{*}) = 2.9$, $J(0) = 11$.</p>
+      <p><strong>(b)</strong> $\nabla J(0) = -9$, so $w^{(1)} = 2.25$ with $J = 3.40625$.</p>
+      <p><strong>(c)</strong> $w$ goes $0 \to 1 \to 0.5 \to 1.5 \to 4.5$; final $J = 21.125$, worse than the start.</p>
+      <p><strong>(d)</strong> In the order $4,1,2,3$: $0 \to 6 \to 4 \to 2 \to 0$; final $J = 11$. Same cost, same data, different answer — SGD is order-dependent and batch is not.</p>
+      <p><strong>(e)</strong> $Nd/d = N = 10^6$ SGD updates per batch update. Batch gives exact directions at $O(Nd)$ per step; SGD gives noisy directions at $O(d)$ per step and wins on wall-clock whenever $N$ is large, at the price of needing a smaller, usually decaying $\alpha$.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — the missing $\frac1N$.</strong> $J$ here is defined with $\frac14$, so the batch gradient carries $\frac{2}{4}$ and comes out as $-9$, not $-36$. Forget it and your batch step is four times too big ($w^{(1)} = 9$), which makes batch look wildly unstable and inverts the entire conclusion. Read the definition of $J$ in the question, every time.</p>
+      <p><strong>Trap 2 — comparing one batch step to one SGD step.</strong> That comparison is rigged, because a batch step costs $N$ times more. Compare per unit of arithmetic: one batch step versus one epoch of $N$ SGD steps — which is exactly what (b) versus (c) does.</p>
+      <p><strong>Trap 3 — reusing a stale $w$ inside the epoch.</strong> SGD updates $w$ <em>after every single example</em>. Computing all four per-example gradients at $w = 0$ and applying them one after another is just a batch step with the wrong scaling; the four gradients at $w=0$ are $-4, 0, -8, -24$, so you would land at $w = 0 + 1 + 0 + 2 + 6 = 9$ — a different algorithm with a very different answer. Recompute the residual from the current $w$ at every step.</p>
+      <p><strong>Trap 4 — "SGD is worse because $J$ went up".</strong> SGD's noise is not purely a cost: on a non-convex objective it can jump out of a poor local minimum, which batch cannot. On a convex objective like this one there is nothing to escape, so the noise is pure cost and smaller steps are pure gain. Say which regime you are in before judging it.</p>
+    </div></details>
+  </div>
+
+  <h2 id="features-logistic-selection">9. Feature engineering, logistic regression and model selection</h2>
+
+  <p>Chapter references: <a href="feature-engineering.html">Feature engineering &amp; overfitting</a>, <a href="logistic-regression.html">Logistic regression</a>, <a href="model-selection.html">Regularization &amp; model selection</a>.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 26</span>Write $\phi$, and give the shape of $\Phi$ <span class="pill">warm-up</span></div>
+    <div class="g-body">
+      <p>For each hypothesis below, write the feature transform $\phi$ explicitly as a vector, state $M$ (its output dimension), and give the shape of the transformed design matrix $\Phi$.</p>
+      <ol>
+        <li><strong>(a)</strong> One original feature $x \in \mathbb{R}$, $N = 12$ examples, and
+        $$h(x) = \theta_0 + \theta_1 x + \theta_2 x^3 + \theta_3 \sin x.$$</li>
+        <li><strong>(b)</strong> Two original features $x = (x_1, x_2)$, $N = 50$ examples, and the <em>full</em> degree-2 polynomial — every monomial of degree $\le 2$, cross term included.</li>
+        <li><strong>(c)</strong> For (b), write the row of $\Phi$ corresponding to the example $x = (2, 3)$.</li>
+        <li><strong>(d)</strong> For (b), give $\theta^{*}$ in closed form. Is this model linear? Linear in <em>what</em>?</li>
+        <li><strong>(e)</strong> How many features does a full degree-$D$ polynomial in $K = 2$ original features have? Evaluate at $D = 3$.</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>$\phi : \mathbb{R}^{K} \to \mathbb{R}^{M}$ takes the $K$ original features of <em>one</em> example and returns the $M$ features you actually regress on. The rule for reading it off a hypothesis is mechanical:</p>
+      <p><strong>Each $\theta_j$ in the hypothesis multiplies exactly one entry of $\phi(x)$ — so list the things the $\theta$s multiply, in order.</strong> A bare $\theta_0$ with nothing attached multiplies the constant $1$, so $\phi$ starts with a $1$; that is where the bias column comes from.</p>
+      <p>Then $\Phi \in \mathbb{R}^{N \times M}$, with row $i$ equal to $\phi(x^{(i)})^{\top}$ — one row per example, one column per produced feature. $N$ never changes under feature engineering; $M$ does.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) and (b)</summary><div>
+      <p><strong>(a)</strong> The four $\theta$s multiply $1$, $x$, $x^3$ and $\sin x$:</p>
+      $$\phi(x) = \begin{pmatrix} 1 \\ x \\ x^3 \\ \sin x\end{pmatrix} \in \mathbb{R}^{4}, \qquad M = 4, \qquad \Phi \in \mathbb{R}^{12 \times 4}$$
+      <p>There is no $x^2$ term, so there is no $x^2$ entry. $\phi$ is read off the hypothesis you were given, not off a template for "the degree-3 polynomial".</p>
+      <p><strong>(b)</strong> The monomials in $x_1, x_2$ of total degree $\le 2$ are $1$; $x_1, x_2$; $x_1^2, x_1x_2, x_2^2$:</p>
+      $$\phi(x_1,x_2) = \begin{pmatrix} 1 \\ x_1 \\ x_2 \\ x_1^2 \\ x_1x_2 \\ x_2^2\end{pmatrix} \in \mathbb{R}^{6}, \qquad M = \mathbf{6}, \qquad \Phi \in \mathbb{R}^{50\times 6}$$
+      $$h(x) = \theta_0 + \theta_1x_1 + \theta_2x_2 + \theta_3x_1^2 + \theta_4x_1x_2 + \theta_5x_2^2$$
+      <p>The cross term $x_1x_2$ is the one people drop, and it is the only one that lets the model represent an interaction — the whole reason to go to degree 2 with more than one feature.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (c) and (d)</summary><div>
+      <p><strong>(c)</strong> With $x_1 = 2$, $x_2 = 3$: $\ x_1^2 = 4$, $x_1x_2 = 6$, $x_2^2 = 9$.</p>
+      $$\phi(2,3)^{\top} = \begin{pmatrix} 1 & 2 & 3 & 4 & 6 & 9\end{pmatrix}$$
+      <p>Six numbers in one row of $\Phi$, from an example that arrived as two numbers.</p>
+      <p><strong>(d)</strong> Identical to the normal equations with $X$ replaced by $\Phi$:</p>
+      $$\theta^{*} = (\Phi^{\top}\Phi)^{-1}\Phi^{\top}y, \qquad \Phi^{\top}\Phi \in \mathbb{R}^{6\times6}$$
+      <p>And yes, the model is still <strong>linear</strong> — <em>linear in $\theta$</em>, which is the only linearity least squares ever required. $h$ is a curved, quadratic surface in $x$; it is a flat, linear function of the parameters. Every result from Section 7 carries over unchanged: the same closed form, the same convexity, the same singularity condition (now on the columns of $\Phi$).</p>
+      <p>That last point matters: engineered features collide easily. Add $x_3 = x_1 + x_2$ to $\phi$ and $\Phi$ is instantly rank-deficient, exactly as in Problem 22.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (e) counting</summary><div>
+      <p>The monomials of degree $\le D$ in $K$ variables number $\binom{D + K}{K}$. With $K = 2$:</p>
+      $$M = \binom{D+2}{2} = \frac{(D+1)(D+2)}{2}$$
+      <p>Check at $D = 2$: $\frac{3 \cdot 4}{2} = 6$ ✓ — matches the six entries we listed. At $D = 3$:</p>
+      $$M = \frac{4 \cdot 5}{2} = \mathbf{10}$$
+      <p>namely $1$; $x_1, x_2$; $x_1^2, x_1x_2, x_2^2$; $x_1^3, x_1^2x_2, x_1x_2^2, x_2^3$. Count them: $1 + 2 + 3 + 4 = 10$ ✓.</p>
+      <p>This growth is the whole problem with polynomial features. At $K = 10$ original features, degree 2 already gives $\binom{12}{2} = 66$ features and degree 3 gives $\binom{13}{3} = 286$. More features means a richer hypothesis class, which means a better training fit <em>and</em>, past some point, worse generalization — which is Problem 27.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $\phi(x) = (1,\ x,\ x^3,\ \sin x)^{\top}$, $M = 4$, $\Phi \in \mathbb{R}^{12\times4}$.</p>
+      <p><strong>(b)</strong> $\phi(x) = (1,\ x_1,\ x_2,\ x_1^2,\ x_1x_2,\ x_2^2)^{\top}$, $M = 6$, $\Phi \in \mathbb{R}^{50\times6}$.</p>
+      <p><strong>(c)</strong> $(1,\ 2,\ 3,\ 4,\ 6,\ 9)$.</p>
+      <p><strong>(d)</strong> $\theta^{*} = (\Phi^{\top}\Phi)^{-1}\Phi^{\top}y$. The model is linear in $\theta$ (not in $x$), which is all least squares needs.</p>
+      <p><strong>(e)</strong> $\binom{D+2}{2} = \frac{(D+1)(D+2)}{2}$; at $D=3$ that is $10$.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — dropping the leading 1.</strong> Then $M = 3$ in (a) and the model is forced through the origin. The bias is a feature that is constantly 1; it has to be in $\phi$ or there is nothing for $\theta_0$ to multiply.</p>
+      <p><strong>Trap 2 — dropping the cross term.</strong> "Degree 2 in two variables" is six terms, not five and not four. If the question says "full" or "including interactions", the cross term is being checked explicitly.</p>
+      <p><strong>Trap 3 — writing $\Phi \in \mathbb{R}^{M \times N}$.</strong> Rows are examples. $\Phi$ is tall and thin when $N &gt; M$, which is the regime you want. Get this backwards and every subsequent matrix product is ill-shaped.</p>
+      <p><strong>Trap 4 — "this is nonlinear regression".</strong> It is linear regression on nonlinear features. The distinction is not pedantry: it is exactly why you still get a closed form and a convex objective, and it is a one-line short-answer question that appears on these exams verbatim.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 27</span>Diagnose it: overfitting, underfitting, or neither <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Five models are fitted to the same 200 training examples and scored on the same 200 held-out test examples. All errors are mean squared error.</p>
+      <table class="tight center">
+        <thead><tr><th>Model</th><th>what it is</th><th>train MSE</th><th>test MSE</th></tr></thead>
+        <tbody>
+          <tr><td>$A$</td><td>degree-1 polynomial</td><td>$0.42$</td><td>$0.45$</td></tr>
+          <tr><td>$B$</td><td>degree-3 polynomial</td><td>$0.08$</td><td>$0.11$</td></tr>
+          <tr><td>$C$</td><td>degree-9 polynomial</td><td>$0.01$</td><td>$0.63$</td></tr>
+          <tr><td>$D$</td><td>degree-15 polynomial</td><td>$0.00$</td><td>$1.84$</td></tr>
+          <tr><td>$E$</td><td>degree-3, trained on 20 examples only</td><td>$0.03$</td><td>$0.37$</td></tr>
+        </tbody>
+      </table>
+      <ol>
+        <li><strong>(a)</strong> Label each of $A$–$D$ as underfitting, overfitting, or a good fit, and say which number told you.</li>
+        <li><strong>(b)</strong> Which model would you ship? Which has the lowest training error, and why is that not the same question?</li>
+        <li><strong>(c)</strong> $D$ has train MSE exactly $0.00$. What does that tell you, and is it good news?</li>
+        <li><strong>(d)</strong> Model $E$ is the same hypothesis class as $B$ but much worse on test. Diagnose it, and give a fix that does <em>not</em> involve changing the model.</li>
+        <li><strong>(e)</strong> Prescribe one concrete action for an underfitting model and one for an overfitting model.</li>
+      </ol>
+
+      <div class="viz">
+        <div class="viz-title">Train and test MSE for models $A$–$D$, as plotted from the table</div>
+        <svg viewBox="0 0 640 320" role="img" aria-label="Training error falling to zero while test error falls then rises sharply as polynomial degree grows">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="80" y1="275" x2="580" y2="275"/>
+    <line x1="80" y1="215" x2="580" y2="215"/>
+    <line x1="80" y1="155" x2="580" y2="155"/>
+    <line x1="80" y1="95" x2="580" y2="95"/>
+    <line x1="80" y1="35" x2="580" y2="35"/>
+  </g>
+  <g stroke="var(--line-2)" stroke-width="1.5"><line x1="80" y1="275" x2="580" y2="275"/><line x1="80" y1="35" x2="80" y2="275"/></g>
+  <line x1="173.8" y1="35" x2="173.8" y2="275" stroke="var(--accent)" stroke-width="2" stroke-dasharray="3 4"/>
+  <polyline points="111.2,224.6 173.8,265.4 361.2,273.8 548.8,275" fill="none" stroke="var(--accent-2)" stroke-width="2.5"/>
+  <g fill="var(--accent-2)"><circle cx="111.2" cy="224.6" r="5"/><circle cx="173.8" cy="265.4" r="5"/><circle cx="361.2" cy="273.8" r="5"/><circle cx="548.8" cy="275" r="5"/></g>
+  <polyline points="111.2,221 173.8,261.8 361.2,199.4 548.8,54.2" fill="none" stroke="var(--rose)" stroke-width="2.5" stroke-dasharray="7 4"/>
+  <g fill="var(--rose)"><circle cx="111.2" cy="221" r="5"/><circle cx="173.8" cy="261.8" r="5"/><circle cx="361.2" cy="199.4" r="5"/><circle cx="548.8" cy="54.2" r="5"/></g>
+  <g font-size="13" font-weight="700">
+    <text x="376.9" y="255.8" fill="var(--accent-2)">train error</text>
+    <text x="405" y="131" fill="var(--rose)">test error</text>
+  </g>
+  <text x="178" y="49" fill="var(--accent)" font-size="12" font-weight="700">best test error (model B)</text>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="111.2" y="292">1</text>
+    <text x="173.8" y="292">3</text>
+    <text x="361.2" y="292">9</text>
+    <text x="548.8" y="292">15</text>
+    <text x="330" y="310" font-size="12">polynomial degree</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="72" y="279">0.0</text>
+    <text x="72" y="219">0.5</text>
+    <text x="72" y="159">1.0</text>
+    <text x="72" y="99">1.5</text>
+    <text x="72" y="39">2.0</text>
+  </g>
+  <text x="42" y="155" fill="var(--ink-mute)" font-size="11" transform="rotate(-90 42 155)" text-anchor="middle">mean squared error</text>
+</svg>
+        <div class="caption">What to notice: the two curves plot exactly the four pairs in the table. They run together at degrees 1 and 3, then separate: training error keeps creeping down to $0.00$ while test error turns around and climbs to $1.84$. The <strong>gap</strong> between the curves is the overfitting; the <strong>height</strong> of the left end is the underfitting. The marked minimum of the test curve is at degree 3, not at the degree with the lowest training error.</div>
+      </div>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Two numbers per model, and they answer two <em>different</em> questions. Read them in this order, every time:</p>
+      <ol>
+        <li><strong>Is the training error high?</strong> If yes, the model cannot even fit what it has seen — <strong>underfitting</strong> (high bias). Nothing about test error is needed to diagnose this.</li>
+        <li><strong>Is the gap (test $-$ train) large?</strong> If yes, it fitted the training set in ways that do not generalise — <strong>overfitting</strong> (high variance).</li>
+      </ol>
+      <p>"High" and "large" are relative to the other rows and to the noise floor you believe is in the data; here the columns span $0.00$ to $1.84$, so the comparisons are not close.</p>
+      <p>The two failures are independent. A model can be both (high train error <em>and</em> a big gap) and the best model is the one that is neither.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the four diagnoses</summary><div>
+      <table class="tight center">
+        <thead><tr><th>Model</th><th>train</th><th>test</th><th>gap</th><th>diagnosis</th></tr></thead>
+        <tbody>
+          <tr><td>$A$</td><td>$0.42$</td><td>$0.45$</td><td>$0.03$</td><td><strong>underfitting.</strong> Train error is the highest of all five and the gap is tiny — it is equally bad everywhere, which is the signature of a class too small to contain the truth.</td></tr>
+          <tr><td>$B$</td><td>$0.08$</td><td>$0.11$</td><td>$0.03$</td><td><strong>good fit.</strong> Low train error <em>and</em> a small gap. This is what you are aiming for.</td></tr>
+          <tr><td>$C$</td><td>$0.01$</td><td>$0.63$</td><td>$0.62$</td><td><strong>overfitting.</strong> Train error improved from $B$ by $0.07$ and test error got worse by $0.52$.</td></tr>
+          <tr><td>$D$</td><td>$0.00$</td><td>$1.84$</td><td>$1.84$</td><td><strong>overfitting, severely.</strong> Perfect on the training set, four times worse than $A$ on test — $A$ being the model that could barely fit anything.</td></tr>
+        </tbody>
+      </table>
+      <p>$A$ and $B$ have the <em>same</em> gap, $0.03$. The gap alone cannot distinguish them; it is the train <em>level</em> that says $A$ is underfitting. You genuinely need both numbers.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) and (c)</summary><div>
+      <p><strong>(b) Ship $B$</strong> — the lowest test error, $0.11$.</p>
+      <p>The lowest <em>training</em> error belongs to $D$, at $0.00$, which is the worst model in the table by the only measure that matters. They are different questions because training error measures <em>how well you fitted data you have already seen</em>, and no amount of it is evidence about data you have not. Training error is monotonically non-increasing in model capacity, so "minimise training error over model classes" always selects the largest class — it is not a model selection criterion at all.</p>
+      <p>One caveat that is itself examinable: once you have used this test set to pick $B$, it is no longer an unbiased estimate of $B$'s risk. Hyperparameters are supposed to be chosen on a <em>validation</em> set, which is Problem 30.</p>
+      <p><strong>(c)</strong> $0.00$ means the degree-15 polynomial <em>interpolated</em> the training data — it passed through every point exactly, noise included. It is not good news, it is the definition of the failure: the model had enough free parameters to memorise, so it memorised, including the part of each $y$ that was random and will not repeat. A model whose training error is exactly zero should always be treated as a suspect rather than an achievement.</p>
+      <p>And note what training error could <em>not</em> tell you: across $A \to D$ it falls monotonically $0.42 \to 0.08 \to 0.01 \to 0.00$ and never once hints that anything went wrong. Overfitting is invisible without held-out data. That is the entire argument for having a test set.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) and (e)</summary><div>
+      <p><strong>(d)</strong> $E$ is degree 3 — the same hypothesis class as $B$, which was fine — but trained on 20 examples instead of 200. Train $0.03$, test $0.37$: a gap of $0.34$. That is <strong>overfitting caused by data scarcity, not by model capacity.</strong> With 20 points a degree-3 polynomial has plenty of freedom to chase noise.</p>
+      <p>The fix that does not change the model: <strong>get more training data.</strong> Going back to the full 200 examples <em>is</em> model $B$, with test error $0.11$. More data shrinks the gap without touching the hypothesis class, which is the one lever that costs you nothing in bias.</p>
+      <p>This is why "overfitting" is not a property of a model. It is a property of a model <em>and</em> a sample size. The same degree-3 polynomial overfits at $N=20$ and fits well at $N=200$.</p>
+      <p><strong>(e)</strong></p>
+      <table class="tight center">
+        <thead><tr><th></th><th>Underfitting (like $A$)</th><th>Overfitting (like $C$, $D$, $E$)</th></tr></thead>
+        <tbody>
+          <tr><td>symptom</td><td>train error high, gap small</td><td>train error low, gap large</td></tr>
+          <tr><td>cause</td><td>hypothesis class too small</td><td>class too large for the data available</td></tr>
+          <tr><td>do this</td><td><strong>add capacity:</strong> raise the degree, add features or interactions, grow the tree</td><td><strong>remove capacity or add data:</strong> lower the degree, regularize (raise $\lambda$), prune the tree, or collect more examples</td></tr>
+          <tr><td>do NOT do this</td><td>add more data — it will not help; the class cannot represent the truth at any $N$</td><td>add more features — it makes the gap worse</td></tr>
+        </tbody>
+      </table>
+      <p>The "do NOT" row is the useful half. More data is the standard reflex and it is <em>useless</em> against underfitting: model $A$ with 20,000 examples still has train error near $0.42$, because a line fitted to a curve is wrong no matter how much of the curve you show it.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> $A$ underfits (highest train error, tiny gap); $B$ is a good fit (low train, small gap); $C$ overfits (gap $0.62$); $D$ overfits severely (gap $1.84$).</p>
+      <p><strong>(b)</strong> Ship $B$, test MSE $0.11$. $D$ has the lowest training error ($0.00$) and the worst test error — training error is non-increasing in capacity and therefore cannot select a model.</p>
+      <p><strong>(c)</strong> It interpolated the training set, fitting the noise. Bad news, and invisible to training error alone.</p>
+      <p><strong>(d)</strong> Overfitting from too few examples, not too much capacity. Fix: more training data — at $N = 200$ this same model is $B$.</p>
+      <p><strong>(e)</strong> Underfitting $\to$ add capacity (more features, higher degree, less regularization). Overfitting $\to$ reduce capacity or add data (lower degree, larger $\lambda$, more examples).</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — diagnosing from the gap alone.</strong> $A$ and $B$ both have a gap of $0.03$ and are opposite diagnoses. Always report the train <em>level</em> and the gap.</p>
+      <p><strong>Trap 2 — "high test error means overfitting".</strong> No: $A$ has the second-highest test error in the table and is underfitting. High test error with <em>equally</em> high training error is underfitting, and the prescriptions are opposite — so this misdiagnosis sends you to add regularization to a model that needed more capacity.</p>
+      <p><strong>Trap 3 — model $E$.</strong> It is in the table to break the reflex "overfitting $\Rightarrow$ reduce the degree". Reducing $E$'s degree would make it underfit as well. The variable that changed was $N$.</p>
+      <p><strong>Trap 4 — picking by training error.</strong> $D$ wins on training error and loses on everything else. Any question of the form "which model would you deploy" is checking whether you look at the held-out column.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 28</span>Sigmoid, cross-entropy and one gradient step, by hand <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Binary logistic regression with $\sigma(z) = \dfrac{1}{1 + e^{-z}}$, prediction $h_\theta(x) = \sigma(\theta^{\top}x)$, and average cross-entropy loss</p>
+      $$J(\theta) = -\frac{1}{N}\sum_{i=1}^{N}\Big[y^{(i)}\ln h_\theta(x^{(i)}) + \big(1-y^{(i)}\big)\ln\big(1 - h_\theta(x^{(i)})\big)\Big], \qquad \nabla_\theta J = \frac{1}{N}\sum_{i=1}^{N}\big(h_\theta(x^{(i)}) - y^{(i)}\big)x^{(i)}.$$
+      <p>Current parameters and two training examples (the leading 1 in each $x$ is the bias feature):</p>
+      $$\theta = \begin{pmatrix}0 \\ 1 \\ -1\end{pmatrix}, \qquad x^{(1)} = \begin{pmatrix}1\\2\\1\end{pmatrix},\ y^{(1)} = 1, \qquad x^{(2)} = \begin{pmatrix}1\\1\\2\end{pmatrix},\ y^{(2)} = 0.$$
+      <p class="tiny muted">Given, so no calculator is needed: $\sigma(1) = 0.731$, $\sigma(-1) = 0.269$, $\sigma(0) = 0.5$, $\ \ln 2 = 0.693$, $\ -\ln(0.731) = 0.313$, $\ -\ln(0.269) = 1.313$. Note $\sigma(-z) = 1 - \sigma(z)$.</p>
+      <ol>
+        <li><strong>(a)</strong> Compute $z^{(i)} = \theta^{\top}x^{(i)}$ and $h_\theta(x^{(i)})$ for both examples.</li>
+        <li><strong>(b)</strong> Compute the per-example cross-entropy losses and $J(\theta)$.</li>
+        <li><strong>(c)</strong> Compute $\nabla_\theta J$.</li>
+        <li><strong>(d)</strong> Take one gradient step with $\alpha = 1$. Report $\theta^{(1)}$, the new $z$ values, and say whether $J$ went up or down — with a reason, not a calculation.</li>
+        <li><strong>(e)</strong> At $\theta$, what are the predicted labels at threshold $0.5$, and what are the odds that example 1 is positive?</li>
+      </ol>
+
+      <div class="viz">
+        <div class="viz-title">The sigmoid, with the two examples' scores marked</div>
+        <svg viewBox="0 0 640 320" role="img" aria-label="The logistic sigmoid with the two points z equals minus one and z equals one marked at 0.269 and 0.731">
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="80" y1="275" x2="580" y2="275"/>
+    <line x1="80" y1="216.2" x2="580" y2="216.2"/>
+    <line x1="80" y1="157.5" x2="580" y2="157.5"/>
+    <line x1="80" y1="98.8" x2="580" y2="98.8"/>
+    <line x1="80" y1="40" x2="580" y2="40"/>
+  </g>
+  <line x1="80" y1="275" x2="580" y2="275" stroke="var(--line-2)" stroke-width="1.5"/>
+  <line x1="330" y1="40" x2="330" y2="275" stroke="var(--line-2)" stroke-width="1.5"/>
+  <polyline points="80,274.4 100.8,274 121.7,273.4 142.5,272.4 163.3,270.8 184.2,268.1 205,263.9 225.8,257.2 246.7,247 267.5,232.1 288.3,211.8 309.2,186.3 330,157.5 350.8,128.7 371.7,103.2 392.5,82.9 413.3,68 434.2,57.8 455,51.1 475.8,46.9 496.7,44.2 517.5,42.6 538.3,41.6 559.2,41 580,40.6" fill="none" stroke="var(--accent-2)" stroke-width="2.5"/>
+  <line x1="80" y1="157.5" x2="580" y2="157.5" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="86" y="150.5" fill="var(--accent)" font-size="11" font-weight="700">decision threshold 0.5</text>
+  <line x1="371.7" y1="103.2" x2="371.7" y2="275" stroke="var(--accent-3)" stroke-width="2" stroke-dasharray="3 3"/>
+  <circle cx="371.7" cy="103.2" r="6" fill="var(--accent-3)"/>
+  <text x="385.7" y="91.2" fill="var(--accent-3)" font-size="12" font-weight="700">example 1: z = 1, h = 0.731</text>
+  <line x1="288.3" y1="211.8" x2="288.3" y2="275" stroke="var(--rose)" stroke-width="2" stroke-dasharray="3 3"/>
+  <circle cx="288.3" cy="211.8" r="6" fill="var(--rose)"/>
+  <text x="274.3" y="229.8" fill="var(--rose)" font-size="12" font-weight="700" text-anchor="end">example 2: z = -1, h = 0.269</text>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="middle">
+    <text x="80" y="292">-6</text>
+    <text x="163.3" y="292">-4</text>
+    <text x="246.7" y="292">-2</text>
+    <text x="413.3" y="292">2</text>
+    <text x="496.7" y="292">4</text>
+    <text x="580" y="292">6</text>
+    <text x="330" y="310" font-size="12">z = theta-transpose x</text>
+  </g>
+  <g fill="var(--ink-mute)" font-size="11" text-anchor="end">
+    <text x="72" y="279">0.00</text>
+    <text x="72" y="220.2">0.25</text>
+    <text x="72" y="161.5">0.50</text>
+    <text x="72" y="102.8">0.75</text>
+    <text x="72" y="44">1.00</text>
+  </g>
+</svg>
+        <div class="caption">What to notice: the two examples land symmetrically about $z = 0$, at $+1$ and $-1$, so their predicted probabilities $0.731$ and $0.269$ sum to exactly 1 — the symmetry $\sigma(-z) = 1 - \sigma(z)$ read straight off the curve. Because $y^{(1)} = 1$ and $y^{(2)} = 0$, both examples are on the correct side of the dashed threshold, and both incur the same loss.</div>
+      </div>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Three stages, strictly in order, because each feeds the next: a <strong>score</strong> $z = \theta^{\top}x$ (any real number), a <strong>probability</strong> $h = \sigma(z) \in (0,1)$, and a <strong>loss</strong> built from that probability. Then one gradient step.</p>
+      <p>The gradient formula is given, and it is worth staring at: $\nabla_\theta J = \frac1N\sum_i (h^{(i)} - y^{(i)})x^{(i)}$. The bracket is the <strong>residual</strong> — predicted probability minus actual label — and it is exactly the same shape as linear regression's gradient. No $\sigma'$ appears anywhere, because the derivative of the sigmoid and the derivative of the logarithm cancel. That cancellation is the reason cross-entropy is the loss of choice here.</p>
+      <p>Shapes: $z$ is a scalar per example, $h$ is a scalar per example, $\nabla_\theta J \in \mathbb{R}^3$ — same shape as $\theta$, because each term is a scalar times $x^{(i)} \in \mathbb{R}^3$.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) scores and probabilities</summary><div>
+      $$z^{(1)} = \theta^{\top}x^{(1)} = (0)(1) + (1)(2) + (-1)(1) = 0 + 2 - 1 = \mathbf{1}$$
+      $$z^{(2)} = \theta^{\top}x^{(2)} = (0)(1) + (1)(1) + (-1)(2) = 0 + 1 - 2 = \mathbf{-1}$$
+      $$h^{(1)} = \sigma(1) = \mathbf{0.731}, \qquad h^{(2)} = \sigma(-1) = \mathbf{0.269}$$
+      <p>Consistency check: $0.731 + 0.269 = 1.000$ ✓, as $\sigma(-z) = 1 - \sigma(z)$ demands.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) the losses</summary><div>
+      <p>Only one of the two terms survives per example, because $y$ is 0 or 1.</p>
+      <p><strong>Example 1, $y = 1$:</strong> the loss is $-\ln h$:</p>
+      $$\ell^{(1)} = -\ln(0.731) = \mathbf{0.313}$$
+      <p><strong>Example 2, $y = 0$:</strong> the loss is $-\ln(1 - h)$, and $1 - 0.269 = 0.731$:</p>
+      $$\ell^{(2)} = -\ln(1 - 0.269) = -\ln(0.731) = \mathbf{0.313}$$
+      $$J(\theta) = \frac{0.313 + 0.313}{2} = \mathbf{0.313}$$
+      <p>Both examples cost the same, which the figure explains: each is the same distance on the correct side of the boundary. For scale, a model that said $0.5$ for everything would score $-\ln(0.5) = \ln 2 = 0.693$, so $0.313$ is genuinely better than knowing nothing — a comparison always worth making, since cross-entropy has no natural units.</p>
+      <p>Note which probability goes inside the log: for $y = 0$ it is $1 - h$, the probability the model assigns to the <em>true</em> class. In both cases the loss is $-\ln P(\text{correct class})$, which is the whole content of cross-entropy and much easier to remember than the two-term formula.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) the gradient</summary><div>
+      <p>Residuals first:</p>
+      $$h^{(1)} - y^{(1)} = 0.731 - 1 = -0.269, \qquad h^{(2)} - y^{(2)} = 0.269 - 0 = +0.269$$
+      <p>Equal and opposite — again the symmetry. Now weight each $x^{(i)}$ by its residual and average:</p>
+      $$\nabla_\theta J = \frac12\left[(-0.269)\begin{pmatrix}1\\2\\1\end{pmatrix} + (0.269)\begin{pmatrix}1\\1\\2\end{pmatrix}\right] = \frac{0.269}{2}\left[\begin{pmatrix}-1\\-2\\-1\end{pmatrix} + \begin{pmatrix}1\\1\\2\end{pmatrix}\right] = \frac{0.269}{2}\begin{pmatrix}0\\-1\\1\end{pmatrix}$$
+      $$\nabla_\theta J = \begin{pmatrix}\mathbf{0} \\ \mathbf{-0.1345} \\ \mathbf{+0.1345}\end{pmatrix}$$
+      <p>The <strong>bias component is exactly zero</strong>, and that is not a coincidence: the bias feature is $1$ for every example, so its gradient component is the plain average of the residuals, $\frac12(-0.269 + 0.269) = 0$. One example is under-predicted by as much as the other is over-predicted, so there is no pressure to shift the whole boundary — only to rotate it.</p>
+    </div></details>
+    <details class="step"><summary>Step 5 — (d) and (e)</summary><div>
+      <p><strong>(d)</strong> With $\alpha = 1$:</p>
+      $$\theta^{(1)} = \theta - 1\cdot\nabla_\theta J = \begin{pmatrix}0\\1\\-1\end{pmatrix} - \begin{pmatrix}0\\-0.1345\\0.1345\end{pmatrix} = \begin{pmatrix}\mathbf{0}\\ \mathbf{1.1345}\\ \mathbf{-1.1345}\end{pmatrix}$$
+      $$z^{(1)}_{\text{new}} = 0 + 2(1.1345) - 1.1345 = \mathbf{+1.1345}, \qquad z^{(2)}_{\text{new}} = 0 + 1.1345 - 2(1.1345) = \mathbf{-1.1345}$$
+      <p>$J$ went <strong>down</strong>, and you can say so without evaluating a single logarithm. Example 1 is a positive whose score rose from $1$ to $1.1345$, so $h^{(1)}$ rose and $-\ln h^{(1)}$ fell. Example 2 is a negative whose score fell from $-1$ to $-1.1345$, so $h^{(2)}$ fell and $-\ln(1-h^{(2)})$ fell too. Both terms decreased, so the average decreased. (For the record: $J$ goes from $0.313262$ to $0.278837$.)</p>
+      <p>Each example moved <em>further onto its own correct side</em>. That is what the gradient step did: it steepened the boundary rather than moving it, exactly as the zero bias component predicted.</p>
+      <p><strong>(e)</strong> Threshold $0.5$ on $h$ is the same as threshold $0$ on $z$, since $\sigma$ is increasing and $\sigma(0) = 0.5$. So:</p>
+      <ul>
+        <li>Example 1: $h = 0.731 &gt; 0.5 \Rightarrow \hat y = 1$, and $y = 1$ ✓ correct.</li>
+        <li>Example 2: $h = 0.269 &lt; 0.5 \Rightarrow \hat y = 0$, and $y = 0$ ✓ correct.</li>
+      </ul>
+      <p>Both correct — zero-one loss is $0/2 = 0$ — while cross-entropy is still $0.313$. Cross-entropy keeps pushing after the classification is already right, because it scores <em>confidence</em>, not correctness; that is precisely why it is differentiable and usable, and why zero-one loss is not.</p>
+      <p><strong>Odds.</strong> Logistic regression is linear in the log-odds:</p>
+      $$\ln\frac{h}{1-h} = \theta^{\top}x = z \qquad\Longrightarrow\qquad \frac{h^{(1)}}{1 - h^{(1)}} = e^{z^{(1)}} = e^{1} \approx 2.718$$
+      <p>Check it directly: $0.731/0.269 = 2.717$, matching $e \approx 2.718$ up to the rounding in the given $\sigma$ values ✓. Example 1 is about $2.7$ times more likely positive than negative.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <table class="tight center">
+        <thead><tr><th>$i$</th><th>$z$</th><th>$h = \sigma(z)$</th><th>$y$</th><th>$\ell$</th><th>$h - y$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>$+1$</td><td>$0.731$</td><td>1</td><td>$0.313$</td><td>$-0.269$</td></tr>
+          <tr><td>2</td><td>$-1$</td><td>$0.269$</td><td>0</td><td>$0.313$</td><td>$+0.269$</td></tr>
+        </tbody>
+      </table>
+      <p><strong>(b)</strong> $J(\theta) = 0.313$. &nbsp; <strong>(c)</strong> $\nabla_\theta J = (0,\ -0.1345,\ +0.1345)^{\top}$.</p>
+      <p><strong>(d)</strong> $\theta^{(1)} = (0,\ 1.1345,\ -1.1345)^{\top}$; new scores $+1.1345$ and $-1.1345$; $J$ decreased (to $0.2788$) because each example moved further onto its correct side.</p>
+      <p><strong>(e)</strong> Both predicted correctly at threshold $0.5$; the odds for example 1 are $e^{1} \approx 2.718$ to 1.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — inserting a $\sigma'$ into the gradient.</strong> The chain rule <em>looks</em> like it should leave a factor $\sigma(z)(1-\sigma(z))$ behind. It cancels against the $1/h$ from differentiating $\ln h$. If your gradient contains $h(1-h)$, you have differentiated squared loss through a sigmoid instead — a different (and non-convex) objective.</p>
+      <p><strong>Trap 2 — using $h$ instead of $1-h$ for a negative example.</strong> For $y = 0$ the loss is $-\ln(1 - h)$. Plugging in $-\ln(0.269) = 1.313$ gives $J = 0.813$ instead of $0.313$, and the number even looks plausible. Say out loud "probability of the true class" before you take the log.</p>
+      <p><strong>Trap 3 — forgetting the bias feature.</strong> $\theta \in \mathbb{R}^3$ and $x \in \mathbb{R}^3$ with a leading 1. Drop it and $z^{(1)} = 1$ by coincidence here, but the gradient loses a component and the shapes stop matching.</p>
+      <p><strong>Trap 4 — "both examples are classified correctly, so the loss is 0".</strong> That is zero-<em>one</em> loss. Cross-entropy is $0.313$ and still has a nonzero gradient, which is the only reason the step in (d) exists. Confusing "correct" with "zero loss" is the single most common conceptual error in this chapter.</p>
+      <p><strong>Trap 5 — $\ln$ versus $\log_2$.</strong> Entropy problems in Section 6 used $\log_2$; cross-entropy here uses $\ln$. The two differ by a factor $\ln 2$, which never changes an $\arg\min$ but always changes the number. Use whichever the question writes.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 29</span>Ridge versus LASSO, and why the bias is exempt <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>Regularized ERM with a feature transform $\phi$:</p>
+      $$\theta^{\star} = \arg\min_{\theta}\ \underbrace{\frac1N\sum_{i=1}^{N}\big(\theta^{\top}\phi(x^{(i)}) - y^{(i)}\big)^2}_{\hat R(\theta)} \;+\; \lambda\, r(\theta), \qquad r_{\text{ridge}}(\theta) = \sum_{j\ge1}\theta_j^2, \qquad r_{\text{lasso}}(\theta) = \sum_{j\ge1}|\theta_j|.$$
+      <p>Two candidate weight vectors (ignore the bias for now) happen to achieve <em>exactly the same</em> empirical risk $\hat R = 0.5$ on the training set:</p>
+      $$\theta_A = (3,\ 0), \qquad \theta_B = (2,\ 2).$$
+      <ol>
+        <li><strong>(a)</strong> Compute both penalties for both vectors, then the full objective under each regularizer with $\lambda = 1$.</li>
+        <li><strong>(b)</strong> Which vector does Ridge choose? Which does LASSO choose? Explain the disagreement in one sentence.</li>
+        <li><strong>(c)</strong> Why does LASSO produce weights that are <em>exactly</em> zero while Ridge merely shrinks?</li>
+        <li><strong>(d)</strong> Why is $\theta_0$ excluded from both sums? Give a concrete consequence of including it.</li>
+        <li><strong>(e)</strong> What happens as $\lambda \to 0$ and as $\lambda \to \infty$? And why must features be standardized first?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>The objective is a <strong>sum of two competing terms</strong>: fit, which wants large weights that chase the data, and penalty, which wants small weights. $\lambda$ sets the exchange rate between them.</p>
+      <p>This problem rigs $\hat R$ to be identical for the two candidates, so the fit term cancels out of the comparison and you are looking at the penalty alone. That is artificial on purpose: it isolates the question "what shape of solution does each penalty <em>prefer</em>, all else equal?", which is the thing you are actually being tested on.</p>
+      <p>Then parts (c)–(e) are short-answer, and each has a specific right answer, not a vibe.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the four penalties</summary><div>
+      <table class="tight center">
+        <thead><tr><th></th><th>$\sum_j \theta_j^2$ (Ridge)</th><th>$\sum_j|\theta_j|$ (LASSO)</th></tr></thead>
+        <tbody>
+          <tr><td>$\theta_A = (3,0)$</td><td>$9 + 0 = 9$</td><td>$3 + 0 = \mathbf{3}$</td></tr>
+          <tr><td>$\theta_B = (2,2)$</td><td>$4 + 4 = \mathbf{8}$</td><td>$2 + 2 = 4$</td></tr>
+        </tbody>
+      </table>
+      <p>Full objectives with $\hat R = 0.5$ and $\lambda = 1$:</p>
+      <table class="tight center">
+        <thead><tr><th></th><th>Ridge objective</th><th>LASSO objective</th></tr></thead>
+        <tbody>
+          <tr><td>$\theta_A = (3,0)$</td><td>$0.5 + 9 = 9.5$</td><td>$0.5 + 3 = \mathbf{3.5}$ ✓</td></tr>
+          <tr><td>$\theta_B = (2,2)$</td><td>$0.5 + 8 = \mathbf{8.5}$ ✓</td><td>$0.5 + 4 = 4.5$</td></tr>
+        </tbody>
+      </table>
+      <p>Note that both vectors have the same total "size" in a loose sense — $3 + 0$ versus $2+2$ is only off by one — yet squaring swings the comparison the other way, because $3^2 = 9$ punishes concentration while $2^2 + 2^2 = 8$ rewards spreading.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) and (c)</summary><div>
+      <p><strong>(b) Ridge chooses $\theta_B = (2,2)$; LASSO chooses $\theta_A = (3,0)$.</strong></p>
+      <p>In one sentence: squaring penalises a single large weight more than two medium ones, so <strong>Ridge spreads weight across correlated features</strong>; the absolute value prices every unit of weight the same wherever it sits, so what LASSO can save is the <em>number</em> of features used — and <strong>LASSO drops one entirely</strong>.</p>
+      <p><strong>(c)</strong> Look at how each penalty behaves for one weight near zero, with everything else fixed.</p>
+      <ul>
+        <li>Ridge: $\frac{d}{d\theta_j}\lambda\theta_j^2 = 2\lambda\theta_j \to 0$ as $\theta_j \to 0$. The penalty's <em>pull toward zero vanishes</em> right where you would need it most, so any tiny nonzero gradient from the fit term holds $\theta_j$ at a small nonzero value. Shrinkage, never elimination.</li>
+        <li>LASSO: $\frac{d}{d\theta_j}\lambda|\theta_j| = \pm\lambda$, a constant pull of size $\lambda$ that does <em>not</em> vanish near zero. If the fit term's pull on $\theta_j$ is weaker than $\lambda$, the two cannot balance anywhere except exactly at $\theta_j = 0$, where the kink lets the subgradient absorb the difference. Hence exact zeros.</li>
+      </ul>
+      <p>Geometrically: the LASSO constraint region $\sum|\theta_j| \le c$ is a <em>diamond</em>, with corners on the axes, and a corner is where a coordinate is exactly 0. The Ridge region $\sum\theta_j^2 \le c$ is a <em>circle</em>, which touches a generic objective contour at a point with every coordinate nonzero. That is why LASSO performs feature selection and Ridge does not.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (d) the bias exemption</summary><div>
+      <p>Both sums start at $j = 1$: $\theta_0$ is never penalised. Three reasons, in increasing order of how likely they are to be the expected answer.</p>
+      <p><strong>1. $\theta_0$ is not a feature weight.</strong> Regularization encodes the prior belief "features probably do not matter much, so keep their weights small". The bias is not a feature; it is the model's baseline level, and shrinking it expresses the belief that $y$ is probably near zero — a belief about your units, not about the data.</p>
+      <p><strong>2. Concrete consequence: you lose shift-equivariance.</strong> Suppose every $y^{(i)}$ is in dollars and you switch to cents, multiplying all $y$ by 100 — or simply add 1000 dollars to every house price. The correct response is for $\theta_0$ to grow accordingly, with the feature weights unchanged. A penalty $\lambda\theta_0^2$ fights this: at $\lambda$ large enough, the fitted intercept is dragged toward 0 and <em>every prediction is biased low</em> for the whole dataset, uniformly. Penalising $\theta_0$ makes your model's answers depend on where you happened to put the origin of $y$.</p>
+      <p><strong>3. At $\lambda \to \infty$ the model should be the best constant, not zero.</strong> With the bias exempt, infinite $\lambda$ drives $\theta_{1..M} \to 0$ and leaves $\theta_0 = \bar y$, i.e. "always predict the training mean" — the sensible maximally-underfit model. With the bias penalised, infinite $\lambda$ gives $h \equiv 0$, which is not a model of anything.</p>
+    </div></details>
+    <details class="step"><summary>Step 5 — (e) the two limits, and standardization</summary><div>
+      <p><strong>$\lambda \to 0$:</strong> the penalty disappears and you recover ordinary least squares, $\theta^{\star} \to (\Phi^{\top}\Phi)^{-1}\Phi^{\top}y$. Maximum variance, minimum bias — and if $\Phi^{\top}\Phi$ is singular (Problem 22), no unique answer at all.</p>
+      <p><strong>$\lambda \to \infty$:</strong> all penalised weights are crushed to 0 and the prediction becomes the constant $\theta_0 = \bar y$. Maximum bias, zero variance — guaranteed underfitting. Between the extremes, training error increases monotonically with $\lambda$ while test error is U-shaped, which is why $\lambda$ is chosen on held-out data (Problem 30) and never on the training set — on the training set the answer is always $\lambda = 0$.</p>
+      <p><strong>Standardization.</strong> Both penalties are stated in the units of the weights, and a weight's units are the inverse of its feature's. Measure a distance feature in kilometres instead of metres and its values shrink by 1000, so the fitted weight must grow by 1000 to make the same prediction — and its Ridge penalty grows by $10^6$. The same model, the same data, a thousand-fold different penalty, purely because of a unit choice. So subtract the mean and divide by the standard deviation of each feature first (using the <em>training</em> statistics, applied unchanged to test data); then one unit of weight means the same thing in every coordinate and $\lambda$ is a meaningful single knob.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> Ridge: $9$ for $\theta_A$, $8$ for $\theta_B$ (objectives $9.5$ and $8.5$). LASSO: $3$ for $\theta_A$, $4$ for $\theta_B$ (objectives $3.5$ and $4.5$).</p>
+      <p><strong>(b)</strong> Ridge picks $\theta_B = (2,2)$; LASSO picks $\theta_A = (3,0)$. Squaring penalises one big weight more than two medium ones, so Ridge spreads; the absolute value prices weight uniformly, so LASSO zeroes a coordinate out.</p>
+      <p><strong>(c)</strong> LASSO's derivative is $\pm\lambda$ and does not vanish at $0$, so a weight whose fit-gradient is smaller than $\lambda$ can only balance exactly at zero (the diamond's corners lie on the axes). Ridge's derivative $2\lambda\theta_j \to 0$ at the origin, so it never finishes the job (the circle has no corners).</p>
+      <p><strong>(d)</strong> $\theta_0$ is a baseline, not a feature weight. Penalising it destroys shift-equivariance — add a constant to every $y$ and the fitted intercept is pulled back toward 0, biasing every prediction low — and it makes $\lambda \to \infty$ give $h \equiv 0$ instead of $h \equiv \bar y$.</p>
+      <p><strong>(e)</strong> $\lambda \to 0$ gives OLS; $\lambda \to \infty$ gives the constant predictor $\bar y$. Features must be standardized because the penalty depends on the units of each feature, so without it $\lambda$ means something different in every coordinate.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — assuming the two regularizers always agree.</strong> They are different objectives. These numbers are chosen so that each picks the vector the other rejects, which is the cleanest possible demonstration that "regularization shrinks weights" is not a complete description.</p>
+      <p><strong>Trap 2 — "LASSO gives smaller weights".</strong> Not pointwise: $\theta_A$'s largest weight is $3$, bigger than either of $\theta_B$'s. LASSO gives <em>sparser</em> weights, i.e. fewer nonzero ones. Sparse and small are different properties.</p>
+      <p><strong>Trap 3 — squaring the sum instead of summing the squares.</strong> $(3+0)^2 = 9$ agrees with $3^2 + 0^2 = 9$ by luck on $\theta_A$, but for $\theta_B$ it gives $(2+2)^2 = 16$ instead of $8$ — and reverses the conclusion. $\|\theta\|_2^2 = \sum_j\theta_j^2$.</p>
+      <p><strong>Trap 4 — forgetting that $\lambda$ cannot be fitted.</strong> $\lambda$ is a hyperparameter. Minimising the training objective over $\theta$ <em>and</em> $\lambda$ jointly always returns $\lambda = 0$, since the penalty only ever adds to the objective. Hyperparameters live on held-out data by necessity, not by convention.</p>
+    </div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Problem 30</span>Holdout versus $k$-fold cross-validation <span class="pill">exam level</span></div>
+    <div class="g-body">
+      <p>You have <strong>1000 labelled examples</strong> and you want to choose the regularization strength $\lambda$ from the $C = 5$ candidates $\{0.01,\ 0.1,\ 1,\ 10,\ 100\}$. You run <strong>5-fold</strong> cross-validation on the 1000 examples; each fold is 200 examples. The validation MSE for each $(\lambda, \text{fold})$ pair:</p>
+      <div class="scroll-x">
+      <table class="center tight">
+        <thead><tr><th>$\lambda$</th><th>fold 1</th><th>fold 2</th><th>fold 3</th><th>fold 4</th><th>fold 5</th><th>mean</th></tr></thead>
+        <tbody>
+          <tr><td>$0.01$</td><td>$0.42$</td><td>$0.50$</td><td>$0.46$</td><td>$0.38$</td><td>$0.44$</td><td>?</td></tr>
+          <tr><td>$0.1$</td><td>$0.20$</td><td>$0.34$</td><td>$0.26$</td><td>$0.32$</td><td>$0.38$</td><td>?</td></tr>
+          <tr><td>$1$</td><td>$0.22$</td><td>$0.28$</td><td>$0.20$</td><td>$0.26$</td><td>$0.24$</td><td>?</td></tr>
+          <tr><td>$10$</td><td>$0.30$</td><td>$0.36$</td><td>$0.34$</td><td>$0.32$</td><td>$0.38$</td><td>?</td></tr>
+          <tr><td>$100$</td><td>$0.52$</td><td>$0.56$</td><td>$0.48$</td><td>$0.54$</td><td>$0.50$</td><td>?</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <ol>
+        <li><strong>(a)</strong> Fill in the means and state which $\lambda$ 5-fold CV selects.</li>
+        <li><strong>(b)</strong> Suppose instead you had done a single 80:20 holdout, and your holdout split happened to be fold 1. Which $\lambda$ would you have chosen? What does the discrepancy demonstrate?</li>
+        <li><strong>(c)</strong> How many model fits does each procedure cost, including the final one? Give the general formula.</li>
+        <li><strong>(d)</strong> Exactly <em>what</em> is being chosen here, and why can it not be chosen by minimising training error?</li>
+        <li><strong>(e)</strong> After selecting $\lambda$, what do you train the shipped model on? And what is the role of a separate test set?</li>
+      </ol>
+    </div>
+    <details class="step"><summary>Step 1 — What are we actually being asked?</summary><div>
+      <p>Cross-validation is a <em>procedure for estimating a model's risk without touching the test set</em>, used here as the scoring function in a search over 5 candidate values of a hyperparameter. So separate the three roles cleanly, because every confusion in this topic is a collapse of two of them:</p>
+      <ul>
+        <li><strong>Training set</strong> — fits $\theta$ (the parameters), by ERM.</li>
+        <li><strong>Validation set(s)</strong> — scores $\lambda$ (the hyperparameter). Used repeatedly, therefore no longer unbiased for the final model.</li>
+        <li><strong>Test set</strong> — estimates the risk of the one finished model. Used once, at the end, or not at all.</li>
+      </ul>
+      <p>In $k$-fold, the 1000 examples take turns playing training and validation: for each fold, train on the other $k-1$ folds (800 examples) and score on the held-out one (200). Each example is validated on exactly once and trained on $k-1$ times.</p>
+      <p>Arithmetic note: every row has 5 numbers, so comparing row <em>sums</em> ranks them exactly as comparing means does. Add first, divide once.</p>
+    </div></details>
+    <details class="step"><summary>Step 2 — (a) the means</summary><div>
+      <table class="tight center">
+        <thead><tr><th>$\lambda$</th><th>sum of 5 folds</th><th>mean</th></tr></thead>
+        <tbody>
+          <tr><td>$0.01$</td><td>$0.42+0.50+0.46+0.38+0.44 = 2.20$</td><td>$0.44$</td></tr>
+          <tr><td>$0.1$</td><td>$0.20+0.34+0.26+0.32+0.38 = 1.50$</td><td>$0.30$</td></tr>
+          <tr><td>$1$</td><td>$0.22+0.28+0.20+0.26+0.24 = 1.20$</td><td>$\mathbf{0.24}$ ✓</td></tr>
+          <tr><td>$10$</td><td>$0.30+0.36+0.34+0.32+0.38 = 1.70$</td><td>$0.34$</td></tr>
+          <tr><td>$100$</td><td>$0.52+0.56+0.48+0.54+0.50 = 2.60$</td><td>$0.52$</td></tr>
+        </tbody>
+      </table>
+      <p><strong>5-fold CV selects $\lambda = 1$</strong>, with an estimated risk of $0.24$.</p>
+      <p>The column of means is U-shaped in $\lambda$ — $0.44, 0.30, \mathbf{0.24}, 0.34, 0.52$ — exactly the bias–variance story of Problem 29(e): too little regularization overfits, too much underfits, and the minimum is in the middle. A monotone column would be a warning that the best $\lambda$ lies outside the range you searched, and you should extend the grid.</p>
+    </div></details>
+    <details class="step"><summary>Step 3 — (b) what a single split would have told you</summary><div>
+      <p>Read down the fold-1 column alone: $0.42,\ \mathbf{0.20},\ 0.22,\ 0.30,\ 0.52$. The minimum is at $\lambda = \mathbf{0.1}$, not $\lambda = 1$.</p>
+      <p>A single 80:20 holdout would have selected $\lambda = 0.1$ — <strong>the wrong value</strong>, as judged by the far more reliable 5-fold estimate. And nothing in that one column would have warned you: $0.20$ versus $0.22$ looks like a clear winner if you have only one number each.</p>
+      <p>What it demonstrates is <strong>variance in the estimate</strong>. A single 200-example validation set gives a noisy estimate of risk, and the noise ($\pm 0.06$ or so across folds here) is comparable to the real differences between neighbouring $\lambda$ values ($0.30$ vs $0.24$). Averaging $k$ folds cuts that noise down without needing any more data, and that is the entire reason $k$-fold exists.</p>
+      <p>Look at the $\lambda = 0.1$ row to see it directly: its folds run $0.20, 0.34, 0.26, 0.32, 0.38$ — a spread of $0.18$, which is <em>three times</em> the gap between the best and second-best mean. Any conclusion drawn from one of those five numbers is a coin flip. The $\lambda = 1$ row, by contrast, is $0.20$–$0.28$ and wins on four of the five folds.</p>
+    </div></details>
+    <details class="step"><summary>Step 4 — (c) cost</summary><div>
+      <p><strong>Holdout:</strong> one fit per candidate, plus one final refit on all the data.</p>
+      $$C + 1 = 5 + 1 = \mathbf{6}\ \text{fits}$$
+      <p><strong>$k$-fold:</strong> $k$ fits per candidate, plus the final refit.</p>
+      $$Ck + 1 = 5 \times 5 + 1 = \mathbf{26}\ \text{fits}$$
+      <p>So $k$-fold costs about $k$ times more compute and buys you a $k$-times-averaged estimate. The extreme is <strong>LOOCV</strong>, $k = N$: here that would be $5 \times 1000 + 1 = 5001$ fits, each on 999 examples. Nearly unbiased, almost always too expensive, and with high variance of its own because the $N$ training sets are nearly identical. $k = 5$ or $10$ is the standard compromise.</p>
+      <p>If you were tuning two hyperparameters on a grid — say 5 values of $\lambda$ and 4 polynomial degrees — then $C = 20$ and 5-fold costs $101$ fits. The cost is multiplicative in the number of hyperparameters, which is why grid search gets abandoned quickly.</p>
+    </div></details>
+    <details class="step"><summary>Step 5 — (d) and (e)</summary><div>
+      <p><strong>(d)</strong> You are choosing $\lambda$, a <strong>hyperparameter</strong> — a knob that controls the hypothesis class itself (here, how strongly weights are penalised, and so how much effective capacity the model has). The parameters $\theta$ are <em>not</em> being chosen here; they are refitted from scratch inside every one of the 25 fits.</p>
+      <p>Why not minimise training error over $\lambda$? Because the training objective is $\hat R(\theta) + \lambda r(\theta)$, and the training <em>error</em> $\hat R$ alone is minimised by whichever $\lambda$ constrains $\theta$ least — i.e. $\lambda = 0$, always, for every dataset. The answer would be a foregone conclusion and would have nothing to do with the data. The same argument applies to every capacity hyperparameter: more capacity always fits the training set at least as well, so training error ranks capacity monotonically and cannot find an optimum. <em>A quantity that controls capacity cannot be tuned on the data used to fit the parameters.</em></p>
+      <p><strong>(e)</strong> Having chosen $\lambda = 1$, <strong>refit on all 1000 examples</strong> with $\lambda = 1$. That is the shipped model, and it is the "$+1$" in the fit counts above. Each CV fit used only 800 examples, so none of those 25 models is the one you want — they existed only to score $\lambda$.</p>
+      <p>The separate test set — data that took part in neither the fitting nor the selection — exists to estimate the final model's risk. You need it because $0.24$ is <em>optimistically biased</em>: it is the minimum of five noisy estimates, and taking a minimum over noise systematically understates the truth. Report $0.24$ as "the CV score that selected $\lambda$", and whatever the untouched test set says as "the estimated risk". Peek at the test set repeatedly and it quietly becomes a validation set, after which you no longer have an honest estimate of anything.</p>
+    </div></details>
+    <details class="step"><summary>Solution</summary><div>
+      <p><strong>(a)</strong> Means $0.44,\ 0.30,\ \mathbf{0.24},\ 0.34,\ 0.52$; 5-fold CV selects $\lambda = 1$.</p>
+      <p><strong>(b)</strong> A holdout equal to fold 1 would select $\lambda = 0.1$ (its $0.20$ beats $\lambda=1$'s $0.22$) — the wrong value. It demonstrates that a single split gives a high-variance risk estimate, with fold-to-fold noise as large as the real differences between candidates; averaging $k$ folds removes it without extra data.</p>
+      <p><strong>(c)</strong> Holdout $C + 1 = 6$ fits; $k$-fold $Ck + 1 = 26$ fits; LOOCV would be $CN + 1 = 5001$.</p>
+      <p><strong>(d)</strong> The hyperparameter $\lambda$. Training error cannot choose it because training error is minimised at $\lambda = 0$ for any dataset — capacity-controlling quantities are monotone in training error and so have no interior optimum there.</p>
+      <p><strong>(e)</strong> Refit on all 1000 examples at $\lambda = 1$. A separate, never-selected-on test set gives the honest risk estimate, because the winning CV score $0.24$ is biased low by being the minimum over five noisy numbers.</p>
+    </div></details>
+    <details class="step"><summary>Why this is the exam version of this idea</summary><div>
+      <p><strong>Trap 1 — picking per-fold winners and voting.</strong> CV selects on the <em>mean</em> across folds, one number per candidate. Choosing a different $\lambda$ for each fold produces five models and no decision.</p>
+      <p><strong>Trap 2 — forgetting the final refit.</strong> People answer "25 fits" and ship one of the 800-example fold models. The procedure is: score with CV, then retrain on everything with the chosen hyperparameter. $Ck + 1$, and the $+1$ is the model you actually deploy.</p>
+      <p><strong>Trap 3 — reporting the CV score as the test error.</strong> $0.24$ is the minimum over five candidates of noisy estimates, which is biased low by construction. This is the same selection bias as in Problem 27(b), where picking a model on the test set stopped that test set from being honest.</p>
+      <p><strong>Trap 4 — confusing $k$ with the number of candidates.</strong> $k$ is the number of folds (how the data is cut), $C$ is the number of hyperparameter values (what you are searching). Here both are 5, which is exactly the sort of coincidence an exam uses to see whether you know which is which. If the question changes to 10-fold over 5 candidates, the answer is $51$ fits, not $26$ or $101$.</p>
+      <p><strong>Trap 5 — "$k$-fold gives more data".</strong> It gives better <em>use</em> of the data you have. Every fit still sees only $\frac{k-1}{k}N = 800$ examples; what improves is the precision of the estimate, by averaging, not the size of any training set.</p>
+    </div></details>
+  </div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>

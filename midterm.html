@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midterm 1 plan · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="midterm">
+<main>
+
+  <div class="eyebrow">Exam prep</div>
+  <h1>Midterm 1 — scope and plan</h1>
+  <p class="subtitle">Tuesday 6 October, in class. What's on it, where each topic is taught here, and
+  what to put on your one page of notes.</p>
+
+  <div data-toc></div>
+
+  <h2 id="rules">1. The rules, and what they imply</h2>
+
+  <div class="grid2">
+    <div class="box key">
+      <span class="label">Your notes sheet</span>
+      <ul style="margin-bottom:0">
+        <li><strong>One page, two sides.</strong></li>
+        <li><strong>Hand-written — your handwriting only.</strong> No screenshots.</li>
+        <li>You may handwrite it digitally and print it.</li>
+        <li>You may collaborate on <em>what goes on it</em>, but the sheet must be yours.</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <span class="label">No calculators</span>
+      <p style="margin-bottom:0">Allowed and unnecessary, which tells you something: every number on
+      the exam will be chosen to work out by hand. Entropies will land on halves, quarters, eighths
+      and thirds. Matrices to invert will be 2&times;2 with clean determinants. If your arithmetic is
+      getting ugly, you have probably made an error rather than hit a hard problem.</p>
+    </div>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">What "no calculators" should change about your prep</span>
+    <p style="margin-bottom:0">Practise the arithmetic, not just the method. Knowing that
+    $I(Y;W) = H(Y) - H(Y\mid W)$ is worth nothing if you cannot evaluate
+    $-\tfrac14\log_2\tfrac14 - \tfrac34\log_2\tfrac34$ without a calculator. The
+    <a href="cheatsheet.html#information-theory">lookup table on the cheat sheet</a> exists for exactly
+    this, and copying a small version of it onto your notes page is probably the single highest-value
+    use of that space.</p>
+  </div>
+
+  <h2 id="scope">2. Scope, mapped to this site</h2>
+
+  <p>The staff listed four sources of exam material. Here is each one against what the site covers.
+  Tick things off as you go — the boxes save in your browser.</p>
+
+  <div class="viz">
+    <div class="viz-title">Coverage checklist</div>
+    <table id="scopeTable">
+      <thead><tr><th style="width:2.2rem"></th><th>Topic</th><th>Taught here</th><th>Problems</th></tr></thead>
+      <tbody>
+        <tr><td><input type="checkbox" data-ck="s1"></td><td>Search problems, state spaces, BFS / DFS / UCS</td><td><a href="search-foundations.html">Ch 1</a></td><td><a href="practice.html#search-foundations">P&nbsp;1</a> · <a href="recitations.html">R&nbsp;1</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="s2"></td><td>Heuristics, Greedy, A*, admissibility, consistency</td><td><a href="informed-search.html">Ch 2</a></td><td><a href="practice.html#informed-search">P&nbsp;2</a> · <a href="recitations.html">R&nbsp;1</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="s3"></td><td>Minimax, &alpha;-&beta; pruning, expectimax, eval functions</td><td><a href="adversarial-search.html">Ch 3</a></td><td><a href="practice.html#adversarial-search">P&nbsp;3</a> · <a href="recitations.html">R&nbsp;2</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="s4"></td><td>CSPs, backtracking, forward checking, AC-3, MRV / LCV</td><td><a href="csps.html">Ch 4</a></td><td><a href="practice.html#csps">P&nbsp;4</a> · <a href="recitations.html">R&nbsp;2</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m1"></td><td>ML formulation: loss, risk, empirical risk, ERM, i.i.d.</td><td><a href="ml-formulation.html">Ch 5</a></td><td><a href="practice.html">P&nbsp;5</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m2"></td><td>Decision trees, stumps, majority vote, greedy splitting</td><td><a href="decision-trees.html">Ch 6</a></td><td><a href="practice.html">P&nbsp;6</a> · <a href="recitations.html">R&nbsp;3</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m3"></td><td>Entropy, conditional entropy, mutual information</td><td><a href="information-theory.html">Ch 7</a></td><td><a href="practice.html">P&nbsp;6</a> · <a href="recitations.html">R&nbsp;3</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m4"></td><td>Linear regression, normal equations</td><td><a href="linear-regression.html">Ch 8</a></td><td><a href="practice.html">P&nbsp;7</a> · <a href="recitations.html">R&nbsp;5</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m5"></td><td>Gradient descent, SGD, learning rate, gradients</td><td><a href="optimization.html">Ch 9</a></td><td><a href="practice.html">P&nbsp;8</a> · <a href="recitations.html">R&nbsp;4</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m6"></td><td>Feature engineering, polynomial transforms, overfitting</td><td><a href="feature-engineering.html">Ch 10</a></td><td><a href="practice.html">P&nbsp;9</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m7"></td><td>Logistic regression, sigmoid, cross-entropy, convexity, softmax</td><td><a href="logistic-regression.html">Ch 11</a></td><td><a href="practice.html">P&nbsp;9</a> · <a href="recitations.html">R&nbsp;5</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="m8"></td><td>Model selection: regularization, hyperparameters, cross-validation</td><td><a href="model-selection.html">Ch 12</a></td><td><a href="practice.html">P&nbsp;9</a> · <a href="recitations.html">R&nbsp;5</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="e1"></td><td>Problem formulation from scratch (Tower of Hanoi style)</td><td><a href="recitations.html">Recitations</a></td><td><a href="recitations.html">R&nbsp;1</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="e2"></td><td>Ethics of deployed ML systems</td><td><a href="recitations.html">Recitations</a></td><td><a href="recitations.html">R&nbsp;1</a></td></tr>
+        <tr><td><input type="checkbox" data-ck="e3"></td><td>Vector derivatives and proofs</td><td><a href="optimization.html#multivariate-calculus">Ch 9</a></td><td><a href="recitations.html">R&nbsp;4</a></td></tr>
+      </tbody>
+    </table>
+    <div class="controls">
+      <span class="pill" id="scopeCount">0 / 15 ticked</span>
+      <button class="btn" id="scopeReset">Reset</button>
+    </div>
+    <div class="caption">P = <a href="practice.html">practice set</a>, R = <a href="recitations.html">recitation problems</a>.
+    The recitation problems are the staff's own chosen questions, so they are the closest thing you
+    have to the exam's taste in problems.</div>
+  </div>
+
+  <h2 id="out-of-scope">3. What is <em>not</em> on it</h2>
+
+  <div class="box key">
+    <span class="label">Neural networks are excluded</span>
+    <p>The staff were explicit: material up to and including lecture 10, <em>"i.e., no neural
+    networks"</em>, and pre-reading excluding neural networks. The site has a
+    <a href="neural-networks.html">neural networks chapter</a> — it is not on this exam. Skip it
+    entirely until after Tuesday.</p>
+    <p style="margin-bottom:0">That also means the chain-rule and computation-graph material in that
+    chapter is out. But <strong>vector derivatives are still in</strong>, because they come from
+    <a href="optimization.html#multivariate-calculus">the optimization lecture</a> and recitation 4,
+    not from neural networks. Do not confuse the two.</p>
+  </div>
+
+  <div class="box warn">
+    <span class="label">Gap you should know about</span>
+    <p style="margin-bottom:0">Exam material includes <strong>homeworks 1&ndash;5</strong>, and this
+    site does not cover them — the homework files were not available when it was built. Work those
+    from your own submissions and the posted solutions. Everything else the staff listed is covered
+    here.</p>
+  </div>
+
+  <h2 id="plan">4. A three-day plan</h2>
+
+  <p>Three days is enough if you spend them on problems rather than re-reading. The chapters are for
+  when a problem shows you do not understand something, not the other way round.</p>
+
+  <table>
+    <thead><tr><th>When</th><th>Do this</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Day 1</strong></td>
+        <td>All of <a href="recitations.html">recitations 1&ndash;5</a>, with a pen, attempting each step before revealing it.</td>
+        <td>These are the staff's own problems. They tell you what the exam cares about more reliably than anything else here.</td>
+      </tr>
+      <tr>
+        <td><strong>Day 2</strong></td>
+        <td>The <a href="practice.html">practice set</a>, both halves. Then reread only the chapters where you got stuck.</td>
+        <td>Finding the gaps is the point. A chapter read before you have failed at its problems mostly feels productive without being so.</td>
+      </tr>
+      <tr>
+        <td><strong>Day 3</strong></td>
+        <td>Build your notes sheet by hand (section 5 below). Then redo the problems you got wrong on days 1&ndash;2, plus homeworks 1&ndash;5.</td>
+        <td>Writing the sheet <em>is</em> revision — deciding what deserves the space forces you to sort what you know from what you don't.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="sheet">5. What to put on the one page</h2>
+
+  <p>You have two sides and your own handwriting. The temptation is to transcribe everything, which
+  produces a sheet you cannot navigate under time pressure. Spend the space on two things:
+  <strong>what you cannot re-derive quickly</strong>, and <strong>what saves arithmetic</strong>.</p>
+
+  <div class="grid2">
+    <div class="box example">
+      <span class="label">Worth the space</span>
+      <ul style="margin-bottom:0">
+        <li><strong>$\log_2$ and binary-entropy tables</strong> — $\log_2 3 \approx 1.585$,
+          $\log_2 5 \approx 2.322$, $\log_2 7 \approx 2.807$; $H(\tfrac12)=1$,
+          $H(\tfrac13)\approx0.918$, $H(\tfrac14)\approx0.811$, $H(\tfrac15)\approx0.722$,
+          $H(\tfrac25)\approx0.971$, $H(\tfrac38)\approx0.954$. No calculators, so this is pure speed.</li>
+        <li><strong>The A* conditions</strong> — admissible $0 \le h \le h^\star$ for tree search;
+          consistent $h(n) \le c(n,n') + h(n')$ for graph search. Easy to state backwards under pressure.</li>
+        <li><strong>The &alpha;-&beta; cutoff tests</strong> — in max-value, <code>if v &ge; &beta;: return v</code>
+          then $\alpha \leftarrow \max(\alpha,v)$; in min-value, <code>if v &le; &alpha;: return v</code>
+          then $\beta \leftarrow \min(\beta,v)$. Getting the direction wrong costs the whole question.</li>
+        <li><strong>Normal equations</strong> $\theta^\star = (X^\top X)^{-1}X^\top y$, and the scalar
+          $w^\star = \frac{\sum x_i y_i}{\sum x_i^2}$.</li>
+        <li><strong>Gradient identities</strong> $\nabla(\theta^\top v) = v$,
+          $\nabla(\theta^\top A\theta) = (A+A^\top)\theta$, and
+          $\nabla\|y - X\theta\|^2 = -2X^\top y + 2X^\top X\theta$.</li>
+        <li><strong>Sigmoid facts</strong> $\sigma' = \sigma(1-\sigma)$, $\sigma(-z) = 1-\sigma(z)$,
+          and the cross-entropy gradient $\frac1N\sum(\sigma(\theta^\top x^{(i)}) - y^{(i)})x^{(i)}$.</li>
+        <li><strong>AC-3's cost</strong> $O(n^2d^3)$ and the $d^n$ assignment count — pure recall, no derivation.</li>
+        <li><strong>The GD convergence condition</strong> for $J = cw^2$: $0 < \alpha < 1/c$.</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <span class="label">Not worth the space</span>
+      <ul style="margin-bottom:0">
+        <li><strong>Full proofs.</strong> The A* optimality argument and the convexity proof are
+          understanding, not lookup. If you need the proof written down you will not reconstruct it in
+          the time available anyway.</li>
+        <li><strong>Definitions you can state in a sentence.</strong> Entropy, risk, ERM, a decision
+          stump. Writing these out is how sheets fill up with things you already know.</li>
+        <li><strong>Worked examples.</strong> They eat enormous space and rarely match the exam's numbers.</li>
+        <li><strong>Pseudocode you understand.</strong> If you can run backtracking search by hand,
+          you do not need its pseudocode; if you cannot, the pseudocode will not save you.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">One layout tip</span>
+    <p style="margin-bottom:0">Group by <em>when you'd reach for it</em>, not by lecture. All the
+    hand-arithmetic aids in one corner, all the "which condition applies to which search" material in
+    another. Under time pressure you search your sheet by task, not by chapter number.</p>
+  </div>
+
+  <h2 id="traps">6. The traps, collected</h2>
+
+  <p>These come from the <a href="cheatsheet.html#traps">cheat sheet's trap list</a> and are the
+  mistakes most likely to cost marks on this particular scope:</p>
+
+  <ol>
+    <li><strong>Admissible is enough for A* <em>tree</em> search; graph search needs <em>consistent</em>.</strong>
+      <a href="informed-search.html#graph-search">Why</a>.</li>
+    <li><strong>In arc consistency you delete from the <em>tail</em>.</strong>
+      <a href="csps.html">Why</a>.</li>
+    <li><strong>&alpha;-&beta; preserves the value at the <em>root</em></strong>, not necessarily at interior
+      nodes. <a href="adversarial-search.html">Why</a>.</li>
+    <li><strong>A <em>specific</em> conditional entropy $H(Y\mid W=\omega)$ can exceed $H(Y)$</strong> —
+      only the weighted average cannot. <a href="information-theory.html#mutual-information">Why</a>.</li>
+    <li><strong>$x^{(i)}$ is a sample index, not an exponent.</strong></li>
+    <li><strong>The minimax answer is an <em>action</em></strong>, not just a value.</li>
+    <li><strong>Logistic regression is classification.</strong> The name is historical — it regresses
+      the log-odds. <a href="logistic-regression.html">Why</a>.</li>
+    <li><strong>MRV wants to fail fast; LCV wants to succeed fast.</strong> The asymmetry is the whole
+      idea, and it is easy to state backwards. <a href="csps.html">Why</a>.</li>
+    <li><strong>Exclude the bias term from the regularizer</strong>, and scale your features first.
+      <a href="model-selection.html">Why</a>.</li>
+    <li><strong>UCS is A* with $h = 0$</strong>, which is why it is complete and optimal but explores
+      in every direction.</li>
+  </ol>
+
+  <div class="box key">
+    <span class="label">If you only have one evening</span>
+    <p style="margin-bottom:0">Do <a href="recitations.html">recitations 1&ndash;5</a> and build your
+    notes sheet. That is it. The recitations are the staff's own problems, and the act of deciding what
+    goes on one page forces you to audit what you actually know.</p>
+  </div>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  /* Coverage checklist. Per-viewer convenience only, so browser storage is the
+     right home for it — and every access is guarded, because it throws in a
+     private window and comes back empty with site data cleared. */
+  const KEY = "midterm-scope-v1";
+  const boxes = [...document.querySelectorAll('#scopeTable input[data-ck]')];
+  const count = document.getElementById("scopeCount");
+  const reset = document.getElementById("scopeReset");
+  if (!boxes.length) return;
+
+  const read = () => {
+    try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
+    catch (e) { return {}; }
+  };
+  const write = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} };
+
+  function paint() {
+    const n = boxes.filter(b => b.checked).length;
+    count.textContent = `${n} / ${boxes.length} ticked`;
+    count.style.borderColor = n === boxes.length ? "var(--accent-2)" : "var(--line-2)";
+    count.style.color = n === boxes.length ? "var(--accent-2)" : "var(--ink-mute)";
+  }
+
+  const saved = read();
+  boxes.forEach(b => {
+    b.checked = !!saved[b.dataset.ck];
+    b.addEventListener("change", () => {
+      const o = read(); o[b.dataset.ck] = b.checked; write(o); paint();
+    });
+  });
+  reset.onclick = () => { write({}); boxes.forEach(b => b.checked = false); paint(); };
+  paint();
+});
+</script>
+</body>
+</html>

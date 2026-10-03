@@ -23,10 +23,14 @@ const CHAPTERS = [
   { slug: "feature-engineering", n: "10",  title: "Feature engineering" },
   { slug: "logistic-regression", n: "11",  title: "Logistic regression" },
   { slug: "model-selection",     n: "12",  title: "Regularization & cross-validation" },
-  { slug: "neural-networks",     n: "13",  title: "Neural networks" },
+  { slug: "neural-networks",     n: "13",  title: "Neural networks (not on midterm 1)" },
+
+  { group: "Exam prep" },
+  { slug: "midterm",             n: "",    title: "Midterm 1 — scope & plan" },
+  { slug: "recitations",         n: "",    title: "Recitation problems" },
+  { slug: "practice",            n: "",    title: "Practice problem set" },
 
   { group: "Reference" },
-  { slug: "practice",            n: "",    title: "Guided problems (Part I)" },
   { slug: "cheatsheet",          n: "",    title: "Formula cheat sheet" },
 ];
 
