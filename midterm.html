@@ -106,31 +106,71 @@
     here.</p>
   </div>
 
-  <h2 id="plan">4. A three-day plan</h2>
+  <h2 id="plan">4. Two days to learn, one to test</h2>
 
-  <p>Three days is enough if you spend them on problems rather than re-reading. The chapters are for
-  when a problem shows you do not understand something, not the other way round.</p>
+  <p>There are <strong>58 problems</strong> across the <a href="recitations.html">recitations</a> and
+  the <a href="practice.html">practice set</a>, and roughly 122,000 words of chapters behind them.
+  Reading the chapters front to back would take over twenty hours and is the lowest-yield thing you
+  could do with two days. So don't.</p>
 
+  <div class="box key">
+    <span class="label">The one rule for the next two days</span>
+    <p style="margin-bottom:0"><strong>Problems are the learning. Chapters are the lookup.</strong>
+    Open a problem, attempt it on paper, and only when you get stuck or get it wrong do you open the
+    chapter — and then only the section that failed you. Reading first feels productive and mostly
+    isn't: it hides which things you can't actually do.</p>
+  </div>
+
+  <h3>Day 1 &mdash; all of search, plus trees and entropy &nbsp;<span class="pill">~30 problems</span></h3>
   <table>
-    <thead><tr><th>When</th><th>Do this</th><th>Why</th></tr></thead>
+    <thead><tr><th>Do</th><th>Problems</th><th>Chapter to open only if stuck</th></tr></thead>
     <tbody>
-      <tr>
-        <td><strong>Day 1</strong></td>
-        <td>All of <a href="recitations.html">recitations 1&ndash;5</a>, with a pen, attempting each step before revealing it.</td>
-        <td>These are the staff's own problems. They tell you what the exam cares about more reliably than anything else here.</td>
-      </tr>
-      <tr>
-        <td><strong>Day 2</strong></td>
-        <td>The <a href="practice.html">practice set</a>, both halves. Then reread only the chapters where you got stuck.</td>
-        <td>Finding the gaps is the point. A chapter read before you have failed at its problems mostly feels productive without being so.</td>
-      </tr>
-      <tr>
-        <td><strong>Day 3</strong></td>
-        <td>Build your notes sheet by hand (section 5 below). Then redo the problems you got wrong on days 1&ndash;2, plus homeworks 1&ndash;5.</td>
-        <td>Writing the sheet <em>is</em> revision — deciding what deserves the space forces you to sort what you know from what you don't.</td>
-      </tr>
+      <tr><td><a href="recitations.html#recitation-1">Recitation 1</a></td><td>5</td><td><a href="search-foundations.html">Ch 1</a>, <a href="informed-search.html">Ch 2</a></td></tr>
+      <tr><td><a href="recitations.html#recitation-2">Recitation 2</a></td><td>7</td><td><a href="adversarial-search.html">Ch 3</a>, <a href="csps.html">Ch 4</a></td></tr>
+      <tr><td><a href="practice.html#search-foundations">Practice §1&ndash;4</a></td><td>12</td><td>same four</td></tr>
+      <tr><td><a href="recitations.html#recitation-3">Recitation 3</a></td><td>5</td><td><a href="decision-trees.html">Ch 6</a>, <a href="information-theory.html">Ch 7</a></td></tr>
     </tbody>
   </table>
+  <p class="tiny muted">Ends with Part I finished and the tree/entropy machinery started &mdash; which
+  is the part of the ML half that behaves most like the search half, so it rides along well here.</p>
+
+  <h3>Day 2 &mdash; the rest of machine learning &nbsp;<span class="pill">~28 problems</span></h3>
+  <table>
+    <thead><tr><th>Do</th><th>Problems</th><th>Chapter to open only if stuck</th></tr></thead>
+    <tbody>
+      <tr><td><a href="practice.html#ml-formulation">Practice §5&ndash;6</a></td><td>7</td><td><a href="ml-formulation.html">Ch 5</a>, <a href="decision-trees.html">Ch 6</a>, <a href="information-theory.html">Ch 7</a></td></tr>
+      <tr><td><a href="recitations.html#recitation-4">Recitation 4</a></td><td>5</td><td><a href="optimization.html#multivariate-calculus">Ch 9</a> (vector derivatives)</td></tr>
+      <tr><td><a href="practice.html#linear-regression">Practice §7&ndash;8</a></td><td>6</td><td><a href="linear-regression.html">Ch 8</a>, <a href="optimization.html">Ch 9</a></td></tr>
+      <tr><td><a href="recitations.html#recitation-5">Recitation 5</a></td><td>6</td><td><a href="logistic-regression.html">Ch 11</a>, <a href="model-selection.html">Ch 12</a></td></tr>
+      <tr><td><a href="practice.html#features-logistic-selection">Practice §9</a></td><td>5</td><td><a href="feature-engineering.html">Ch 10</a>, Ch 11, Ch 12</td></tr>
+    </tbody>
+  </table>
+  <p class="tiny muted">Part II is about 40% larger than Part I and is more than half the exam, which
+  is why it gets the cleaner, less interrupted day.</p>
+
+  <h3>Day 3 &mdash; practice tests</h3>
+  <p>The staff said practice questions would be posted in the resources section of Piazza. Day 3 is
+  those, <strong>under timed conditions, with your notes sheet and no calculator</strong> — the same
+  constraints as the exam. Then spend what's left re-working only what you got wrong, plus
+  homeworks&nbsp;1&ndash;5.</p>
+
+  <div class="box intuition">
+    <span class="label">Build the notes sheet as you go, not on day 3</span>
+    <p>Write <strong>side A (search)</strong> at the end of day 1 and <strong>side B (ML)</strong> at
+    the end of day 2, while the gaps you just hit are fresh. Deciding what earns the space is itself
+    revision &mdash; it forces you to separate what you know from what you only recognise.</p>
+    <p style="margin-bottom:0">Then day 3's practice tests double as a <em>test of the sheet</em>. Every
+    time you reach for something that isn't on it, that's a line to add. You cannot discover that on
+    exam morning.</p>
+  </div>
+
+  <div class="box warn">
+    <span class="label">If you fall behind</span>
+    <p style="margin-bottom:0">Cut the practice set before the recitations, and cut chapter problems
+    before either. The recitations are the staff's own questions, so they are the best available
+    signal about what the exam asks and how it asks it. Finishing recitations 1&ndash;5 and having a
+    sheet you trust beats half-finishing everything.</p>
+  </div>
 
   <h2 id="sheet">5. What to put on the one page</h2>
 
@@ -212,9 +252,10 @@
 
   <div class="box key">
     <span class="label">If you only have one evening</span>
-    <p style="margin-bottom:0">Do <a href="recitations.html">recitations 1&ndash;5</a> and build your
-    notes sheet. That is it. The recitations are the staff's own problems, and the act of deciding what
-    goes on one page forces you to audit what you actually know.</p>
+    <p style="margin-bottom:0">Do <a href="recitations.html">recitations 1&ndash;5</a> &mdash; 28
+    problems, about four hours with a pen &mdash; and build your notes sheet. That is it. They are the
+    staff's own problems, and deciding what goes on one page forces you to audit what you actually
+    know.</p>
   </div>
 
 </main>
