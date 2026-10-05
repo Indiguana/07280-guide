@@ -18,6 +18,24 @@
 
   <div data-toc></div>
 
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>ERM always prefers the richer model class, so complexity must be controlled from outside the training error: a penalty inside the objective, held-out data outside it.</p>
+    <ul>
+      <li><strong>Why ERM cannot choose $k$</strong> — every degree-$k$ polynomial is a degree-$(k+1)$ polynomial with $\theta_{k+1}=0$, so training error can only fall as $k$ grows. The extra flexibility fits noise: <strong>overfitting</strong>.</li>
+      <li><strong>Regularized ERM</strong> — $\theta^\star = \arg\min_{\theta} \frac1N\sum_i\bigl(\theta^\top\phi(x^{(i)}) - y^{(i)}\bigr)^2 + \lambda\, r(\theta)$, with $\lambda &gt; 0$. A complex model is chosen only if its drop in empirical risk pays for its rise in $\lambda r(\theta)$.</li>
+      <li><strong>$L_0$</strong> — $r(\theta)=\sum_j \1\{\theta_j \ne 0\}$: sparse, but the arg min is combinatorially hard and there is no gradient to follow.</li>
+      <li><strong>LASSO ($L_1$)</strong> — $\sum_j |\theta_j|$: sparse, with coefficients exactly $0$; convex and tractable, not differentiable at $0$.</li>
+      <li><strong>Ridge ($L_2^2$)</strong> — $\sum_j \theta_j^2$: shrinks coefficients toward $0$, rarely exactly $0$.</li>
+      <li><strong>Two rules</strong> — exclude the bias $\theta_0$ from the regularizer; standardize features first, or scale alone decides who gets penalized.</li>
+      <li><strong>Hyperparameter</strong> — a choice about the model class or training procedure that ERM is biased on: degree $k$, $\lambda$, tree depth, learning rate, number of layers.</li>
+      <li><strong>Holdout CV</strong> — split 80 : 20, score each candidate on the validation set, take the lowest, <em>retrain on all the data</em>. High variance when $N$ is small.</li>
+      <li><strong>$k$-fold CV</strong> — partition into $k$ folds; CV error $= \frac1k\sum_{i=1}^{k}\text{error}_i$ with fold $i$ held out each time; $k=5$ or $10$; $k=N$ is LOOCV. Then retrain on everything.</li>
+      <li><strong>Feature engineering vs feature learning</strong> — humans choose $\phi$ (interpretable) vs $\phi$ discovered from data (needs a lot of it).</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="recap-features">1. Where we are: polynomial features, and the question they leave open</h2>
 
   <p>The lecture opens with data that is plainly curved ($\mathcal X = \R$, $\mathcal Y = \R$). A line
@@ -32,11 +50,11 @@
     <li>Predict on a new point with $h(\phi(x^{\text{new}}))$.</li>
   </ol>
 
-  <p>Here $d'$ is the number of features after the transform — for a degree-$k$ polynomial, $\phi(x) = [x, x^2, \dots, x^k]$
+  <p>$d'$ is the number of features after the transform — for a degree-$k$ polynomial, $\phi(x) = [x, x^2, \dots, x^k]$
   plus the bias.</p>
 
-  <p><strong>The open question: how do you choose $k$?</strong> The tempting answer is "use ERM — pick the $k$ with the
-  lowest training error". That answer is wrong, and it's wrong in a predictable direction.</p>
+  <p><strong>The open question: how do you choose $k$?</strong> "Use ERM — pick the $k$ with the lowest training error" is
+  wrong, and wrong in a predictable direction.</p>
 
   <div class="box key"><span class="label">Key idea — why ERM can't choose $k$</span>
     <p>Every degree-$k$ polynomial is also a degree-$(k+1)$ polynomial (set $\theta_{k+1} = 0$). So the degree-$(k+1)$ model class
@@ -45,18 +63,16 @@
     <strong>overfitting</strong>.</p>
   </div>
 
-  <p>The lecture lists three responses. <strong>Get more data</strong> — effective, but often expensive. The other two
-  are this chapter: <strong>regularization</strong> (change the objective) and <strong>cross-validation</strong>
-  (change how you evaluate).</p>
+  <p>Three responses. <strong>Get more data</strong> — effective, often expensive. The other two are this chapter:
+  <strong>regularization</strong> (change the objective) and <strong>cross-validation</strong> (change how you evaluate).</p>
 
   <h2 id="regularization">2. Regularization: charge the model for complexity</h2>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p>An expense policy. Without one, an employee (ERM) will buy the most expensive tool for every job, because
-    it's always at least as good. With a policy that charges them for each purchase, they only buy the expensive
-    tool when it's <em>enough</em> better to justify the price. $\lambda$ is the price. Where the analogy leaks: the
-    "price" here isn't money but a penalty in the same units as the loss, and you set its size by experiment (§5), not
-    by accounting.</p>
+    <p>An expense policy. Without one, an employee (ERM) buys the most expensive tool for every job, because it is
+    always at least as good. Charge them per purchase and they buy it only when it is <em>enough</em> better to justify
+    the price. $\lambda$ is the price — a penalty in the same units as the loss, whose size you set by experiment (§5),
+    not by accounting.</p>
   </div>
 
   <div class="box defn"><span class="label">Definition — regularized ERM</span>
@@ -67,9 +83,9 @@
     </ul>
   </div>
 
-  <p>Why this works, in the lecture's words: a more complex model always has lower empirical risk because it can fit more
-  complex data. The regularizer is larger for more complex models, so now <strong>a complex model is only chosen if its
-  drop in empirical risk is big enough to pay for its increase in $\lambda r(\theta)$</strong>. Otherwise a simpler model wins.</p>
+  <p>A more complex model always has lower empirical risk, but it also has a larger $r(\theta)$. So <strong>a complex model
+  is chosen only if its drop in empirical risk is big enough to pay for its increase in $\lambda r(\theta)$</strong>;
+  otherwise the simpler model wins.</p>
 
   <h3>Three regularizers</h3>
   <div class="scroll-x"><table>
@@ -94,9 +110,9 @@
   </div>
 
   <h3>Why LASSO gives exact zeros and ridge doesn't</h3>
-  <p>The notes state "LASSO also encourages sparsity" without saying why. The picture that explains it: minimizing loss
-  plus $\lambda r(\theta)$ is equivalent to minimizing the loss subject to $r(\theta) \le t$ for some budget $t$. The loss has
-  elliptical contours around its unregularized minimum; you want the lowest contour that touches the allowed region.</p>
+  <p>The notes assert that LASSO encourages sparsity without saying why. Minimizing loss plus $\lambda r(\theta)$ is
+  equivalent to minimizing the loss subject to $r(\theta) \le t$ for some budget $t$. The loss has elliptical contours
+  around its unregularized minimum, and you want the lowest contour that touches the allowed region.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 — the $L_1$ diamond has corners; the $L_2$ disc doesn't</div>
@@ -126,14 +142,13 @@
     the variance"; the standard choice is the <strong>standard deviation</strong>, which puts every feature on unit scale.
     Dividing by the variance would leave a feature with spread $\sigma$ at scale $1/\sigma$, not $1$.)</p>
   </div>
-  <p>Other regularizers exist that the lecture mentions but doesn't cover: <strong>dropout</strong> and <strong>early
-  stopping</strong> (you'll meet both with <a href="neural-networks.html">neural networks</a>). And the obvious question —
-  <em>how do you choose $\lambda$?</em> — is §4–5.</p>
+  <p>Two more regularizers are named but not covered: <strong>dropout</strong> and <strong>early stopping</strong>, both of
+  which you meet with <a href="neural-networks.html">neural networks</a>. How you choose $\lambda$ is §4–5.</p>
 
   <h2 id="ridge-lab">3. Watch regularization work</h2>
 
-  <p>Fifteen training points (orange) and fifteen separate validation points (teal) from the same curved function plus noise.
-  Fit a polynomial of degree $k$ with a regularizer, and watch the coefficients and both errors.</p>
+  <p>Fifteen training points (orange) and fifteen separate validation points (teal), same curved function plus noise. Fit a
+  degree-$k$ polynomial with a regularizer and watch the coefficients and both errors.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 2 — polynomial degree × regularizer × $\lambda$</div>
@@ -186,7 +201,7 @@
 
   <h2 id="hyperparameters">4. Hyperparameters: the things ERM can't choose</h2>
 
-  <p>The lecture returns to <a href="decision-trees.html">decision trees</a> for a second example of the same problem.</p>
+  <p>A second example of the same problem, from <a href="decision-trees.html">decision trees</a>.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 3 (reconstructed) — split again for one outlier, or stop?</div>
@@ -196,8 +211,8 @@
   </div>
 
   <p>Should the tree keep splitting until the lone point in the top right is classified correctly? <strong>For:</strong> it may
-  contain real information. <strong>Against:</strong> its label may just be noise. Training error can't settle this — the extra
-  split always lowers it.</p>
+  carry real information. <strong>Against:</strong> its label may be noise. Training error cannot settle this — the extra split
+  always lowers it.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A <strong>hyperparameter</strong> is a choice about the model class or training procedure that ERM itself is biased on —
@@ -205,9 +220,8 @@
     and <strong>polynomial degree $k$</strong>. (Learning rate and number of neural-network layers are hyperparameters too.)</p>
   </div>
 
-  <p>The lecture's pivot: <em>what if we had some more labelled data?</em> Evaluate both trees on that other data and pick the one
-  with lower error. Data the model wasn't trained on can't be overfitted by that model — that's the whole idea of
-  cross-validation.</p>
+  <p>The pivot: <em>what if we had more labelled data?</em> Evaluate both trees on it and keep the one with lower error. Data
+  a model was not trained on cannot be overfitted by that model — that is the whole idea of cross-validation.</p>
 
   <h2 id="cross-validation">5. Cross-validation</h2>
 
@@ -221,8 +235,8 @@
     </ol>
   </div>
 
-  <p><strong>Problem:</strong> with few samples, the validation set is tiny, and the score depends heavily on <em>which</em> points
-  happened to land in it. Re-split and you might choose a different $k$. That's <strong>high variance</strong>.</p>
+  <p><strong>Problem:</strong> with few samples the validation set is tiny, so the score depends heavily on <em>which</em> points
+  landed in it. Re-split and you may choose a different $k$: <strong>high variance</strong>.</p>
 
   <h3>$k$-fold cross-validation</h3>
   <div class="box defn"><span class="label">Algorithm — $k$-fold CV</span>
@@ -235,13 +249,13 @@
     <p>Choose the value with the lowest CV error, then <strong>retrain on the full dataset</strong> with it.</p>
   </div>
 
-  <p>Every point is used for validation exactly once, and the $k$ estimates are averaged, so the choice is far less at the
-  mercy of one lucky split. Common choices: $k = 5$ or $k = 10$. The extreme $k = N$ — each fold is a single point — is
+  <p>Every point is validated exactly once and the $k$ estimates are averaged, so the choice is far less at the mercy of one
+  lucky split. Common choices: $k = 5$ or $k = 10$. The extreme $k = N$ — each fold a single point — is
   <strong>leave-one-out cross-validation (LOOCV)</strong>.</p>
 
   <div class="box warn"><span class="label">Name clash</span>
-    <p>This $k$ (number of folds) has nothing to do with the polynomial degree $k$ from §1. The lecture reuses the letter. In the
-    figure below they're labelled "folds" and "degree".</p>
+    <p>This $k$ (number of folds) has nothing to do with the polynomial degree $k$ from §1 — the lecture reuses the letter. In
+    the figure below they are labelled "folds" and "degree".</p>
   </div>
 
   <div class="viz">
@@ -297,7 +311,7 @@
 
   <h2 id="feature-learning">6. Feature engineering vs feature learning</h2>
 
-  <p>The lecture ends with a distinction it will revisit — and which is the bridge to the next chapter.</p>
+  <p>A distinction the course revisits, and the bridge to the next chapter.</p>
 
   <div class="scroll-x"><table>
     <thead><tr><th>Feature engineering</th><th>Feature learning</th></tr></thead>
@@ -308,19 +322,16 @@
     </tbody>
   </table></div>
 
-  <p>Everything so far in this course has been feature engineering: <em>you</em> chose $\phi$. A <a href="neural-networks.html">neural
-  network</a> learns its own $\phi$ — its hidden layers are a feature map with trainable parameters — which is exactly why it needs
-  more data and is harder to interpret.</p>
+  <p>Everything so far has been feature engineering: <em>you</em> chose $\phi$. A <a href="neural-networks.html">neural
+  network</a> learns its own $\phi$ — its hidden layers are a feature map with trainable parameters — which is exactly why it
+  needs more data and is harder to interpret.</p>
 
   <h2 id="recap">7. Recap</h2>
+  <p>The statements are all in the Essentials box at the top; three things are worth saying once more.</p>
   <ol>
-    <li>Richer model classes ($\phi$, higher degree, deeper trees) always win on training error, so ERM alone overfits.</li>
-    <li><strong>Regularized ERM</strong>: $\arg\min_\theta \frac1N\sum_i(\theta^\top\phi(x^{(i)}) - y^{(i)})^2 + \lambda r(\theta)$. A complex model must lower the risk by more than its penalty.</li>
-    <li>$L_0$ (count non-zeros) — sparse but hard to optimize; <strong>LASSO</strong> $\sum|\theta_j|$ — sparse, tractable; <strong>ridge</strong> $\sum\theta_j^2$ — shrinks, rarely zeros.</li>
-    <li>Don't penalize the bias; standardize features first.</li>
-    <li><strong>Hyperparameters</strong> (depth, $\lambda$, degree) are chosen on held-out data, not training data.</li>
-    <li><strong>Holdout</strong> (80:20) is simple but high-variance with little data; <strong>$k$-fold</strong> ($k = 5, 10$) averages $k$ estimates; <strong>LOOCV</strong> is $k = N$. Always retrain on all data with the chosen value.</li>
-    <li>Feature engineering: humans choose features, interpretable. Feature learning: learned from (lots of) data.</li>
+    <li>Regularization <em>always</em> costs training error. The bet is that it buys back more in validation error.</li>
+    <li>CV chooses the <strong>hyperparameter</strong>, not the parameters — so you always retrain on the full dataset afterwards.</li>
+    <li>The CV error of the <em>winning</em> candidate is an optimistically biased estimate of future error: you selected on it.</li>
   </ol>
 
 </main>

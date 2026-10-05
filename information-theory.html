@@ -16,13 +16,28 @@
 
   <div data-toc></div>
 
+  <div class="box key"><span class="label">Essentials</span>
+    <p>This chapter gives the splitting criterion decision trees actually use: measure the uncertainty in a node's labels, and pick the attribute that removes the most of it.</p>
+    <ul>
+      <li><strong>Surprisal</strong> — an outcome of probability $p$ costs $\log_2\frac1p$ bits to name.</li>
+      <li><strong>Entropy</strong> — $H(Y) = \sum_y P(y)\log\frac{1}{P(y)} = -\sum_y P(y)\log P(y)$, the average surprisal. Probabilities are <em>empirical frequencies inside the node</em>.</li>
+      <li><strong>Bounds</strong> — $0 \le H \le \log_2 k$; $H = 0$ iff the node is pure, $H = \log_2 k$ iff uniform.</li>
+      <li><strong>Binary entropy</strong> — $H(p) = -p\log_2 p - (1-p)\log_2(1-p)$; $H(0)=H(1)=0$, $H(\tfrac12)=1$ bit, $H(p)=H(1-p)$, and $H''(p) = -\frac{1}{p(1-p)} &lt; 0$ so it is strictly concave.</li>
+      <li><strong>Specific conditional entropy</strong> — $H(Y\mid W{=}\omega)$: entropy of <em>one</em> child, computed from that child's rows alone.</li>
+      <li><strong>Conditional entropy</strong> — $H(Y\mid W) = \sum_\omega P(W{=}\omega)H(Y\mid W{=}\omega)$: the <em>size-weighted</em> average over children.</li>
+      <li><strong>Mutual information = information gain</strong> — $I(Y;W) = H(Y) - H(Y\mid W) \ge 0$, with equality iff $Y \perp W$. Symmetric: $I(Y;W) = H(Y)+H(W)-H(Y,W)$.</li>
+      <li><strong>The trap</strong> — $H(Y\mid W) \le H(Y)$ always; $H(Y\mid W{=}\omega) \le H(Y)$ is <em>false</em>. A single branch may be more uncertain than the parent.</li>
+      <li><strong>BestAttribute</strong> — $\argmax_b I(Y;x_b) = \argmin_b H(Y\mid x_b)$, because $H(Y)$ is the same constant for every candidate at a node.</li>
+      <li><strong>Hand values</strong> — $\log_2 3 = 1.585$, $\log_2 5 = 2.322$, $\log_2 7 = 2.807$; $H(0.5)=1$, $H(0.375)=0.954$, $H(0.25)=0.811$, $H(0.2)=0.722$, $H(0.1)=0.469$.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="where-we-left-off">Where we left off: a criterion that cannot see progress</h2>
 
-  <p><a href="decision-trees.html">Chapter 6</a> ended with a dataset on which splitting on $a$, splitting on $b$, and not splitting at all all produced a training error of exactly $2/8$. The error-rate criterion had no opinion, even though split $b$ purified half the dataset and split $a$ accomplished literally nothing.</p>
+  <p><a href="decision-trees.html">Chapter 6</a> ended with a dataset on which splitting on $a$, splitting on $b$, and not splitting at all all produced a training error of exactly $2/8$ — even though split $b$ purified half the dataset and split $a$ accomplished nothing. The diagnosis: training error only asks <em>which label wins the vote</em> in each child, never <em>by how much</em>. A child that goes from a 50/50 coin flip to a 75/25 near-certainty has made enormous progress, but the majority did not flip, so the error count did not move.</p>
 
-  <p>The diagnosis was precise. Training error only asks <em>which label wins the vote</em> in each child. It is blind to <em>by how much</em>. A child that goes from a 50/50 coin flip to a 75/25 near-certainty has made enormous progress, but the majority vote did not flip, so the error count did not move.</p>
-
-  <p>What we actually want to measure is <strong>uncertainty</strong>, on a continuous scale, so that a split that makes the labels <em>more predictable</em> gets credit even when no prediction changes yet. That measure exists, it is unique up to a constant, and it comes from a surprisingly humble place: a parlour game.</p>
+  <p>We need to measure <strong>uncertainty</strong> on a continuous scale, so that a split making the labels <em>more predictable</em> gets credit even when no prediction changes yet.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>The whole chapter is one sentence: <strong>uncertainty about a random variable = the average number of yes/no questions you need to pin it down</strong>. Everything else — entropy, conditional entropy, mutual information, information gain — is bookkeeping around that one sentence.</p>
@@ -30,129 +45,78 @@
 
   <h2 id="twenty-questions">The 20-questions game</h2>
 
-  <p>Here is the professor's setup, verbatim in substance:</p>
-
   <div class="box example"><span class="label">Example</span>
-    <p>There are $128$ students in the class. I choose one of them <strong>uniformly at random</strong> — every student equally likely, probability $1/128$ each. You may ask me any yes/no questions you like, and then you must name the student I chose. How many questions do you need?</p>
+    <p>There are $128$ students. I choose one <strong>uniformly at random</strong> — probability $1/128$ each. You may ask any yes/no questions (not only "Is it Alice?" but "Is the surname in the first half of the roster?"), then name the student. How many questions do you need?</p>
   </div>
-
-  <p>Notice what "any yes/no question" means. You are not restricted to "Is it Alice?". You may ask "Is the student's surname in the first half of the alphabetical roster?" — any question whose answer is a single bit about the chosen student.</p>
-
-  <h3>The answer, and both halves of the proof</h3>
 
   <p>The answer is $\mathbf{7}$, and</p>
 
   $$7 \;=\; \log_2 128 \;=\; \log_2 \frac{1}{1/128} \;=\; \log_2 \frac{1}{P(\text{any particular student})}.$$
 
-  <p>That has to be proved in two directions: $7$ questions <em>suffice</em>, and $6$ questions <em>do not</em>.</p>
+  <p>That needs proving in two directions: $7$ questions suffice, and $6$ do not.</p>
 
   <div class="box proof"><span class="label">Proof — 7 questions suffice</span>
-    <p>Line the $128$ students up in any fixed order you and I both know (say, alphabetically), numbered $0$ through $127$. Keep a set $C$ of "candidates still possible"; initially $|C| = 128$.</p>
-    <p><strong>Halving strategy.</strong> At each step, split $C$ into two halves of equal size and ask "Is the chosen student in the first half?" Whatever the answer, you discard exactly half the candidates:</p>
+    <p>Keep a set $C$ of still-possible candidates, initially $|C| = 128$. At each step split $C$ into two halves of equal size and ask "is the chosen student in the first half?" Whichever the answer, you discard exactly half:</p>
     $$128 \to 64 \to 32 \to 16 \to 8 \to 4 \to 2 \to 1.$$
-    <p>Count the arrows: there are $7$ of them, because $128 = 2^7$. After $7$ questions $|C| = 1$ and you name that student with certainty. The strategy never needs more than $7$ and never fewer, so the average is exactly $7$. $\blacksquare$</p>
+    <p>Seven arrows, because $128 = 2^7$. The strategy never needs more than $7$ and never fewer, so the average is exactly $7$. $\blacksquare$</p>
   </div>
 
   <div class="box proof"><span class="label">Proof — 6 questions cannot be enough (counting argument)</span>
-    <p>Fix <em>any</em> strategy that asks at most $k$ yes/no questions. Run it. The only information you ever receive is the sequence of answers, which is a string of $k$ bits. There are at most $2^k$ such strings.</p>
-    <p>Your final guess is a function of that string alone — nothing else reached you. So your strategy can output at most $2^k$ distinct guesses across all possible plays of the game.</p>
-    <p>With $k = 6$: at most $2^6 = 64$ distinct guesses. But there are $128$ students, each of which I might have chosen. At least $128 - 64 = 64$ students are never guessed by your strategy, and each of those has probability $1/128$ of being the one I picked. So</p>
+    <p>Fix <em>any</em> strategy that asks at most $k$ yes/no questions. The only information that ever reaches you is the sequence of answers, a string of $k$ bits, and there are at most $2^k$ such strings. Your final guess is a function of that string alone, so the strategy can output at most $2^k$ distinct guesses across all plays.</p>
+    <p>With $k = 6$: at most $2^6 = 64$ distinct guesses, but $128$ students each with probability $1/128$. At least $128 - 64 = 64$ students are never guessed, so</p>
     $$P(\text{you are correct}) \;\le\; \frac{64}{128} \;=\; \frac{1}{2}.$$
-    <p>You fail at least half the time. Hence $6$ questions are not enough, and $7$ is optimal. $\blacksquare$</p>
-    <p class="tiny muted">The same counting works for any $k$: $k$ yes/no answers can distinguish at most $2^k$ outcomes, so distinguishing $n$ equally likely outcomes requires $k \ge \log_2 n$.</p>
-  </div>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>A yes/no answer is worth <strong>one bit</strong>, and one bit is exactly the power to cut a set of possibilities in half. To go from $128$ possibilities to $1$ you must halve seven times. That is all $\log_2 128 = 7$ is saying — the logarithm is <em>counting halvings</em>.</p>
+    <p>You fail at least half the time, so $6$ is not enough and $7$ is optimal. $\blacksquare$</p>
+    <p class="tiny muted">The same counting works for any $k$: $k$ yes/no answers distinguish at most $2^k$ outcomes, so distinguishing $n$ equally likely outcomes requires $k \ge \log_2 n$. A yes/no answer is worth <strong>one bit</strong>, and one bit is exactly the power to halve a set of possibilities — the logarithm is <em>counting halvings</em>.</p>
   </div>
 
   <h2 id="log-one-over-p">Why $\log \frac{1}{p}$, and why the logarithm specifically</h2>
 
-  <p>The notes make the pivotal observation: the probability of the chosen student was $1/128$, and the answer was $\log_2 \frac{1}{1/128}$. So the fundamental quantity is</p>
+  <p>The chosen student had probability $1/128$ and the answer was $\log_2\frac{1}{1/128}$. So the fundamental quantity is</p>
 
   $$\boxed{\;\text{surprise}(\text{outcome with probability } p) \;=\; \log \frac{1}{p} \;=\; -\log p.\;}$$
 
-  <p>This is called the <strong>information content</strong> or <strong>surprisal</strong> of the outcome: how many bits it takes to name it, equivalently how startled you should be to see it. Two reasons the logarithm — and nothing else — belongs here.</p>
+  <p>This is the <strong>information content</strong> or <strong>surprisal</strong>: how many bits it takes to name the outcome, equivalently how startled you should be to see it. Two reasons the logarithm — and nothing else — belongs here.</p>
 
-  <h3>Reason 1: a 1-in-$2^k$ event literally costs $k$ bits to name</h3>
+  <p><strong>Reason 1: a 1-in-$2^k$ event literally costs $k$ bits.</strong> If $p = 2^{-k}$ out of a uniform pool there are $2^k$ equally likely outcomes, and the counting argument says you need exactly $k$ questions. And indeed $\log_2\frac{1}{p} = \log_2 2^k = k$. On powers of two, $\log_2(1/p)$ is not an analogy for "number of questions" — it <em>is</em> the number of questions.</p>
 
-  <p>If an outcome has probability $p = 2^{-k}$ out of a uniform pool, then there are $2^k$ equally likely outcomes, and the counting argument above says you need exactly $k$ yes/no questions. And indeed</p>
+  <p><strong>Reason 2: additivity over independent events.</strong> Suppose I also flip a fair coin independently; naming the pair should cost $7 + 1 = 8$. Probabilities <em>multiply</em> for independent events, and the logarithm turns multiplication into addition:</p>
 
-  $$\log_2 \frac{1}{p} = \log_2 2^{k} = k.$$
-
-  <p>So $\log_2(1/p)$ is not an analogy for "number of questions" — on powers of two it <em>is</em> the number of questions.</p>
-
-  <h3>Reason 2: additivity over independent events</h3>
-
-  <p>Suppose after picking a student I also flip a fair coin, independently. Now I am describing a pair (student, coin). Intuitively, naming the pair should cost naming the student <em>plus</em> naming the coin: $7 + 1 = 8$ questions. Probabilities <em>multiply</em> for independent events, and the logarithm is exactly the function that turns multiplication into addition:</p>
-
-  $$\log \frac{1}{p \cdot q} \;=\; \log \frac{1}{p} + \log \frac{1}{q}.$$
-
-  $$\log_2 \frac{1}{\tfrac{1}{128}\cdot\tfrac12} \;=\; \log_2 256 \;=\; 8 \;=\; 7 + 1. \quad\checkmark$$
-
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>Think of surprisal as the <strong>length of the name</strong> you'd have to assign an outcome in a code book. Common outcomes get short names ("the", "a"), rare outcomes get long ones ("antidisestablishmentarianism"). If an outcome happens $1$ time in $2^k$, you cannot give it a name shorter than $k$ bits without stealing a name that some other outcome needs.</p>
-    <p><em>Where the analogy holds exactly:</em> this is Shannon's source coding theorem, and the average name length is precisely entropy. <em>Where it strains:</em> real code words have integer lengths, so you can only hit entropy exactly when every probability is a power of two — see below.</p>
-  </div>
+  $$\log \frac{1}{p \cdot q} \;=\; \log \frac{1}{p} + \log \frac{1}{q}, \qquad \log_2 \frac{1}{\tfrac{1}{128}\cdot\tfrac12} \;=\; \log_2 256 \;=\; 8 \;=\; 7 + 1. \quad\checkmark$$
 
   <h2 id="expected-questions">Averaging: the expected number of questions</h2>
 
-  <p>Now drop the assumption that I choose uniformly. Let there be $k$ outcomes with probabilities $p_1, \dots, p_k$. Outcome $i$ costs $\log \frac{1}{p_i}$ questions and occurs a $p_i$ fraction of the time, so the <strong>expected</strong> number of questions is the probability-weighted average of the surprisals:</p>
+  <p>Drop the uniformity. With $k$ outcomes of probabilities $p_1,\dots,p_k$, outcome $i$ costs $\log\frac1{p_i}$ questions and occurs a $p_i$ fraction of the time, so the <strong>expected</strong> number of questions is the probability-weighted average of the surprisals:</p>
 
   $$\text{Answer} \;=\; \sum_{i=1}^{k} p_i \log \frac{1}{p_i}.$$
 
-  <p>Sanity check against the uniform case: with $p_i = 1/128$ for all $128$ students,</p>
+  <p>Sanity check in the uniform case, $p_i = 1/128$:</p>
 
   $$\sum_{i=1}^{128} \frac{1}{128}\log_2 128 \;=\; \log_2 128 \cdot \underbrace{\sum_{i=1}^{128}\frac{1}{128}}_{=\,1} \;=\; 7. \quad\checkmark$$
 
   <h3>The notes' non-uniform example, computed in full</h3>
 
-  <p>The notes then change the distribution to</p>
+  <p>The notes change the distribution to</p>
 
   $$p_1 = \tfrac14, \qquad p_2 = p_3 = \cdots = p_7 = \tfrac18, \qquad p_8 = \cdots = p_{128} = 0,$$
 
-  <p>with the convention $0 \cdot \log\frac10 := 0$, and assert the answer is $11/4$. Let us check that it is even a probability distribution, then verify the number.</p>
+  <p>with the convention $0 \cdot \log\frac10 := 0$, and assert the answer is $11/4$.</p>
 
-  <div class="box example"><span class="label">Example — verifying $11/4$, every step</span>
-    <p><strong>Step 0. It is a distribution.</strong> $\tfrac14 + 6 \cdot \tfrac18 = \tfrac14 + \tfrac68 = \tfrac28 + \tfrac68 = \tfrac88 = 1.$ &nbsp;(Students $2$ through $7$ is six students, not seven.) ✓</p>
-    <p><strong>Step 1. Surprisal of student 1.</strong> $\displaystyle \log_2\frac{1}{1/4} = \log_2 4 = 2$ bits.</p>
-    <p><strong>Step 2. Surprisal of students 2–7.</strong> $\displaystyle \log_2\frac{1}{1/8} = \log_2 8 = 3$ bits each.</p>
-    <p><strong>Step 3. Surprisal of students 8–128.</strong> These have $p_i = 0$. The convention says the term is $0$ — see the justification below.</p>
-    <p><strong>Step 4. Weighted sum.</strong></p>
+  <div class="box example"><span class="label">Example — verifying $11/4$</span>
+    <p>It is a distribution: $\tfrac14 + 6 \cdot \tfrac18 = \tfrac28 + \tfrac68 = 1$ ✓ (students $2$ through $7$ is six students, not seven). Surprisals: $\log_2\frac{1}{1/4} = \log_2 4 = 2$ bits for student 1, $\log_2\frac{1}{1/8} = \log_2 8 = 3$ bits each for students 2–7, and $0$ for students 8–128 by the convention. So</p>
     $$\sum_i p_i \log_2\frac{1}{p_i} \;=\; \underbrace{\tfrac14 \cdot \log_2 4}_{\text{student 1}} \;+\; \underbrace{6 \cdot \tfrac18 \cdot \log_2 8}_{\text{students 2–7}} \;+\; \underbrace{121 \cdot 0}_{\text{students 8–128}}$$
-    $$= \tfrac14 \cdot 2 \;+\; 6 \cdot \tfrac18 \cdot 3 \;=\; \tfrac{2}{4} \;+\; 6 \cdot \tfrac38 \;=\; \tfrac12 \;+\; \tfrac{18}{8} \;=\; \tfrac12 + \tfrac94.$$
-    <p><strong>Step 5. Common denominator.</strong> $\displaystyle \tfrac12 + \tfrac94 = \tfrac24 + \tfrac94 = \tfrac{11}{4} = 2.75$ questions on average. ✓ &nbsp;This matches the notes exactly.</p>
+    $$= \tfrac14 \cdot 2 \;+\; 6 \cdot \tfrac38 \;=\; \tfrac12 \;+\; \tfrac{18}{8} \;=\; \tfrac24 + \tfrac94 \;=\; \tfrac{11}{4} \;=\; 2.75 \text{ questions on average.} \quad\checkmark$$
   </div>
 
   <div class="box defn"><span class="label">Definition</span>
-    <p><strong>The $0\log\frac10 := 0$ convention.</strong> An outcome that never happens should contribute nothing to the average. Formally this is not a fudge, it is the limit:</p>
+    <p><strong>The $0\log\frac10 := 0$ convention.</strong> An outcome that never happens should contribute nothing to the average. This is not a fudge but a limit, so the definition keeps $H$ continuous — the surprisal $\log\frac10$ is infinite, but it is multiplied by a probability heading to zero faster, and zero wins:</p>
     $$\lim_{p\to 0^+} p \log_2 \frac{1}{p} \;=\; \lim_{p\to 0^+} \frac{-\log_2 p}{1/p} \;\overset{\text{L'Hôpital}}{=}\; \lim_{p\to 0^+} \frac{-1/(p\ln 2)}{-1/p^2} \;=\; \lim_{p\to 0^+} \frac{p}{\ln 2} \;=\; 0.$$
-    <p>So defining the term as $0$ makes $H$ continuous. The surprisal $\log\frac10 = \infty$ is infinite, but it is multiplied by a probability heading to zero faster, and zero wins.</p>
-  </div>
-
-  <h3>Does a real question strategy actually achieve $11/4$?</h3>
-
-  <p>Yes, here — and it is worth seeing why, because it also shows when it <em>fails</em>.</p>
-
-  <div class="box example"><span class="label">Example — a strategy hitting $2.75$ exactly</span>
-    <p>Ask: <strong>Q1: "Is it student 1?"</strong> If yes (prob $\tfrac14$) you are done in $1$ question... but that is <em>not</em> optimal. Do it the other way:</p>
-    <p><strong>Q1: "Is it student 1 or 2?"</strong> — the two halves each carry probability $\tfrac14 + \tfrac18 = \tfrac38$... not a clean half either. The clean strategy pairs probability mass into exact halves:</p>
-    <ul>
-      <li><strong>Q1:</strong> "Is it in $\{1, 2, 3\}$?" &nbsp;→ mass $\tfrac14+\tfrac18+\tfrac18 = \tfrac12$. Exactly half. ✓</li>
-      <li>If <em>yes</em> — <strong>Q2:</strong> "Is it student 1?" (mass $\tfrac14$ out of $\tfrac12$ = half of the branch ✓). If yes, <strong>done in 2 questions</strong>. If no, <strong>Q3</strong> separates $2$ from $3$: <strong>done in 3</strong>.</li>
-      <li>If <em>no</em> — the survivors are $\{4,5,6,7\}$, each with mass $\tfrac18$, i.e. four equally likely outcomes. Two more questions (binary search) pin it down: <strong>done in 3</strong>.</li>
-    </ul>
-    <p>Cost accounting: student 1 costs $2$ questions with probability $\tfrac14$; students $2$–$7$ cost $3$ questions each with probability $\tfrac18$:</p>
-    $$\mathbb{E}[\#\text{questions}] = \tfrac14(2) + 6\cdot\tfrac18(3) = \tfrac12 + \tfrac94 = \tfrac{11}{4}. \quad\checkmark$$
-    <p>Notice the number of questions spent on outcome $i$ came out to exactly $\log_2(1/p_i)$ in every case: $2 = \log_2 4$, $3 = \log_2 8$.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>"So entropy is the number of questions."</strong> Only when every $p_i$ is a power of two, as above. In general $\log_2(1/p_i)$ is not an integer, and you cannot ask $1.58$ questions.</p>
-    <p>What is true in general: entropy is a <strong>lower bound</strong>, and you can always get within one question of it. If $H$ is the entropy and $L^\star$ the expected length of the best strategy,</p>
-    $$H \;\le\; L^\star \;\lt\; H + 1,$$
-    <p>achieved by rounding each ideal length up, $\lceil \log_2(1/p_i)\rceil$. Example: three equally likely outcomes have $H = \log_2 3 \approx 1.585$ bits, but any real strategy costs $\tfrac13(1) + \tfrac13(2) + \tfrac13(2) = \tfrac53 \approx 1.667$ questions. The gap is the rounding.</p>
-    <p>For decision trees none of this matters — we only ever <em>compare</em> entropies, never cash them in for actual questions.</p>
+    <p><strong>"So entropy is the number of questions."</strong> Only when every $p_i$ is a power of two — as here, where asking "is it in $\{1,2,3\}$?" (mass $\tfrac14+\tfrac18+\tfrac18 = \tfrac12$, an exact half) and then halving the surviving mass costs student 1 two questions and students 2–7 three, for $\tfrac14(2) + 6\cdot\tfrac18(3) = \tfrac{11}{4}$ exactly. In general $\log_2(1/p_i)$ is not an integer, and you cannot ask $1.58$ questions.</p>
+    <p>What is true in general: entropy is a <strong>lower bound</strong>, reachable to within one question by rounding each ideal length up to $\lceil\log_2(1/p_i)\rceil$:</p>
+    $$H \;\le\; L^\star \;\lt\; H + 1.$$
+    <p>Three equally likely outcomes have $H = \log_2 3 \approx 1.585$ bits, but any real strategy costs $\tfrac13(1) + \tfrac13(2) + \tfrac13(2) = \tfrac53 \approx 1.667$ questions; the gap is the rounding. For decision trees none of this matters — we only ever <em>compare</em> entropies, never cash them in for questions.</p>
   </div>
 
   <div class="guided">
@@ -196,44 +160,40 @@
       <li>$k$ — the number of possible outcomes (for us: the number of class labels).</li>
       <li>$p_i$ — the probability of outcome $i$; in a decision-tree node, the <em>fraction of examples in that node carrying label $i$</em>.</li>
       <li>$\log\frac{1}{p_i}$ — the surprisal of outcome $i$: how many bits to name it.</li>
-      <li>The sum — an expectation, $H(p) = \mathbb{E}_{i \sim p}\!\left[\log \frac{1}{p_i}\right]$: the <em>average</em> surprisal.</li>
-      <li>The two forms are the same because $\log\frac1{p} = -\log p$. Both appear in the wild; the $-\sum p\log p$ form is the one you will see on exams.</li>
+      <li>The sum is an expectation, $H(p) = \mathbb{E}_{i \sim p}\!\left[\log \frac{1}{p_i}\right]$ — the <em>average</em> surprisal. The two forms agree because $\log\frac1p = -\log p$; the $-\sum p\log p$ form is the one you will see on exams.</li>
     </ul>
-    <p><strong>Units.</strong> With $\log_2$, entropy is in <strong>bits</strong>. With $\ln$, it is in <strong>nats</strong> ($1$ nat $= 1/\ln 2 \approx 1.4427$ bits). With $\log_{10}$, "bans". The base only rescales everything by a constant, so it never changes which attribute wins a split. <em>Use $\log_2$ in this course</em> — it makes the 20-questions story literal.</p>
+    <p><strong>Units.</strong> With $\log_2$, bits; with $\ln$, nats ($1$ nat $\approx 1.4427$ bits); with $\log_{10}$, bans. The base only rescales by a constant, so it never changes which attribute wins a split. <em>Use $\log_2$ in this course.</em></p>
   </div>
 
   <h3>Property 1: $H(p) \ge 0$</h3>
 
   <div class="box proof"><span class="label">Proof</span>
-    <p>Take any term $p_i \log\frac{1}{p_i}$. Since $p_i \in [0,1]$ we have $\frac{1}{p_i} \ge 1$, hence $\log\frac{1}{p_i} \ge \log 1 = 0$. The term is a product of two non-negative numbers, so it is $\ge 0$. A sum of non-negative terms is non-negative. $\blacksquare$</p>
-    <p class="tiny muted">Interpretation: you can never need a negative number of questions. Entropy has no upper limit in general (many outcomes ⟹ large $H$), but it has a hard floor at zero.</p>
+    <p>Take any term $p_i \log\frac{1}{p_i}$. Since $p_i \in [0,1]$ we have $\frac{1}{p_i} \ge 1$, hence $\log\frac{1}{p_i} \ge \log 1 = 0$. The term is a product of two non-negative numbers, so it is $\ge 0$, and a sum of non-negative terms is non-negative. $\blacksquare$</p>
+    <p class="tiny muted">You can never need a negative number of questions. Entropy has no upper limit in general (many outcomes ⟹ large $H$), but it has a hard floor at zero.</p>
   </div>
 
   <h3>Property 2: $H(p) = 0$ if and only if the distribution is deterministic</h3>
 
   <div class="box proof"><span class="label">Proof</span>
-    <p>($\Leftarrow$) If some $p_j = 1$ and all others are $0$: the $j$ term is $1 \cdot \log\frac11 = 1 \cdot 0 = 0$, and every other term is $0\log\frac10 = 0$ by convention. So $H = 0$.</p>
-    <p>($\Rightarrow$) Suppose $H = 0$. By Property 1 every term is $\ge 0$, and a sum of non-negative numbers is zero only if <em>every</em> term is zero. So for each $i$, $p_i \log\frac{1}{p_i} = 0$, which forces $p_i = 0$ or $\log\frac1{p_i}=0 \Rightarrow p_i = 1$. So every $p_i \in \{0,1\}$; since they sum to $1$, exactly one is $1$. $\blacksquare$</p>
-    <p><strong>Decision-tree meaning:</strong> $H = 0$ ⟺ the node is <strong>pure</strong> — every example in it has the same label. Zero questions needed, zero uncertainty, and the recursion stops.</p>
+    <p>($\Leftarrow$) If some $p_j = 1$ and all others are $0$: the $j$ term is $1 \cdot \log\frac11 = 0$, and every other term is $0\log\frac10 = 0$ by convention. So $H = 0$.</p>
+    <p>($\Rightarrow$) Suppose $H = 0$. By Property 1 every term is $\ge 0$, and a sum of non-negative numbers is zero only if <em>every</em> term is zero. So $p_i \log\frac{1}{p_i} = 0$ for each $i$, forcing $p_i = 0$ or $\log\frac1{p_i}=0 \Rightarrow p_i = 1$. Every $p_i \in \{0,1\}$, and since they sum to $1$, exactly one is $1$. $\blacksquare$</p>
+    <p><strong>Decision-tree meaning:</strong> $H = 0$ ⟺ the node is <strong>pure</strong>. Zero uncertainty, and the recursion stops.</p>
   </div>
 
   <h3>Property 3: $H(p) \le \log k$, with equality exactly for the uniform distribution</h3>
 
   <div class="box proof"><span class="label">Proof (Jensen's inequality)</span>
-    <p>$\log$ is a <strong>concave</strong> function (its second derivative $-1/(x^2\ln 2)$ is negative everywhere on $x&gt;0$). Jensen's inequality for a concave $f$ says $\mathbb{E}[f(Z)] \le f(\mathbb{E}[Z])$ — the average of the function is at most the function of the average.</p>
-    <p>Apply it with $Z = 1/p_i$ where $i \sim p$ (summing only over $i$ with $p_i &gt; 0$, say $m \le k$ of them):</p>
+    <p>$\log$ is <strong>concave</strong> (second derivative $-1/(x^2\ln 2) &lt; 0$ on $x&gt;0$), and Jensen for concave $f$ says $\mathbb{E}[f(Z)] \le f(\mathbb{E}[Z])$. Apply it with $Z = 1/p_i$, $i \sim p$, summing only over the $m \le k$ indices with $p_i &gt; 0$:</p>
     $$H(p) = \mathbb{E}\!\left[\log \frac{1}{p_i}\right] \;\le\; \log\left(\mathbb{E}\!\left[\frac{1}{p_i}\right]\right) = \log\left(\sum_{i : p_i &gt; 0} p_i \cdot \frac{1}{p_i}\right) = \log\left(\sum_{i: p_i&gt;0} 1\right) = \log m \;\le\; \log k.$$
-    <p>Every step: (1) definition of $H$ as an expectation; (2) Jensen, legal because $\log$ is concave; (3) expand the expectation as a sum, the $p_i$ cancels; (4) count the surviving terms.</p>
-    <p><strong>Equality.</strong> $\log$ is <em>strictly</em> concave, so Jensen is tight only when $Z$ is constant, i.e. $1/p_i$ is the same for all $i$ in the support — a uniform distribution. And the last inequality is tight only when $m = k$, i.e. no outcome has probability zero. So $H = \log k$ exactly when $p$ is uniform over all $k$ outcomes. $\blacksquare$</p>
-    <p><strong>Meaning:</strong> maximum uncertainty is "all outcomes equally likely", and it costs $\log_2 k$ questions — the 20-questions answer from the start of the chapter, now as a theorem. For $k=2$ the cap is $\log_2 2 = 1$ bit.</p>
+    <p>Step by step: definition of $H$ as an expectation; Jensen, legal because $\log$ is concave; expand the expectation as a sum, the $p_i$ cancels; count the surviving terms.</p>
+    <p><strong>Equality.</strong> $\log$ is <em>strictly</em> concave, so Jensen is tight only when $1/p_i$ is constant over the support — a uniform distribution — and the last inequality is tight only when $m = k$. So $H = \log k$ exactly when $p$ is uniform over all $k$ outcomes. $\blacksquare$</p>
+    <p><strong>Meaning:</strong> maximum uncertainty is "all outcomes equally likely", costing $\log_2 k$ questions — the 20-questions answer, now as a theorem. For $k=2$ the cap is $1$ bit.</p>
   </div>
 
   <h3>Property 4: entropy measures uncertainty</h3>
 
-  <p>Not a theorem so much as the summary of Properties 1–3, and the reason we bothered:</p>
-
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>More uncertainty $\iff$ more questions needed $\iff$ higher entropy.</strong> The scale runs from $0$ (you already know the answer — a pure node) to $\log_2 k$ (total ignorance — a perfectly balanced node). Everything in between is graded continuously, which is precisely what training error refused to do.</p>
+    <p><strong>More uncertainty $\iff$ more questions needed $\iff$ higher entropy.</strong> The scale runs from $0$ (a pure node) to $\log_2 k$ (a perfectly balanced node), graded continuously — precisely what training error refused to do.</p>
   </div>
 
   <div class="quiz" data-answer="2">
@@ -247,11 +207,11 @@
 
   <h2 id="binary-entropy">The binary entropy function</h2>
 
-  <p>Almost every hand computation in this course has two labels, so it is worth learning one function cold. Write $p$ for the probability of label "1"; then label "0" has probability $1-p$ and</p>
+  <p>Almost every hand computation in this course has two labels, so learn one function cold. Write $p$ for the probability of label "1"; label "0" then has probability $1-p$ and</p>
 
   $$H(p) \;=\; -p\log_2 p - (1-p)\log_2(1-p).$$
 
-  <p class="muted tiny">Notation warning: $H(p)$ here takes a single <em>number</em> $p \in [0,1]$ and means the entropy of the two-outcome distribution $(p, 1-p)$. Elsewhere $H(\cdot)$ takes a random variable. Both are standard; context disambiguates.</p>
+  <p class="muted tiny">Notation warning: $H(p)$ here takes a single <em>number</em> $p \in [0,1]$ and means the entropy of $(p, 1-p)$. Elsewhere $H(\cdot)$ takes a random variable. Both are standard; context disambiguates.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 · The binary entropy curve $H(p)$, plotted from computed values</div>
@@ -321,72 +281,58 @@
   </div>
 
   <div class="box example"><span class="label">Example — the running 40/60 node, by hand</span>
-    <p>The notes' example: $40\%$ of labels in $S$ are "1" and $60\%$ are "0", so $P(Y{=}1) = 0.4$, $P(Y{=}0) = 0.6$.</p>
+    <p>The notes' example: $P(Y{=}1) = 0.4$, $P(Y{=}0) = 0.6$.</p>
     $$H(Y) = 0.4\log_2\frac{1}{0.4} + 0.6\log_2\frac{1}{0.6} = 0.4\log_2 2.5 + 0.6\log_2 1.\overline{6}.$$
-    <p>Using $\log_2 2.5 = \log_2 5 - \log_2 2 = 2.321928 - 1 = 1.321928$ and $\log_2 \tfrac53 = \log_2 5 - \log_2 3 = 2.321928 - 1.584963 = 0.736966$:</p>
+    <p>With $\log_2 2.5 = \log_2 5 - 1 = 1.321928$ and $\log_2 \tfrac53 = 2.321928 - 1.584963 = 0.736966$:</p>
     $$H(Y) = 0.4(1.321928) + 0.6(0.736966) = 0.528771 + 0.442179 = \mathbf{0.970951} \text{ bits}.$$
-    <p>Round to $0.971$. Worth committing to memory — a 40/60 split is the most common number on 07-280 problem sets, and it is only $0.029$ bits below the maximum of $1$.</p>
+    <p>Round to $0.971$ and memorise it — a 40/60 split is the most common number on 07-280 problem sets, and it is only $0.029$ bits below the maximum.</p>
   </div>
 
   <h2 id="node-entropy">Entropy of the labels inside a node</h2>
 
-  <p>Everything above was about abstract distributions. Here is the translation into decision-tree language, which is exactly the move the notes make.</p>
-
-  <p>Let $S$ be the set of training examples sitting at some node, and let $\mathcal{Y}$ be the set of possible labels. Define the label distribution empirically — <em>by counting</em>:</p>
+  <p>The translation into decision-tree language. Let $S$ be the examples at a node and $\mathcal{Y}$ the possible labels. Define the label distribution empirically — <em>by counting</em>:</p>
 
   $$P(Y = y) \;=\; \frac{\#\{\text{examples in } S \text{ with label } y\}}{|S|}.$$
 
   <div class="box defn"><span class="label">Definition</span>
     <p>The <strong>entropy of the labels at a node</strong> $S$ is</p>
-    $$H(Y) \;=\; \sum_{y \in \mathcal{Y}} P(Y=y)\,\log\frac{1}{P(Y=y)}.$$
-    <p>Every symbol: $Y$ is the random variable "the label of an example drawn uniformly at random from $S$"; $y$ ranges over the possible labels ($\{0,1\}$ for us); $P(Y=y)$ is the <em>fraction</em> of $S$ carrying label $y$.</p>
-  </div>
-
-  <div class="box example"><span class="label">Example</span>
-    <p>The notes' instance: if $40\%$ of the labels in $S$ are "1" and $60\%$ are "0", then $P(Y{=}1) = 0.4$ and $P(Y{=}0) = 0.6$, so $H(Y) = 0.971$ bits (computed in full above).</p>
-    <p>Note that $H(Y)$ did <em>not</em> depend on $|S|$. A node with $4$ ones and $6$ zeros and a node with $400$ ones and $600$ zeros have identical entropy. Size enters later, through the weights in conditional entropy.</p>
+    $$H(Y) \;=\; \sum_{y \in \mathcal{Y}} P(Y=y)\,\log\frac{1}{P(Y=y)},$$
+    <p>where $Y$ is the label of an example drawn uniformly at random from $S$, $y$ ranges over the possible labels ($\{0,1\}$ for us), and $P(Y=y)$ is the <em>fraction</em> of $S$ carrying label $y$. For the $40\%$/$60\%$ node above, $H(Y) = 0.971$ bits.</p>
+    <p>$H(Y)$ does <em>not</em> depend on $|S|$: $4$ ones and $6$ zeros has the same entropy as $400$ and $600$. Size enters later, through the weights in conditional entropy.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>These probabilities are <strong>empirical frequencies computed from the node's own examples</strong>, not some prior belief and not the frequencies in the full dataset. When you recurse into a child, you recompute from scratch using only the examples that reached the child. Forgetting to recompute is the single most common arithmetic error on this material.</p>
+    <p>These probabilities are <strong>empirical frequencies computed from the node's own examples</strong>, not a prior belief and not the frequencies in the full dataset. When you recurse into a child, recompute from scratch using only the examples that reached it. Forgetting to recompute is the single most common arithmetic error on this material.</p>
   </div>
 
   <h2 id="conditional-entropy">Specific conditional entropy and conditional entropy</h2>
 
-  <p>We want to choose an attribute so that splitting on it reduces uncertainty as much as possible. So we need to answer: <em>after</em> the split, how uncertain are the labels?</p>
-
-  <p>Let $W$ be a random variable — later we will set $W$ to be the attribute we split on, so $W = x_b$ for some attribute index $b$, and $\omega$ ranges over its values ($0$ and $1$ for binary attributes).</p>
+  <p>To score a split we need to know how uncertain the labels are <em>after</em> it. Let $W$ be the attribute we split on (so $W = x_b$), with $\omega$ ranging over its values ($0$ and $1$ for binary attributes).</p>
 
   <h3>Specific conditional entropy — the entropy of <em>one</em> child</h3>
 
   <div class="box defn"><span class="label">Definition</span>
     $$H(Y \mid W = \omega) \;=\; \sum_{y \in \mathcal{Y}} P(Y = y \mid W = \omega)\,\log\frac{1}{P(Y = y \mid W = \omega)}.$$
-    <p>The professor annotates this formula twice, and both annotations are the whole point:</p>
+    <p>Two annotations from the notes, and both are the whole point:</p>
     <ul>
-      <li><strong>"The conditioning $\mid W = \omega$ defines left or right child node."</strong> Fixing $\omega$ is <em>literally</em> the act of walking down one branch. $H(Y \mid x_b = 1)$ is "the entropy of the left child"; $H(Y \mid x_b = 0)$ is "the entropy of the right child". There is nothing probabilistic to worry about — just look at a subset of rows.</li>
-      <li><strong>"$P(Y \mid W = \omega)$ is the distribution of labels when you take the subset of $S$ that has attribute $W = \omega$."</strong> So $P(Y{=}y \mid W{=}\omega) = \dfrac{\#\{\text{examples with } W=\omega \text{ and label } y\}}{\#\{\text{examples with } W=\omega\}}$ — count within the child, divide by the child's size.</li>
+      <li><strong>"The conditioning $\mid W = \omega$ defines left or right child node."</strong> Fixing $\omega$ is <em>literally</em> walking down one branch: $H(Y \mid x_b = 1)$ is the left child's entropy, $H(Y \mid x_b = 0)$ the right child's.</li>
+      <li><strong>$P(Y{=}y \mid W{=}\omega) = \dfrac{\#\{\text{examples with } W=\omega \text{ and label } y\}}{\#\{\text{examples with } W=\omega\}}$</strong> — count within the child, divide by the child's size.</li>
     </ul>
-    <p>It is called <em>specific</em> because it is pinned to one specific value $\omega$. It is a single number per child, not an average.</p>
-  </div>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>Specific conditional entropy is nothing new — it is just $H$ applied to the child's label counts. If you can compute $H$ of a bag of labels, you can compute specific conditional entropy: take the bag, throw away every example whose attribute isn't $\omega$, recount, apply $H$. That's it.</p>
+    <p>It is called <em>specific</em> because it is pinned to one value $\omega$: a single number per child, not an average. Computationally it is nothing new — throw away every example whose attribute isn't $\omega$, recount, apply $H$.</p>
   </div>
 
   <h3>Conditional entropy — the <em>weighted average</em> over children</h3>
 
   <div class="box defn"><span class="label">Definition</span>
-    $$H(Y \mid W) \;=\; \sum_{\omega \in W} P(W = \omega)\cdot H(Y \mid W = \omega).$$
-    <p>Here $P(W=\omega)$ is the fraction of $S$ that lands in the child $\omega$ — for a binary attribute, $\frac{|S_{\omega}|}{|S|}$. So for a binary split:</p>
+    $$H(Y \mid W) \;=\; \sum_{\omega \in W} P(W = \omega)\cdot H(Y \mid W = \omega),$$
+    <p>where $P(W=\omega)$ is the fraction of $S$ landing in child $\omega$ — for a binary attribute $\frac{|S_\omega|}{|S|}$, so</p>
     $$H(Y \mid W) = \frac{|S_1|}{|S|}H(Y \mid W{=}1) + \frac{|S_0|}{|S|}H(Y \mid W{=}0).$$
-    <p>In the notes' words: <em>"This is the average entropy across the child nodes (after the current node is split)."</em></p>
+    <p>In the notes' words: <em>"the average entropy across the child nodes (after the current node is split)."</em></p>
   </div>
 
   <div class="box key"><span class="label">Key idea — why the weighting matters enormously</span>
-    <p>Suppose a node has $100$ examples, $50$ of each label ($H(Y) = 1$ bit), and some attribute isolates a <strong>single example</strong> into the left child and dumps the other $99$ into the right child.</p>
-    <p>The left child is pure, so $H(Y \mid W{=}1) = 0$ — a perfect score! If we naively averaged the two children's entropies without weights we would get $\tfrac12(0) + \tfrac12(0.99993) = 0.49996$ bits and conclude this useless split halved our uncertainty.</p>
-    <p>With the correct weights: $\tfrac{1}{100}(0) + \tfrac{99}{100}(0.99993) = 0.98993$ bits. The split is credited with a gain of a mere $1 - 0.98993 = 0.01007$ bits, which is the truth: it resolved one example out of a hundred.</p>
-    <p><strong>The weight $P(W=\omega)$ is what stops a split that isolates a single point from looking good.</strong> A pure child that contains almost nothing earns almost nothing.</p>
+    <p>Take a node of $100$ examples, $50$ of each label ($H(Y) = 1$ bit), and an attribute that isolates a <strong>single example</strong> into the left child and dumps the other $99$ right. The left child is pure, $H(Y\mid W{=}1) = 0$. Averaged naively you would get $\tfrac12(0) + \tfrac12(0.99993) = 0.49996$ bits and conclude this useless split halved your uncertainty.</p>
+    <p>With the correct weights: $\tfrac{1}{100}(0) + \tfrac{99}{100}(0.99993) = 0.98993$ bits, a gain of $0.01007$ bits — the truth, since it resolved one example out of a hundred. <strong>The weight $P(W=\omega)$ is what stops a split that isolates a single point from looking good.</strong></p>
   </div>
 
   <div class="viz">
@@ -478,13 +424,7 @@
   <div class="box defn"><span class="label">Definition</span>
     <p>The <strong>mutual information</strong> between the label $Y$ and the attribute $W$ is</p>
     $$I(Y; W) \;=\; H(Y) - H(Y \mid W).$$
-    <p>In the notes' words: <em>"Amount of reduction in entropy (before vs. after splitting)."</em> In the decision-tree literature the same quantity is called the <strong>information gain</strong> of the split. Same number, two names.</p>
-    <p>Units: bits (with $\log_2$). Reading: "splitting on $W$ saves you $I(Y;W)$ yes/no questions, on average, when you later have to guess the label."</p>
-  </div>
-
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>You are playing 20 questions to guess a student's label. $H(Y)$ is what the game costs you cold. Then a friend whispers the value of attribute $W$ for free. $I(Y;W)$ is how many questions that whisper saved you, averaged over which whisper you get.</p>
-    <p><em>Where the analogy strains:</em> the saving is an average over whispers, and a particular whisper can make the game <em>harder</em> — see the trap below. It is only the average that can never hurt.</p>
+    <p>In the notes' words: <em>"amount of reduction in entropy (before vs. after splitting)."</em> The decision-tree literature calls the same quantity the <strong>information gain</strong>. Units: bits. Reading: "splitting on $W$ saves you $I(Y;W)$ yes/no questions, on average, when you later have to guess the label."</p>
   </div>
 
   <h3>Theorem: $I(Y;W) \ge 0$, i.e. $H(Y \mid W) \le H(Y)$</h3>
@@ -492,18 +432,17 @@
   <div class="box proof"><span class="label">Proof (concavity of entropy / Jensen)</span>
     <p><strong>Step 1 — the parent's distribution is a mixture of the children's.</strong> By the law of total probability, for every label $y$,</p>
     $$P(Y = y) \;=\; \sum_{\omega} P(W=\omega)\, P(Y = y \mid W = \omega).$$
-    <p>Reading this as vectors over $y$: the parent label distribution $P(Y)$ is the <strong>convex combination</strong> of the child label distributions $P(Y \mid W=\omega)$, with weights $P(W=\omega)$ (which are non-negative and sum to $1$). Concretely: pooling the children back together <em>is</em> the parent.</p>
-    <p><strong>Step 2 — $H$ is concave as a function of the distribution.</strong> We showed $H'' \lt 0$ for the binary case; in general $H(p) = \sum_i p_i\log\frac1{p_i}$ is a sum of terms $-p_i \log p_i$, each concave in $p_i$ (second derivative $-1/(p_i \ln 2) \lt 0$), and a sum of concave functions is concave.</p>
-    <p><strong>Step 3 — apply Jensen's inequality to the concave function $H$.</strong> For a concave $f$, $f(\sum_j \lambda_j z_j) \ge \sum_j \lambda_j f(z_j)$. With $f = H$, $\lambda_\omega = P(W=\omega)$ and $z_\omega = P(Y \mid W=\omega)$:</p>
+    <p>As vectors over $y$: the parent distribution $P(Y)$ is the <strong>convex combination</strong> of the child distributions $P(Y \mid W=\omega)$ with weights $P(W=\omega)$. Pooling the children back together <em>is</em> the parent.</p>
+    <p><strong>Step 2 — $H$ is concave as a function of the distribution.</strong> $H(p) = \sum_i p_i\log\frac1{p_i}$ is a sum of terms $-p_i\log p_i$, each concave in $p_i$ (second derivative $-1/(p_i\ln 2) &lt; 0$), and a sum of concave functions is concave.</p>
+    <p><strong>Step 3 — Jensen for a concave $f$:</strong> $f(\sum_j \lambda_j z_j) \ge \sum_j \lambda_j f(z_j)$. With $f = H$, $\lambda_\omega = P(W=\omega)$, $z_\omega = P(Y \mid W=\omega)$:</p>
     $$H(Y) = H\!\left(\sum_\omega P(W{=}\omega)\,P(Y\mid W{=}\omega)\right) \;\ge\; \sum_\omega P(W{=}\omega)\, H\big(P(Y \mid W{=}\omega)\big) \;=\; H(Y \mid W).$$
-    <p>The left side is $H(Y)$ by Step 1; the right side is exactly the definition of conditional entropy. Therefore $I(Y;W) = H(Y) - H(Y\mid W) \ge 0$. $\blacksquare$</p>
-    <p><strong>Equality condition.</strong> $H$ is <em>strictly</em> concave, so Jensen is tight only when all the $z_\omega$ with positive weight are identical: $P(Y \mid W = \omega) = P(Y)$ for every $\omega$. That is precisely the statement that <strong>$Y$ and $W$ are independent</strong>. So</p>
+    <p>The left side is $H(Y)$ by Step 1, the right side is the definition of conditional entropy. Therefore $I(Y;W) \ge 0$. $\blacksquare$</p>
+    <p><strong>Equality condition.</strong> $H$ is <em>strictly</em> concave, so Jensen is tight only when all $z_\omega$ with positive weight are identical: $P(Y \mid W = \omega) = P(Y)$ for every $\omega$, i.e. <strong>$Y$ and $W$ are independent</strong>. So</p>
     $$H(Y \mid W) = H(Y) \iff I(Y;W) = 0 \iff Y \perp W.$$
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Why can't information hurt, on average? Because you are always free to ignore it. Any guessing strategy that doesn't look at $W$ is still available after you learn $W$, so the best strategy that <em>does</em> look at $W$ can only be at least as good. Averaged over which value of $W$ you see, uncertainty cannot go up.</p>
-    <p>In tree terms: splitting a node and then predicting the majority in each child is at least as accurate as predicting the majority in the parent, because "predict the parent's majority in both children" is one of the options available to you.</p>
+    <p>Why can't information hurt on average? Because you are free to ignore it: any strategy that doesn't look at $W$ is still available after you learn $W$. In tree terms, "predict the parent's majority in both children" is one of the options available after splitting, so splitting and predicting each child's majority is at least as accurate.</p>
   </div>
 
   <h3>The exam trap: a <em>specific</em> conditional entropy CAN exceed $H(Y)$</h3>
@@ -514,7 +453,7 @@
   </div>
 
   <div class="box example"><span class="label">Example — worked counterexample, every number verified</span>
-    <p>A node with $|S| = 10$ examples: $9$ labelled "0" and $1$ labelled "1". Attribute $W$ splits it as follows.</p>
+    <p>A node with $|S| = 10$: $9$ labelled "0" and $1$ labelled "1", split by $W$ as follows.</p>
     <table class="tight center">
       <thead><tr><th>Node</th><th>$n$</th><th>zeros</th><th>ones</th><th>$P(Y{=}1)$</th><th>entropy</th><th>weight</th></tr></thead>
       <tbody>
@@ -523,14 +462,12 @@
         <tr><td>child $W{=}0$</td><td>8</td><td>8</td><td>0</td><td>0.0</td><td>$H(Y\mid W{=}0) = 0.000$</td><td>$8/10 = 0.8$</td></tr>
       </tbody>
     </table>
-    <p><strong>Parent.</strong> $H(Y) = -0.9\log_2 0.9 - 0.1\log_2 0.1 = 0.9(0.152003) + 0.1(3.321928) = 0.136803 + 0.332193 = \mathbf{0.468996}$.</p>
-    <p><strong>Child $W{=}1$.</strong> One of each label, so $P(Y{=}1 \mid W{=}1) = 1/2$ and $H(Y \mid W{=}1) = \mathbf{1.000}$ bit.</p>
+    <p><strong>Parent.</strong> $H(Y) = -0.9\log_2 0.9 - 0.1\log_2 0.1 = 0.9(0.152003) + 0.1(3.321928) = 0.136803 + 0.332193 = \mathbf{0.468996}$. The child $W{=}1$ has one of each label, so $H(Y\mid W{=}1) = \mathbf{1.000}$ bit; the child $W{=}0$ is pure, so $\mathbf{0.000}$.</p>
     <p class="center"><strong>$1.000 \;&gt;\; 0.469$ — the specific conditional entropy strictly exceeds the parent's entropy.</strong></p>
-    <p><strong>Child $W{=}0$.</strong> Pure, so $H(Y \mid W{=}0) = \mathbf{0.000}$.</p>
-    <p><strong>The average, however, obeys the theorem:</strong></p>
+    <p>The average, however, obeys the theorem:</p>
     $$H(Y \mid W) = 0.2(1.000) + 0.8(0.000) = \mathbf{0.200} \;\le\; 0.469 = H(Y),$$
     $$I(Y;W) = 0.468996 - 0.200000 = \mathbf{0.268996} \;&gt;\; 0. \quad\checkmark$$
-    <p>The branch $W{=}1$ made things worse ($0.469 \to 1.000$), but only $20\%$ of the examples go there, while $80\%$ go to a branch that became perfectly certain. The average wins comfortably.</p>
+    <p>The branch $W{=}1$ made things worse ($0.469 \to 1.000$), but only $20\%$ of the examples go there while $80\%$ go to a branch that became perfectly certain.</p>
   </div>
 
   <h3>Symmetry: $I(Y;W) = I(W;Y)$</h3>
@@ -542,12 +479,8 @@
     <p>Now substitute into the definition of mutual information:</p>
     $$I(Y;W) = H(Y) - H(Y\mid W) = H(Y) - \big[H(Y,W) - H(W)\big] = H(Y) + H(W) - H(Y,W).$$
     <p>That expression is <strong>visibly symmetric</strong> in $Y$ and $W$ — swapping the two names leaves it unchanged. Hence $I(Y;W) = I(W;Y)$. $\blacksquare$</p>
-    <p><span class="pill">beyond syllabus</span> The equivalent single-sum form makes symmetry even more obvious:
-    $\displaystyle I(Y;W) = \sum_{y,w} P(y,w)\log\frac{P(y,w)}{P(y)P(w)}$, which is the KL divergence between the joint distribution and the product of the marginals — a direct measure of "how far from independent are they".</p>
-  </div>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>Symmetry is a genuinely surprising fact. "How much does knowing the attribute tell me about the label" equals "how much does knowing the label tell me about the attribute". Information is a <em>shared</em> quantity, not a directional flow — which is why it is called <em>mutual</em> information.</p>
+    <p>Symmetry is genuinely surprising: "how much does knowing the attribute tell me about the label" equals "how much does knowing the label tell me about the attribute". Information is a <em>shared</em> quantity, not a directional flow — hence <em>mutual</em> information.</p>
+    <p class="tiny muted"><span class="pill">beyond syllabus</span> Equivalently $I(Y;W) = \sum_{y,w} P(y,w)\log\frac{P(y,w)}{P(y)P(w)}$, the KL divergence between the joint and the product of the marginals.</p>
   </div>
 
   <h2 id="best-attribute">BestAttribute, version 2: maximise mutual information</h2>
@@ -582,7 +515,7 @@
 
   <h2 id="worked-split">A fully worked split selection</h2>
 
-  <p>This is the poll dataset from <a href="decision-trees.html">Chapter 6</a> — the one the professor left with "Answer: in poll." We solved it there under the training-error criterion. Now we solve it properly.</p>
+  <p>The poll dataset from <a href="decision-trees.html">Chapter 6</a>, solved there under training error and now solved properly.</p>
 
   <table class="tight center">
     <thead><tr><th>$i$</th><th>$y$</th><th>$x_1$</th><th>$x_2$</th><th>$x_3$</th></tr></thead>
@@ -598,7 +531,7 @@
     </tbody>
   </table>
 
-  <p class="tiny muted">Reading the table: $i$ indexes the training example; $y \in \{0,1\}$ is its label; $x_1, x_2, x_3 \in \{0,1\}$ are its three binary attributes. Superscripts like $x^{(i)}$ would index the example — here we use a row number instead, to keep the arithmetic readable.</p>
+  <p class="tiny muted">Reading the table: $i$ indexes the training example, $y \in \{0,1\}$ is its label, and $x_1, x_2, x_3 \in \{0,1\}$ are its three binary attributes.</p>
 
   <h3>Step 0 — the root entropy $H(Y)$</h3>
 
@@ -694,19 +627,18 @@
 
   <h3>Step 5 — contrast with the training-error criterion</h3>
 
-  <p>Under training error (Chapter 6's criterion), every split's score is <em>mistakes made by majority vote in each child</em>:</p>
+  <p>Under training error, each split scores <em>mistakes made by majority vote in each child</em>:</p>
 
   <ul>
-    <li><strong>$x_1$:</strong> the $x_1{=}1$ child has $3$ zeros and $4$ ones → vote $1$ → $3$ mistakes; the $x_1{=}0$ child is pure → $0$. <strong>Total $3/8$.</strong></li>
-    <li><strong>$x_2$:</strong> $x_2{=}1$ is pure → $0$; $x_2{=}0$ has $3$ zeros, $1$ one → vote $0$ → $1$ mistake. <strong>Total $1/8$.</strong></li>
-    <li><strong>$x_3$:</strong> $x_3{=}1$ has $1$ zero, $3$ ones → vote $1$ → $1$ mistake; $x_3{=}0$ is a $2$–$2$ tie → vote either → $2$ mistakes. <strong>Total $3/8$.</strong></li>
+    <li><strong>$x_1$:</strong> the $x_1{=}1$ child is $3$ zeros, $4$ ones → vote $1$ → $3$ mistakes; the $x_1{=}0$ child is pure → $0$. <strong>Total $3/8$.</strong></li>
+    <li><strong>$x_2$:</strong> $x_2{=}1$ is pure → $0$; $x_2{=}0$ is $3$ zeros, $1$ one → vote $0$ → $1$ mistake. <strong>Total $1/8$.</strong></li>
+    <li><strong>$x_3$:</strong> $x_3{=}1$ is $1$ zero, $3$ ones → vote $1$ → $1$ mistake; $x_3{=}0$ is a $2$–$2$ tie → $2$ mistakes. <strong>Total $3/8$.</strong></li>
     <li><strong>No split at all:</strong> vote $1$ → $3$ mistakes. <strong>$3/8$.</strong></li>
   </ul>
 
   <div class="box warn"><span class="label">Common mistake — and the reason the course switches criteria</span>
-    <p>Training error does get the winner right here ($x_2$, $1/8$). But look at what it says about the other two: <strong>$x_1$, $x_3$ and doing nothing at all all score $3/8$.</strong> A three-way dead tie, including a tie with "don't split".</p>
-    <p>Mutual information separates them cleanly: $I(Y;x_1) = 0.0924$ versus $I(Y;x_3) = 0.0488$ — $x_1$ is nearly twice as informative as $x_3$, and <em>both</em> are strictly better than not splitting ($I = 0$ would mean useless). Error rate cannot express any of that, because in each case the majority label simply did not flip.</p>
-    <p>On a dataset where the <em>best</em> attribute happens to be one of the tied ones, error rate picks arbitrarily and the greedy algorithm goes down the wrong path. That is the failure Chapter 6 demonstrated, and this is the repair.</p>
+    <p>Training error gets the winner right here ($x_2$, $1/8$), but <strong>$x_1$, $x_3$ and doing nothing all score $3/8$</strong> — a three-way dead tie, including a tie with "don't split".</p>
+    <p>Mutual information separates them: $I(Y;x_1) = 0.0924$ versus $I(Y;x_3) = 0.0488$, and both are strictly better than not splitting. Error rate cannot express any of that, because the majority label did not flip. On a dataset where the <em>best</em> attribute is one of the tied ones, error rate picks arbitrarily and the greedy algorithm goes down the wrong path.</p>
   </div>
 
   <div class="quiz" data-answer="1">
@@ -720,7 +652,7 @@
 
   <h2 id="calculator">Interactive: the entropy calculator</h2>
 
-  <p>Move the sliders to set the class counts in the two children. The parent is their union (that is forced — pooling the children back together <em>is</em> the parent), so the parent's counts update automatically. Watch $I(Y;W)$ and try to make it negative. You cannot.</p>
+  <p>Set the class counts in the two children; the parent is their union, so its counts follow automatically. Watch $I(Y;W)$ and try to make it negative. You cannot.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 3 · Live entropy, conditional entropy and information gain</div>
@@ -778,30 +710,15 @@
 
   <h2 id="id3">ID3, C4.5, and the bias toward many-valued attributes</h2>
 
-  <p><span class="pill">beyond syllabus</span> The algorithm you just built — recursive splitting with <code>BestAttribute = argmax</code> information gain — is <strong>ID3</strong> (Quinlan, 1986). Its successor <strong>C4.5</strong> adds real-valued thresholds, missing-value handling, pruning, and one fix that matters here.</p>
-
-  <p><strong>The bug.</strong> Information gain systematically prefers attributes with many possible values. Take our 8-row dataset and add an attribute $x_{\text{id}} \in \{1,\dots,8\}$ that is just the row number. Splitting on it gives eight children of one example each, every one pure, so</p>
-
-  $$H(Y \mid x_{\text{id}}) = \sum_{\omega=1}^{8}\tfrac18 \cdot 0 = 0, \qquad I(Y; x_{\text{id}}) = 0.954434 - 0 = 0.954434,$$
-
-  <p>the maximum possible gain — beating $x_2$'s $0.548795$. Yet the resulting "tree" is a lookup table that memorises the training set and generalises to nothing.</p>
-
-  <p><strong>The fix: gain ratio.</strong> Penalise by the entropy of the <em>attribute itself</em> (called the <em>split information</em>):</p>
+  <p><span class="pill">beyond syllabus</span> The algorithm above is <strong>ID3</strong> (Quinlan, 1986); <strong>C4.5</strong> adds real-valued thresholds, missing values, pruning, and a fix for one bug — information gain prefers attributes with many values, since an attribute as fine as a row number gives all-pure children and so the maximal gain $H(Y)$ while memorising the training set. The fix is the <strong>gain ratio</strong>, which charges the attribute for its own entropy:</p>
 
   $$\text{GainRatio}(Y;W) = \frac{I(Y;W)}{H(W)}, \qquad H(W) = \sum_\omega P(W{=}\omega)\log\frac{1}{P(W{=}\omega)}.$$
 
-  <ul>
-    <li>$x_{\text{id}}$: $H(x_{\text{id}}) = \log_2 8 = 3$ bits, so GainRatio $= 0.954434 / 3 = \mathbf{0.318145}$.</li>
-    <li>$x_2$: it splits $4$–$4$, so $H(x_2) = 1$ bit, and GainRatio $= 0.548795 / 1 = \mathbf{0.548795}$.</li>
-  </ul>
-
-  <p>$x_2$ now wins comfortably. The intuition: an attribute that shatters the data into many tiny pieces has to <em>pay</em> for the shattering, and the price is its own entropy.</p>
-
-  <p class="tiny muted">CART instead uses <strong>Gini impurity</strong> $\sum_y p_y(1-p_y)$, which the notes mention and explicitly do not discuss. It behaves almost identically to entropy — both are concave, both are $0$ exactly at purity, both are maximised at uniform — and the two criteria disagree on roughly $2\%$ of splits in practice. Gini is slightly cheaper because it needs no logarithm.</p>
+  <p class="tiny muted">On the 8-row dataset, a row-number attribute scores $0.954434/3 = 0.318$ against $x_2$'s $0.548795/1 = 0.549$, so $x_2$ wins again. CART instead uses <strong>Gini impurity</strong> $\sum_y p_y(1-p_y)$, which the notes mention and do not discuss; it behaves almost identically to entropy and needs no logarithm.</p>
 
   <h2 id="lookup">The hand-computation lookup table</h2>
 
-  <p>Exams are computed by hand. Every entropy you will ever need on a small dataset is built from a handful of logarithms and a handful of two-class entropies. Learn these and you will never stall.</p>
+  <p>Exams are computed by hand, and every entropy you will need on a small dataset is built from a handful of logarithms and two-class entropies. Learn these and you will never stall.</p>
 
   <div class="grid2">
     <div class="card">
@@ -844,7 +761,7 @@
   <p>Three more that come up often, derived from the table: $H(3/7) = 0.985$ (the $x_1$ branch above), $H(1/10) = 0.469$ (the counterexample above), $H(1/16) = 0.337$.</p>
 
   <div class="box intuition"><span class="label">Intuition — the shape of the table</span>
-    <p>Read the right-hand column downward and notice how <strong>slowly</strong> entropy falls at first: going from a $50/50$ node to a $40/60$ node buys $0.029$ bits; going from $40/60$ to $25/75$ buys $0.160$; going from $12.5/87.5$ to pure buys $0.544$. Entropy rewards <em>finishing the job</em> far more than <em>starting it</em> — which is exactly the behaviour you want from a criterion that is trying to build small trees.</p>
+    <p>Entropy falls <strong>slowly</strong> at first: $50/50 \to 40/60$ buys $0.029$ bits, $40/60 \to 25/75$ buys $0.160$, $12.5/87.5 \to$ pure buys $0.544$. Entropy rewards <em>finishing the job</em> far more than <em>starting it</em> — exactly what you want from a criterion trying to build small trees.</p>
   </div>
 
   <h2 id="problems">Guided problems</h2>
@@ -1014,26 +931,13 @@
     <div class="why"><strong>Why:</strong> conditional entropy is a <em>weighted</em> average. For split A, both children are $p = 0.2$, so $H(Y\mid W) = 0.5(0.721928) + 0.5(0.721928) = 0.721928$ and the gain is $1 - 0.721928 = 0.278$ bits. For split B, the pure child carries weight $2/100 = 0.02$ and contributes $0$, while the $98$-example child is still nearly balanced ($48$–$50$, $H \approx 0.9997$), contributing $0.98(0.9997) = 0.9797$; the gain is about $0.020$ bits. Split A wins by more than a factor of thirteen. The weighting is the entire reason — it is what stops "isolate one point" from scoring well.</div>
   </div>
 
-  <h2 id="recap">Recap</h2>
+    <h2 id="recap">Recap</h2>
 
-  <table class="center">
-    <thead><tr><th>Quantity</th><th>Formula</th><th>In tree language</th></tr></thead>
-    <tbody>
-      <tr><td>Surprisal</td><td>$\log_2\frac{1}{p}$</td><td>bits needed to name one outcome</td></tr>
-      <tr><td>Entropy</td><td>$H(Y) = \sum_y P(Y{=}y)\log\frac{1}{P(Y{=}y)}$</td><td>impurity of the labels at a node; $0$ = pure, $1$ = 50/50</td></tr>
-      <tr><td>Specific conditional entropy</td><td>$H(Y\mid W{=}\omega) = \sum_y P(y\mid\omega)\log\frac{1}{P(y\mid\omega)}$</td><td>impurity of <em>one</em> child</td></tr>
-      <tr><td>Conditional entropy</td><td>$H(Y\mid W) = \sum_\omega P(W{=}\omega)H(Y\mid W{=}\omega)$</td><td>size-weighted average impurity <em>after</em> the split</td></tr>
-      <tr><td>Mutual information</td><td>$I(Y;W) = H(Y) - H(Y\mid W)$</td><td>information gain of the split</td></tr>
-      <tr><td>BestAttribute</td><td>$\argmax_b I(Y;x_b) = \argmin_b H(Y\mid x_b)$</td><td>which question to ask at this node</td></tr>
-    </tbody>
-  </table>
+  <p>The quantities, in tree language: <strong>surprisal</strong> $\log_2\frac1p$ is the bits to name one outcome; <strong>entropy</strong> is the impurity of a node's labels; <strong>specific conditional entropy</strong> is the impurity of <em>one</em> child; <strong>conditional entropy</strong> is the size-weighted average impurity after the split; <strong>mutual information</strong> is the split's information gain; and <code>BestAttribute</code> picks which question to ask at this node. The formulas are in the Essentials box at the top.</p>
 
-  <ul>
-    <li><strong>$7 = \log_2 128$.</strong> Halving seven times gets you from $128$ candidates to $1$; the counting argument ($k$ bits distinguish at most $2^k$ outcomes) shows $6$ leaves you right at most half the time.</li>
-    <li><strong>$\sum_i p_i\log\frac1{p_i}$ is the expected number of questions</strong>, exactly achievable when all the $p_i$ are powers of two ($\tfrac14, \tfrac18\times 6 \Rightarrow \tfrac{11}{4}$), and a lower bound otherwise.</li>
+<ul>
     <li><strong>$0 \le H \le \log_2 k$</strong>, with $0$ iff deterministic (pure node) and $\log_2 k$ iff uniform (worst node).</li>
     <li><strong>$I(Y;W)\ge 0$ always</strong>, by concavity of $H$ plus Jensen; equality iff $Y \perp W$. <strong>But a single $H(Y\mid W{=}\omega)$ can exceed $H(Y)$.</strong></li>
-    <li><strong>$I$ is symmetric</strong>: $I(Y;W) = H(Y)+H(W)-H(Y,W) = I(W;Y)$.</li>
     <li><strong>The weights are not decoration.</strong> They are what stops a pure-but-empty child from winning.</li>
     <li>On the poll dataset the answer is $x_2$: $I = 0.548795$ bits versus $0.092359$ for $x_1$ and $0.048795$ for $x_3$ — a ranking training error could not produce.</li>
   </ul>

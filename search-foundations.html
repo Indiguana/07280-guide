@@ -12,26 +12,30 @@
 
   <div class="eyebrow">Part I · Chapter 1</div>
   <h1>Search problems, BFS, DFS &amp; UCS</h1>
-  <p class="subtitle">By the end of this page you can take any planning puzzle, write it down as a formal search problem, and hand-trace breadth-first, depth-first and uniform-cost search on it — including the frontier bookkeeping step that everyone gets wrong.</p>
+  <p class="subtitle">Write any planning puzzle down as a formal search problem, then hand-trace breadth-first, depth-first and uniform-cost search on it — including the frontier bookkeeping step that everyone gets wrong.</p>
 
   <div data-toc></div>
 
   <div class="box key">
-    <span class="label">Why this page exists</span>
-    <p>The Lecture 2 slides open with “Pre-reading: tree search vs graph search, BFS, DFS, UCS” and then spend four slides <em>reviewing</em> them before racing off to heuristics. If you never did the pre-reading, the rest of the search unit is built on sand. This chapter rebuilds the whole foundation from scratch, at the level of Russell &amp; Norvig chapter 3, and then walks the exact slide examples line by line.</p>
+    <span class="label">Essentials</span>
+    <p>How to write a planning puzzle down as a formal search problem, and how BFS, DFS and UCS differ from each other by a single line.</p>
+    <ul>
+      <li><strong>Search problem</strong> — a state space, $\text{Actions}(s)$, $\text{Result}(s,a)$, a step cost $c(s,a,s')$, a start state $s_0$, a goal test $\text{IsGoal}(s)$. A solution is a <em>plan</em> (an action sequence), never a state.</li>
+      <li><strong>Node</strong> — <code>state, parent, action, path-cost</code>, with $g(\text{child}) = g(\text{parent}) + c(\text{parent.state}, a, \text{child.state})$. The plan is recovered by following <code>parent</code> back from the goal.</li>
+      <li><strong>Graph vs tree</strong> — a state space graph holds each state once; a search tree holds one node per <em>path</em>, and is infinite whenever the graph has a cycle. Graph search = tree search + an explored set.</li>
+      <li><strong>The frontier discipline is the only difference</strong> — FIFO ⇒ BFS, LIFO ⇒ DFS, priority $g(n)$ ⇒ UCS, priority $g(n)+h(n)$ ⇒ A*.</li>
+      <li><strong>BFS</strong> — complete if $b$ is finite; optimal <em>only</em> when all step costs are equal; $O(b^d)$ time <em>and</em> $O(b^d)$ space.</li>
+      <li><strong>DFS</strong> — as tree search neither complete nor optimal; $O(b^m)$ time but only $O(bm)$ space.</li>
+      <li><strong>UCS</strong> — complete if every step cost $\ge \varepsilon &gt; 0$; optimal; $O\!\left(b^{1+\lfloor C^*/\varepsilon\rfloor}\right)$ time and space. It expands increasing <strong>cost contours</strong>, in every direction at once.</li>
+      <li><strong>UCS frontier rules</strong> — one node per state; a cheaper rediscovery <strong>replaces</strong> it (parent pointer included); a no-better one is <strong>discarded</strong>; an already-explored state is ignored. The goal test is <strong>on pop</strong>, not on generation.</li>
+      <li><strong>Abstraction</strong> — keep a variable in the state iff the goal test, the action set or the cost function reads it. That is what turns $120 \cdot 2^{30} \cdot 12^2 \cdot 4$ into $120$.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
   </div>
 
   <h2 id="what-is-a-search-problem">1. What a search problem actually is</h2>
 
-  <p>Start concrete. You are Pacman. You are standing somewhere in a maze. You want to reach a dot in the far corner. You cannot see the whole maze at once and you certainly cannot list every possible future — but at every moment you <em>can</em> answer three local questions:</p>
-
-  <ul>
-    <li>Where am I right now?</li>
-    <li>What moves are legal from here?</li>
-    <li>If I take one of those moves, where do I end up, and what did it cost me?</li>
-  </ul>
-
-  <p>That is it. Every search problem in this course is nothing more than those three questions, written down formally, plus a way to recognise when you're done.</p>
+  <p>An agent can always answer three local questions: where am I, what moves are legal here, and if I take one, where do I land and what did it cost? A search problem is those three, written down formally, plus a goal test.</p>
 
   <div class="box defn">
     <span class="label">Definition — search problem</span>
@@ -46,34 +50,22 @@
     <p>A <strong>solution</strong> is a sequence of actions — a <strong>plan</strong> — which transforms the start state into a goal state. An <strong>optimal solution</strong> is one of minimum total cost.</p>
   </div>
 
-  <p>Read the symbols out loud once, because they will appear on every later page:</p>
+  <p>One symbol to read carefully: $\text{Result}(s,a)$ is a <em>function</em> — one state and one action in, one state out, deterministic. (A random ghost breaks this and needs <a href="adversarial-search.html">expectimax</a>.)</p>
 
-  <ul>
-    <li>$s$ and $s'$ are <em>states</em>, not numbers. In a maze, $s$ might be the pair “(row 3, column 7)”.</li>
-    <li>$a$ is one action, e.g. <code>North</code>. $\text{Actions}(s)$ is the whole legal menu at $s$; in the slide's little picture that menu is $\{\mathrm{N}, \mathrm{E}\}$, because walls block the other two.</li>
-    <li>$\text{Result}(s,a)$ is a <em>function</em>: one state in, one action in, one state out. Deterministic. (Chapter 3 breaks this when we add a random ghost and need <a href="adversarial-search.html">expectimax</a>.)</li>
-    <li>$c(s,a,s')$ takes all three arguments because the same action can cost different amounts from different places — walking north over gravel is not walking north over ice. In the slide's picture every step costs $1$.</li>
-  </ul>
-
-  <p>Notice what is <em>not</em> in the definition: there is no map, no picture, no global view. A search algorithm is only ever allowed to call $\text{Actions}$, $\text{Result}$, $c$, and $\text{IsGoal}$. Everything the algorithm knows, it discovered by poking those four functions.</p>
-
-  <div class="box analogy">
-    <span class="label">Analogy</span>
-    <p>You are in a pitch-dark building with a phone that can answer exactly two queries: “what doors are in this room?” and “if I go through door <em>k</em>, which room am I in and how many steps did it take?”. Search algorithms are strategies for exploring that building with only those queries. <strong>Where the analogy breaks:</strong> unlike you, the algorithm can teleport — it keeps a list of half-explored rooms and may jump back to any of them at no cost. Real robots pay to backtrack; our search algorithms do not, because they are planning <em>on a model</em> before moving at all.</p>
-  </div>
+  <p>Notice what is <em>not</em> in the definition: no map, no global view. A search algorithm may only call $\text{Actions}$, $\text{Result}$, $c$ and $\text{IsGoal}$; everything it knows, it discovered by poking those four functions.</p>
 
   <h3>A solution is a plan, not a state</h3>
 
-  <p>This trips people up on exams. If the question asks “what is the solution?”, the answer is <strong>an action sequence</strong> — <code>[North, North, East, East]</code> — or equivalently the path of states it induces, <code>S → A → C → G</code>. The answer is never just “the goal state”; we already knew what the goal looked like. The whole point was the route.</p>
+  <p>Asked “what is the solution?”, the answer is <strong>an action sequence</strong> — <code>[North, North, East, East]</code> — or the path of states it induces, <code>S → A → C → G</code>. Never just the goal state.</p>
 
   <div class="box warn">
     <span class="label">Common mistake</span>
-    <p>“The answer is $G$.” No. $G$ was given to you in the goal test. Search is the process of recovering the <em>plan</em>, and later in this chapter you will see that we recover it by following <em>parent pointers</em> back from the goal node, not by remembering paths as we go.</p>
+    <p>“The answer is $G$.” No — $G$ was given to you in the goal test. Search recovers the <em>plan</em>, and we recover it by following <em>parent pointers</em> back from the goal node, not by remembering paths as we go.</p>
   </div>
 
   <h2 id="how-big-is-the-state-space">2. World states, search states, and how big the space is</h2>
 
-  <p>Here is the slide that looks like arithmetic and is really about modelling. Pacman in a small maze:</p>
+  <p>This slide looks like arithmetic and is really about modelling. Pacman in a small maze:</p>
 
   <div class="box example">
     <span class="label">Example — the Pacman state space (slide, verbatim)</span>
@@ -96,50 +88,27 @@
     </div>
   </div>
 
-  <p>Every symbol, named:</p>
-
-  <ul>
-    <li>$p$ — Pacman's position, one of the 120 non-wall squares.</li>
-    <li>$f_i$ — a <em>boolean</em>: is dot $i$ still on the board? There are 30 dots, so $2^{30}$ combinations of eaten/uneaten. (This is why it's $2^{30}$ and not $30$: the 30 is a <em>count of bits</em>, not a count of states.)</li>
-    <li>$g_1, g_2$ — the positions of the two ghosts. Each ghost can be in any of 12 squares, so $12 \times 12 = 12^2$.</li>
-    <li>$d$ — the direction Pacman is facing, 4 possibilities.</li>
-  </ul>
-
-  <p>Multiply: $120 \cdot 2^{30} \cdot 144 \cdot 4 \approx 7.4 \times 10^{13}$. Seventy-four trillion. No computer is going to enumerate that.</p>
+  <p>$p$ is Pacman's position, one of 120 non-wall squares. $f_i$ is a <em>boolean</em> — is dot $i$ still there? — so 30 dots give $2^{30}$ combinations: the 30 is a <em>count of bits</em>, not a count of states. $g_1, g_2$ are the ghosts' positions, $12 \times 12 = 12^2$; $d$ is the facing, 4 values. Multiply: $120 \cdot 2^{30} \cdot 144 \cdot 4 \approx 7.4 \times 10^{13}$, seventy-four trillion.</p>
 
   <h3>Why the representation shrinks when the task shrinks</h3>
 
-  <p>The magic is in the second and third rows. For the task “eat the dot in the top-left corner,” the state is just $(p)$ — <strong>120 states</strong>. We threw away 99.9999% of the world. Why is that legal?</p>
-
   <div class="box key">
-    <span class="label">Key idea — a state must record exactly what affects the future</span>
-    <p>A variable belongs in your state representation if and only if (a) it changes as you act, and (b) the rest of the problem — legal actions, costs, or the goal test — depends on it. Anything else is decoration and you must drop it, because every bit you keep multiplies the size of the space by 2.</p>
+    <span class="label">Key idea — a state records exactly what affects the future</span>
+    <p>A variable belongs in your state representation if and only if (a) it changes as you act, and (b) the legal actions, the costs or the goal test depend on it. Anything else is decoration and you must drop it, because every bit you keep doubles the size of the space.</p>
   </div>
 
-  <p>Apply the test to “eat the top-left dot”:</p>
+  <p>For “eat the top-left dot” the goal test reads only Pacman's square. Ghosts do not block movement and dying is not modelled, so they go — factor $144$. Which other dots are eaten changes nothing we can do next, so the food bits go — factor $2^{30}$. Legal moves ignore the facing — factor $4$. State $= (p)$, <strong>120 states</strong>.</p>
 
-  <ul>
-    <li>Ghost positions? The goal test is “is Pacman standing on the top-left square?”. Ghosts don't block movement and we're not modelling dying. Drop them — factor of $144$ gone.</li>
-    <li>Which dots are eaten? The goal only mentions one specific square. Whether we happened to swallow other dots on the way changes nothing about what we can do next or when we're finished. Drop it — factor of $2^{30}$ gone.</li>
-    <li>Facing direction? Legal moves don't depend on it (Pacman can reverse freely) and the goal doesn't mention it. Drop it — factor of $4$ gone.</li>
-    <li>Position? Obviously keep it. $120$ states.</li>
-  </ul>
-
-  <p>Now “eat <em>all</em> dots”. The goal test is “are all 30 $f_i$ false?”. That mentions the food, so the food must stay in the state: $120 \cdot 2^{30} \approx 1.3 \times 10^{11}$. Ghosts and facing are still irrelevant, so they still go.</p>
-
-  <div class="box intuition">
-    <span class="label">Intuition</span>
-    <p>The state is the <em>memo you would leave yourself</em> if you were teleported out of the game and back in an hour later, containing everything you'd need to carry on optimally. For “reach the corner,” the memo says only “you are at square 47.” For “eat everything,” it must also say which dots are already gone — otherwise you'd wander back over empty squares forever.</p>
-  </div>
+  <p>For “eat <em>all</em> dots” the goal test is “are all 30 $f_i$ false?”, which mentions the food, so the food stays: $120 \cdot 2^{30} \approx 1.3 \times 10^{11}$. Ghosts and facing are still never read.</p>
 
   <h3>World state vs. search state</h3>
 
   <div class="box defn">
     <span class="label">Definition — abstraction</span>
-    <p>A <strong>world state</strong> contains every detail of the actual environment (pixel positions, score, which frame of the animation the ghost is on). A <strong>search state</strong> contains only the details our search problem needs. Choosing the search state is called <strong>abstraction</strong>, and the slide's phrase for it is “vertices are <em>(abstracted)</em> world configurations.”</p>
+    <p>A <strong>world state</strong> contains every detail of the environment; a <strong>search state</strong> contains only what the search problem needs. Choosing it is <strong>abstraction</strong> — the slide's “vertices are <em>(abstracted)</em> world configurations.” An abstraction must be <strong>sound</strong>: every plan that works in the abstract problem must correspond to one that works in the real one.</p>
   </div>
 
-  <p>Abstraction is the single highest-leverage decision in applied search. The algorithms in this chapter are fixed and about ten lines long; the difference between a solver that runs in a millisecond and one that never finishes is almost always the state representation. A good abstraction must be <strong>sound</strong>: every plan that works in the abstract problem must correspond to a plan that works in the real one.</p>
+  <p>Abstraction is the highest-leverage decision in applied search: the algorithms are fixed and ten lines long, so the gap between a millisecond and never finishing is almost always the representation.</p>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>Sizing three Pacman variants</div>
@@ -194,7 +163,7 @@
     <p>The <strong>search tree</strong> is what an algorithm actually builds. Its root is the start state. Each node corresponds to a <em>path</em> from the start, and its children are the results of the legal actions at the end of that path. <strong>A state appears once in the graph but once per path in the tree.</strong></p>
   </div>
 
-  <p>The relationship is: <em>the search tree is the graph unrolled along every path</em>. If two different routes reach state $B$, the graph has one $B$ and the tree has two nodes both labelled $B$ — different nodes, same state, different histories and (usually) different path costs.</p>
+  <p>The search tree is the graph <em>unrolled along every path</em>: if two routes reach $B$, the graph has one $B$ and the tree has two nodes labelled $B$ — same state, different histories, usually different path costs.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 · The graph on the left unrolls into the tree on the right</div>
@@ -262,7 +231,7 @@
 
   <div class="box key">
     <span class="label">Key idea</span>
-    <p>Tree nodes are <em>paths</em>; graph vertices are <em>states</em>. The tree is infinite whenever the graph contains a cycle, even if the graph has three vertices. Everything called “graph search” below is just “tree search plus a memory of which states we already expanded.”</p>
+    <p>Tree nodes are <em>paths</em>; graph vertices are <em>states</em>. The tree is infinite whenever the graph has a cycle, even with three vertices. “Graph search” is just tree search plus a memory of which states we already expanded.</p>
   </div>
 
   <div class="quiz" data-answer="2">
@@ -275,18 +244,13 @@
 
   <h2 id="the-generic-search-algorithm">4. The generic search algorithm</h2>
 
-  <p>Every algorithm on this page — and greedy search and A* on the <a href="informed-search.html">next page</a> — is the same seven lines with one word changed. Learn the skeleton once.</p>
+  <p>Every algorithm on this page — and greedy search and A* on the <a href="informed-search.html">next page</a> — is the same seven lines with one word changed.</p>
 
   <h3>The frontier</h3>
 
   <div class="box defn">
     <span class="label">Definition — frontier and explored set</span>
-    <p>The <strong>frontier</strong> (also called the fringe or open list) is the set of nodes that have been <em>generated</em> but not yet <em>expanded</em> — the rim of what we know. The <strong>explored set</strong> (closed list) is the set of states we have already expanded. To <strong>expand</strong> a node means: take its state, call $\text{Actions}$ and $\text{Result}$, and put the resulting children on the frontier.</p>
-  </div>
-
-  <div class="box analogy">
-    <span class="label">Analogy</span>
-    <p>Drop ink on paper. The <strong>explored set</strong> is the dried blot; the <strong>frontier</strong> is the wet rim creeping outward. All three algorithms below are the same blot — they differ only in which part of the rim gets to creep next. BFS creeps evenly; DFS shoots one tendril as far as it can; UCS creeps fastest where the paper is thinnest (cheapest).</p>
+    <p>The <strong>frontier</strong> (fringe, open list) holds the nodes that have been <em>generated</em> but not yet <em>expanded</em> — the rim of what we know. The <strong>explored set</strong> (closed list) holds the states already expanded. To <strong>expand</strong> a node: take its state, call $\text{Actions}$ and $\text{Result}$, and put the children on the frontier.</p>
   </div>
 
   <h3>Tree search</h3>
@@ -316,11 +280,11 @@
         expand the chosen node, adding the resulting nodes to the frontier
             only if not already in the frontier or the explored set</code></pre>
 
-  <p>Two lines added, one enormous consequence: the tree is now pruned so that each state is expanded at most once, which makes the search finite whenever the state space is finite. The cost is memory — the explored set can grow to the size of the whole state space.</p>
+  <p>Two lines added, one enormous consequence: each state is expanded at most once, so the search is finite whenever the state space is. The cost is memory — the explored set can grow to the size of the state space.</p>
 
   <div class="box warn">
     <span class="label">Common mistake</span>
-    <p>“Graph search is strictly better, always use it.” Not quite. Graph search needs $O(|S|)$ memory for the explored set, which kills it on huge spaces (that $10^{13}$-vertex Pacman graph). And the “only if not already in the frontier” clause is the subtle one: for UCS and A* you may <em>not</em> simply discard a duplicate — you must compare costs and possibly <strong>replace</strong>. That replacement step is §10 of this page, and getting it wrong is the single most common error on this material.</p>
+    <p>“Graph search is strictly better, always use it.” Not quite. It needs $O(|S|)$ memory for the explored set, which kills it on huge spaces (that $10^{13}$-vertex Pacman graph). And the “only if not already in the frontier” clause is the subtle one: for UCS and A* you may <em>not</em> simply discard a duplicate — you must compare costs and possibly <strong>replace</strong> (§10). Getting that wrong is the most common error on this material.</p>
   </div>
 
   <h3>What a node actually stores</h3>
@@ -343,90 +307,68 @@
 
   $$g(\text{child}) \;=\; g(\text{parent}) \;+\; c(\text{parent.state},\, a,\, \text{child.state}).$$
 
-  <p>In words: <em>the cost of a path is the cost of its prefix plus the cost of the one new step.</em> $g(n)$ is often called the <strong>backward cost</strong> — what you have already spent to arrive at $n$ — in contrast to the <em>forward</em> estimate $h(n)$ you meet on the <a href="informed-search.html">next page</a>.</p>
-
-  <p>Why store <code>parent</code> instead of the whole path in every node? Memory. A million frontier nodes each holding a 40-step list is 40 million entries; a million nodes each holding one pointer is a million entries. To get the plan back:</p>
+  <p>In words: <em>a path costs its prefix plus the one new step.</em> $g(n)$ is the <strong>backward cost</strong> — what you have already spent — as against the <em>forward</em> estimate $h(n)$ on the <a href="informed-search.html">next page</a>. We store <code>parent</code> rather than whole paths to save memory.</p>
 
   <div class="box key">
     <span class="label">Key idea — extracting the solution</span>
-    <p>Start at the goal node. Repeatedly follow <code>parent</code>, collecting the <code>action</code> field at each hop, until you reach the node whose parent is <code>null</code> (the start). Reverse the collected list. That's your plan.</p>
+    <p>Start at the goal node. Repeatedly follow <code>parent</code>, collecting the <code>action</code> field at each hop, until you reach the node whose parent is <code>null</code> (the start). Reverse the collected list. That is your plan.</p>
   </div>
 
   <h2 id="breadth-first-search">5. Breadth-first search</h2>
 
   <p><strong>Strategy: expand a shallowest node first. Implementation: the frontier is a FIFO queue.</strong></p>
 
-  <p>FIFO = first in, first out. New nodes join the back of the queue; we always pop from the front. Because a node generated at depth $k$ always enters the queue after every node of depth $k$ or less that was generated before it, the queue drains depth 0, then all of depth 1, then all of depth 2… BFS sweeps the tree in complete <strong>tiers</strong>.</p>
-
-  <div class="box analogy">
-    <span class="label">Analogy</span>
-    <p>A ripple on a pond. At time $k$ the wave front is exactly the set of states reachable in $k$ steps. <strong>Where it breaks:</strong> a real ripple travels at a speed set by physics — by <em>distance</em>. BFS's ripple travels by <em>number of actions</em>. If some actions cost 100 and others cost 1, BFS's ripple is no longer a circle in cost-space, and that discrepancy is exactly the reason UCS exists.</p>
-  </div>
+  <p>FIFO = first in, first out: children join the back, we pop from the front, so the queue drains depth 0, then all of depth 1, then all of depth 2 — BFS sweeps the tree in complete <strong>tiers</strong>. It is a ripple on a pond, except that the ripple travels by <em>number of actions</em>, not by cost, which is exactly why UCS exists.</p>
 
   <h4>Properties, with the reasoning</h4>
 
   <p>Write $b$ for the <strong>branching factor</strong> (max children per node), $d$ for the <strong>depth of the shallowest goal</strong>, $m$ for the <strong>maximum depth of the tree</strong> (possibly $\infty$).</p>
 
   <ul>
-    <li><strong>Complete?</strong> Yes, if $b$ is finite. Reason: any goal sits at some finite depth $d$; BFS finishes tier $d-1$ in finite time (each tier is finite because $b$ is), so it must reach the goal.</li>
-    <li><strong>Optimal?</strong> Only when all step costs are equal (e.g. all $1$). Reason: BFS returns the goal with the fewest <em>actions</em>. If every action costs the same $c$, fewest actions = cheapest, so it's optimal. If costs differ, a 2-step path of cost $100$ is returned over a 3-step path of cost $3$. <em>Not</em> optimal in general.</li>
-    <li><strong>Time:</strong> $O(b^d)$. Reason: it generates every node down to depth $d$, and $1 + b + b^2 + \dots + b^d = \dfrac{b^{d+1}-1}{b-1} = O(b^d)$ — the last tier dominates the sum, so the whole search costs the same order as its final tier.</li>
-    <li><strong>Space:</strong> $O(b^d)$, and this is the killer. Reason: at the moment BFS is about to expand the first node of tier $d$, the frontier contains essentially all of tier $d$ — that's $b^d$ nodes <em>held in memory at once</em>.</li>
+    <li><strong>Complete?</strong> Yes, if $b$ is finite — a goal sits at some finite depth $d$, every tier is finite, so BFS reaches it.</li>
+    <li><strong>Optimal?</strong> Only when all step costs are equal. BFS returns the goal with the fewest <em>actions</em>; if every action costs the same, fewest actions = cheapest. With unequal costs it returns a 2-step path of cost $100$ over a 3-step path of cost $3$.</li>
+    <li><strong>Time:</strong> $O(b^d)$ — it generates every node down to depth $d$, and $1 + b + \dots + b^d = \dfrac{b^{d+1}-1}{b-1} = O(b^d)$: the last tier dominates the sum.</li>
+    <li><strong>Space:</strong> $O(b^d)$, and this is the killer — just before expanding the first node of tier $d$, the frontier holds essentially all of tier $d$: $b^d$ nodes <em>in memory at once</em>.</li>
   </ul>
 
   <div class="box example">
     <span class="label">Example — why $O(b^d)$ space is fatal</span>
-    <p>Take $b=10$, one million nodes generated per second, 100 bytes per node. At $d=12$: time $\approx 10^{12}$ nodes $= 13$ days; memory $\approx 10^{14}$ bytes $= 100$ terabytes. BFS runs out of RAM long before it runs out of patience. Remember this when you meet <a href="adversarial-search.html">iterative deepening in alpha-beta</a>: memory, not time, is usually what stops you.</p>
+    <p>$b=10$, one million nodes per second, 100 bytes per node, $d=12$: time $\approx 10^{12}$ nodes $= 13$ days; memory $\approx 10^{14}$ bytes $= 100$ terabytes. BFS runs out of RAM long before it runs out of patience. Remember this when you meet <a href="adversarial-search.html">iterative deepening in alpha-beta</a>: memory, not time, is usually what stops you.</p>
   </div>
 
   <h2 id="depth-first-search">6. Depth-first search</h2>
 
   <p><strong>Strategy: expand a deepest node first. Implementation: the frontier is a LIFO stack.</strong></p>
 
-  <p>Change one word — FIFO becomes LIFO — and the behaviour inverts. We push a node's children on top of the stack and immediately pop one of them, so the search plunges down one branch until it hits a dead end, then backs up one level and tries the next sibling.</p>
-
-  <div class="box analogy">
-    <span class="label">Analogy</span>
-    <p>The maze-walker with a piece of chalk: always take the leftmost unexplored door; when you hit a dead end, walk back to the last junction with an unexplored door and take that. You need chalk for the <em>current path</em> only, not for the whole maze — which is precisely DFS's $O(bm)$ memory advantage.</p>
-  </div>
+  <p>Change one word — FIFO becomes LIFO — and the behaviour inverts: children go on top of the stack and one is popped immediately, so the search plunges down a branch until it dead-ends, then backs up one level. Like a maze-walker with chalk, you mark only the <em>current path</em> — DFS's $O(bm)$ memory advantage.</p>
 
   <h4>Properties, with the reasoning</h4>
 
   <ul>
-    <li><strong>Complete?</strong> <em>Tree-search DFS: no.</em> One cycle in the graph and DFS walks $A, B, A, B, \dots$ forever, never noticing. Even without cycles, an infinitely deep branch traps it. <em>Graph-search DFS on a finite space: yes</em> — the explored set forbids revisiting states, so it must terminate.</li>
-    <li><strong>Optimal?</strong> No, not in any sense. It returns the first goal it stumbles into, which may be arbitrarily deep and arbitrarily expensive.</li>
-    <li><strong>Time:</strong> $O(b^m)$. Reason: in the worst case it explores the entire tree down to its maximum depth $m$ before finding anything. When $m \gg d$ this is dramatically worse than BFS; when the tree is shallow and goals are dense it can be far better in practice.</li>
-    <li><strong>Space:</strong> $O(bm)$ — <strong>linear</strong>. Reason: the stack only ever holds the nodes on the current root-to-leaf path ($m$ of them) plus their unexpanded siblings ($b-1$ each). Nothing else is retained. This is the entire reason anyone still uses DFS.</li>
+    <li><strong>Complete?</strong> <em>Tree search: no</em> — one cycle and DFS walks $A, B, A, B, \dots$ forever, and an infinitely deep branch traps it too. <em>Graph search on a finite space: yes</em>, because the explored set forbids revisiting.</li>
+    <li><strong>Optimal?</strong> No, in no sense. It returns the first goal it stumbles into, however deep and expensive.</li>
+    <li><strong>Time:</strong> $O(b^m)$ — in the worst case it explores the whole tree down to maximum depth $m$. When $m \gg d$ that is far worse than BFS; when goals are dense it can be far better in practice.</li>
+    <li><strong>Space:</strong> $O(bm)$ — <strong>linear</strong>: the stack holds only the current root-to-leaf path ($m$ nodes) plus their unexpanded siblings ($b-1$ each). This is the entire reason anyone still uses DFS.</li>
   </ul>
 
   <div class="box intuition">
     <span class="label">Intuition — the trade in one line</span>
-    <p>BFS buys optimality-in-steps with exponential memory. DFS buys linear memory by giving up both optimality and (in cyclic spaces) completeness. Neither is satisfactory, which is why the next two sections exist: iterative deepening buys back BFS's guarantees at DFS's memory, and UCS buys back true cost-optimality.</p>
+    <p>BFS buys optimality-in-steps with exponential memory; DFS buys linear memory by giving up optimality and (in cyclic spaces) completeness. Iterative deepening buys back BFS's guarantees at DFS's memory; UCS buys back true cost-optimality.</p>
   </div>
 
   <h2 id="iterative-deepening">7. Iterative deepening <span class="pill">beyond syllabus</span></h2>
 
-  <p class="tiny muted">Not in the Lecture 2 slides — but it is standard pre-reading material (R&amp;N §3.4.5) and <a href="adversarial-search.html">alpha-beta pruning</a> leans on it for move ordering, so here it is, briefly.</p>
+  <p class="tiny muted">Not in the Lecture 2 slides, but standard pre-reading (R&amp;N §3.4.5), and <a href="adversarial-search.html">alpha-beta</a> leans on it for move ordering.</p>
 
-  <p>Run a depth-limited DFS with limit $0$. No goal? Run it again with limit $1$. Then $2$. Then $3$. Stop at the first limit that finds a goal.</p>
+  <p>Run a depth-limited DFS with limit $0$; no goal, run it again with limit $1$, then $2$, stopping at the first limit that finds a goal.</p>
 
-<pre><code>function ITERATIVE-DEEPENING-SEARCH(problem) returns a solution, or failure
-    for limit = 0, 1, 2, ... do
-        result &lt;- DEPTH-LIMITED-SEARCH(problem, limit)
-        if result != cutoff then return result</code></pre>
-
-  <p>Your first reaction should be that re-searching from scratch every round is wasteful. It isn't, and the arithmetic is worth seeing. Nodes generated by IDS down to depth $d$:</p>
+  <p>Re-searching from scratch every round sounds wasteful. It is not, and the arithmetic is worth seeing. Nodes generated by IDS down to depth $d$:</p>
 
   $$N_{\text{IDS}} = (d+1)b^0 + d\,b^1 + (d-1)b^2 + \dots + 1\cdot b^d,$$
 
-  <p>because the root is regenerated $d+1$ times, tier 1 is regenerated $d$ times, and the bottom tier exactly once. Compare with BFS, which generates $N_{\text{BFS}} = b^0 + b^1 + \dots + b^d$. For $b = 10, d = 5$: $N_{\text{IDS}} = 123{,}456$ versus $N_{\text{BFS}} = 111{,}111$ — about 11% more work. In general the overhead factor tends to $\dfrac{b}{b-1}$, which for $b=10$ is $1.11$.</p>
+  <p>because the root is regenerated $d+1$ times, tier 1 $d$ times, and the bottom tier exactly once. BFS generates $N_{\text{BFS}} = b^0 + b^1 + \dots + b^d$. For $b = 10, d = 5$: $N_{\text{IDS}} = 123{,}456$ versus $N_{\text{BFS}} = 111{,}111$ — about 11% more work, and in general the overhead factor tends to $\dfrac{b}{b-1}$.</p>
 
-  <p>The reason is the same fact that made BFS's time $O(b^d)$: the bottom tier dominates, and IDS generates the bottom tier only once. So IDS is <strong>complete</strong>, <strong>optimal when step costs are uniform</strong>, runs in $O(b^d)$ time, and uses only $O(bd)$ memory. It is the standard choice for large uniform-cost spaces of unknown depth.</p>
-
-  <div class="box analogy">
-    <span class="label">Analogy</span>
-    <p>A dog on an extendable leash. Let out one notch, let it sniff everywhere it can reach, reel it in, let out another notch. You re-walk the ground near the house many times — but the ground near the house is a vanishing fraction of the ground at full extension.</p>
-  </div>
+  <p>The bottom tier dominates, and IDS generates it only once. So IDS is <strong>complete</strong>, <strong>optimal when step costs are uniform</strong>, $O(b^d)$ time and only $O(bd)$ memory — the standard choice for large uniform-cost spaces of unknown depth.</p>
 
   <h2 id="uniform-cost-search">8. Uniform-cost search</h2>
 
@@ -457,30 +399,27 @@
             else if the child is already in the frontier with higher g(n) then
                 replace that frontier node with child</code></pre>
 
-  <p>Three lines deserve a paragraph each.</p>
+  <p>Three lines deserve a sentence each.</p>
 
-  <h4>“choose a node and remove it from the frontier”</h4>
-  <p>Read this as <em>pop the node with the smallest $g$</em>. Ties can be broken arbitrarily; different tie-breaking gives different (equally optimal) answers.</p>
-
-  <h4>“if the node contains a goal state then return”</h4>
-  <p>The goal test happens on <strong>pop</strong>, not on generation. This is not a stylistic choice — it is required for optimality. A goal that is <em>generated</em> cheaply may still be sitting on the frontier with a bad $g$ that a later, better path will improve. Only when a goal node reaches the front of the priority queue do we know nothing cheaper remains.</p>
-
-  <h4>“else if the child is already in the frontier with higher $g(n)$ then replace”</h4>
-  <p>This is the <strong>decrease-key</strong> step, the one the walkthrough in §10 is built around. If we rediscover a frontier state by a cheaper route, we must upgrade its entry. If the new route is <em>worse</em>, we discard the new node and keep the old entry. And if the state is already in the <em>explored</em> set, we do nothing at all — §13 proves that this is safe because a popped node's $g$ is already optimal.</p>
+  <ul>
+    <li><strong>“choose a node and remove it from the frontier”</strong> — pop the node with the smallest $g$. Ties break arbitrarily, giving different but equally optimal answers.</li>
+    <li><strong>“if the node contains a goal state then return”</strong> — the goal test is on <strong>pop</strong>, and this is required for optimality, not stylistic: a goal generated cheaply may still sit on the frontier with a bad $g$ that a later path improves. Only at the front of the queue do we know nothing cheaper remains.</li>
+    <li><strong>“else if the child is already in the frontier with higher $g(n)$ then replace”</strong> — the <strong>decrease-key</strong> step of §10: rediscover a frontier state more cheaply and you must upgrade its entry; if the new route is worse, discard it. If the state is already <em>explored</em>, do nothing — safe by §13, because a popped node's $g$ is already optimal.</li>
+  </ul>
 
   <h4>Properties, with the reasoning</h4>
 
   <p>Let $C^*$ be the cost of the optimal solution and $\varepsilon > 0$ a lower bound on any single step cost.</p>
 
   <ul>
-    <li><strong>Complete?</strong> Yes, provided every step cost is at least some $\varepsilon > 0$ and a finite-cost solution exists. Reason: each expansion raises the contour by at least $\varepsilon$, so after finitely many expansions the frontier's minimum $g$ exceeds $C^*$ — impossible unless the goal was popped first. The $\varepsilon$ condition is not pedantry: with zero-cost actions UCS can loop forever inside a zero-cost cycle, expanding infinitely many nodes at $g = 0$.</li>
+    <li><strong>Complete?</strong> Yes, provided every step cost is at least some $\varepsilon &gt; 0$ and a finite-cost solution exists: each expansion raises the contour by at least $\varepsilon$, so after finitely many expansions the frontier minimum would exceed $C^*$ — impossible unless the goal was popped first. The $\varepsilon$ is not pedantry: with zero-cost actions UCS can loop forever at $g = 0$.</li>
     <li><strong>Optimal?</strong> Yes — see the proof in §13.</li>
-    <li><strong>Time and space:</strong> $O\!\left(b^{\,1 + \lfloor C^*/\varepsilon \rfloor}\right)$. Reason: UCS expands every node whose path cost is less than $C^*$. The cheapest such node is at least $\varepsilon$ per step, so the deepest one you could be forced to expand sits at depth about $C^*/\varepsilon$ — an “effective depth” that replaces BFS's $d$. When every step costs exactly $1$, $C^*/\varepsilon = d$ and the bound collapses back to BFS's $O(b^{d+1})$.</li>
+    <li><strong>Time and space:</strong> $O\!\left(b^{\,1 + \lfloor C^*/\varepsilon \rfloor}\right)$, because UCS expands every node whose path cost is less than $C^*$, and at $\varepsilon$ per step the deepest such node sits at depth about $C^*/\varepsilon$ — an “effective depth” replacing BFS's $d$. With unit costs $C^*/\varepsilon = d$ and the bound collapses back to $O(b^{d+1})$.</li>
   </ul>
 
   <div class="box warn">
     <span class="label">Common mistake</span>
-    <p>Writing UCS's complexity as $O(b^d)$. The depth of the goal is irrelevant to UCS; what matters is how many <em>cheap</em> nodes exist. A goal 2 steps away costing $1000$ is found only after UCS has expanded every node reachable for less than $1000$ — which may be millions of nodes at depth 500.</p>
+    <p>Writing UCS's complexity as $O(b^d)$. The goal's depth is irrelevant to UCS; what matters is how many <em>cheap</em> nodes exist. A goal 2 steps away costing $1000$ is found only after every node reachable for less than $1000$ has been expanded — possibly millions, at depth 500.</p>
   </div>
 
   <div class="quiz" data-answer="0">
@@ -493,7 +432,7 @@
 
   <h2 id="watch-it-run">9. Watch the frontier move</h2>
 
-  <p>Everything above is bookkeeping, and bookkeeping is best learned by watching it. Press <strong>Step</strong> and follow three columns: what got popped, what's on the frontier, and what's already explored. Then switch algorithms and run the same graph again.</p>
+  <p>Press <strong>Step</strong> and follow three columns: what got popped, what is on the frontier, and what is already explored. Then switch algorithm and run the same graph again.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 2 · Interactive — BFS vs DFS vs UCS on one graph</div>
@@ -673,15 +612,15 @@
   <p>Now run the pseudocode's last two lines against this child:</p>
 
   <ol>
-    <li><em>“if the child state is not already in the frontier or explored set”</em> — $D$ <strong>is</strong> already in the frontier (as <code>S-A-C-D</code> with $g = 7$). So we do not simply add it.</li>
-    <li><em>“else if the child is already in the frontier with higher $g(n)$, replace that frontier node with child”</em> — the frontier's entry has $g = 7$, our new child has $g = 5$, and $5 &lt; 7$. So we <strong>throw away the old node entirely</strong> and put the new one in its place.</li>
+    <li><em>“if the child state is not already in the frontier or explored set”</em> — $D$ <strong>is</strong> already in the frontier, as <code>S-A-C-D</code> with $g = 7$, so we do not simply add it.</li>
+    <li><em>“else if the child is already in the frontier with higher $g(n)$, replace that frontier node with child”</em> — the entry has $g = 7$, our new child has $g = 5$, and $5 &lt; 7$, so we <strong>throw the old node away entirely</strong> and put the new one in its place.</li>
   </ol>
 
-  <p>After the replacement the frontier holds exactly one node for state $D$: <code>S-B-D</code> with $g = 5$. The node <code>S-A-C-D</code> no longer exists anywhere. That is why the slide writes <code>S-B-D: 5</code> on the line below <code>S-A-C-D: 7</code> and annotates it “Replaced by better path to D!”.</p>
+  <p>The frontier now holds exactly one node for state $D$: <code>S-B-D</code> with $g = 5$, and <code>S-A-C-D</code> no longer exists anywhere. Hence the slide's annotation “Replaced by better path to D!”.</p>
 
   <div class="box key">
     <span class="label">Key idea — one node per state on the frontier</span>
-    <p>In graph search, a state gets <strong>at most one</strong> frontier node at a time, and that node always carries the cheapest path found <em>so far</em> to the state. Rediscovering the state either upgrades that node (new $g$ smaller) or is discarded (new $g$ larger or equal). The upgrade also rewrites the node's <code>parent</code> pointer — which is how the final answer comes out as $S\!-\!B\!-\!D\!-\!G$ and not $S\!-\!A\!-\!C\!-\!D\!-\!G$.</p>
+    <p>A state gets <strong>at most one</strong> frontier node, and it carries the cheapest path found <em>so far</em>. Rediscovery either upgrades that node (new $g$ smaller) or is discarded (new $g$ no smaller). The upgrade also rewrites the <code>parent</code> pointer — which is how the final answer comes out as $S\!-\!B\!-\!D\!-\!G$ and not $S\!-\!A\!-\!C\!-\!D\!-\!G$.</p>
   </div>
 
   <div class="box warn">
@@ -693,9 +632,9 @@
     </ol>
   </div>
 
-  <p>Why is the replacement safe — why can't the discarded 7-path have been the right one? Because $D$'s <em>future</em> cost is independent of how we got to $D$. The remaining journey from $D$ to the goal costs whatever it costs; the only thing that differs between the two nodes is the prefix, and $5 &lt; 7$. Any completion of the expensive prefix is beaten, edge for edge, by the same completion of the cheap one. This “the past doesn't constrain the future” property is the <strong>optimal substructure</strong> that makes the whole method work — and it fails the moment costs depend on history (e.g. a toll that is charged only if you passed through $C$), which is your cue that the offending history belongs in the state.</p>
+  <p>Why is the replacement safe? $D$'s <em>future</em> cost does not depend on how we reached $D$, so the only difference between the two nodes is the prefix, and $5 &lt; 7$: any completion of the expensive prefix is beaten, edge for edge, by the same completion of the cheap one. That <strong>optimal substructure</strong> fails as soon as costs depend on history (a toll charged only if you passed through $C$) — your cue that the history belongs in the state.</p>
 
-  <p>One more thing to notice about the final answer: $S\!-\!B\!-\!D\!-\!G$ costs $8$, while the path through $C$ costs $1{+}2{+}4{+}3 = 10$. But $S\!-\!A$ is the <em>cheapest first move</em>. UCS did briefly prefer it — it popped $A$ before $B$ — and then the arithmetic overturned it. <strong>Greedy first steps are not optimal plans</strong>, which is the single most useful sentence on this page.</p>
+  <p>Note also that $S\!-\!A$ is the <em>cheapest first move</em>, and UCS briefly preferred it — it popped $A$ before $B$ — before the arithmetic overturned it. <strong>Greedy first steps are not optimal plans.</strong></p>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>A complete UCS hand-trace, including a replacement and a rejection</div>
@@ -764,9 +703,9 @@
 
   <h2 id="cost-contours">11. Cost contours: how UCS really spreads</h2>
 
-  <p>The slide's summary of UCS is one line — “<em>UCS explores increasing cost contours</em>” — next to a picture of concentric rings labelled $c_1, c_2, c_3$ with the Start at the centre and the Goal off to one side. Here is what that picture means.</p>
+  <p>The slides summarise UCS as “<em>UCS explores increasing cost contours</em>”, beside a picture of concentric rings. Here is what it means.</p>
 
-  <p>Define the <strong>contour</strong> at cost $c$ as the set of states whose cheapest path from the start costs at most $c$. Because UCS always pops the minimum $g$, and because $g$-values of popped nodes never decrease (proved in §13), UCS expands states in non-decreasing order of their optimal cost. So at any moment, the explored set <em>is</em> a contour: a solid blob of everything cheaper than the current frontier minimum.</p>
+  <p>The <strong>contour</strong> at cost $c$ is the set of states whose cheapest path from the start costs at most $c$. UCS pops the minimum $g$ and popped $g$-values never decrease (§13), so it expands states in non-decreasing order of optimal cost: the explored set always <em>is</em> a contour.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 4 · UCS expands in rings of equal cost — in every direction at once</div>
@@ -805,11 +744,11 @@
     <div class="caption">What to notice: teal dots are states UCS <strong>expands</strong>; grey dots are states it never touches. Everything inside the dashed ring — every state reachable for less than $C^*$, in <em>every</em> direction, including straight backwards away from the goal — is expanded before the goal is popped. The wasted work is the entire teal area that isn't on the dashed line. On the <a href="informed-search.html">next page</a>, a heuristic squashes these circles into ellipses pointing at the goal.</div>
   </div>
 
-  <p>This contour view also explains the complexity bound $O(b^{1+\lfloor C^*/\varepsilon\rfloor})$ from §8: the number of expansions is the number of states inside the $C^*$ contour, and with a minimum step cost $\varepsilon$ you can only be $C^*/\varepsilon$ steps deep inside it.</p>
+  <p>This also explains the bound $O(b^{1+\lfloor C^*/\varepsilon\rfloor})$ from §8: the expansions are the states inside the $C^*$ contour, and with a minimum step cost $\varepsilon$ you can only be $C^*/\varepsilon$ steps deep inside it.</p>
 
   <h3>The contours on a real search tree</h3>
 
-  <p>Now the big slide example — the one with the lettered maze graph. The graph:</p>
+  <p>The lecture's lettered graph:</p>
 
   <div class="viz">
     <div class="viz-title">Figure 5 · The lecture's 12-state graph</div>
@@ -879,7 +818,7 @@
     <div class="caption">Edges, as the tree on the slide implies them: $S\!\to\!d\,3$, $S\!\to\!e\,9$, $S\!\to\!p\,1$; $d\!\to\!b\,1$, $d\!\to\!c\,8$, $d\!\to\!e\,2$; $e\!\to\!h\,8$, $e\!\to\!r\,2$; $p\!\to\!q\,15$; $b\!\to\!a\,2$; $c\!\to\!a\,2$; $h\!\to\!p\,4$, $h\!\to\!q\,4$; $r\!\to\!f\,1$; $f\!\to\!c\,3$, $f\!\to\!G\,2$. Twelve states, sixteen edges.</div>
   </div>
 
-  <p>Twelve states. Now unroll it into a <em>tree</em>, the way the slide does, and it explodes to 28 nodes — the state $q$ appears four times, $a$ three times, $c$ and $f$ and $p$ twice each. Drag the slider to sweep the cost contour and watch UCS's rings appear <em>inside the tree</em>:</p>
+  <p>Unrolled into a <em>tree</em> the way the slide does it, those twelve states explode to 28 nodes — $q$ appears four times, $a$ three times, $c$, $f$ and $p$ twice each. Drag the slider to sweep the cost contour:</p>
 
   <div class="viz">
     <div class="viz-title">Figure 6 · Interactive — the same graph as a search tree, with $g$ on every node</div>
@@ -890,7 +829,7 @@
         <span class="val" id="contourv"></span></label>
       <button class="btn" id="contourPath">Show optimal path</button>
     </div>
-    <div class="caption">What to notice: with the slider at 20 you see the whole tree — 28 nodes from 12 states. Slide it down and the surviving nodes are exactly the contour UCS has expanded at that moment. At $c = 10$ the goal <strong>G (g = 10)</strong> lights up on the path $S\!-\!d\!-\!e\!-\!r\!-\!f\!-\!G$; notice how many nodes at costs 1–9 had to light up first, scattered across every branch. Also notice the other <code>G</code> at $g = 14$ and the duplicate <code>c</code> at 11 and 15 — the tree has no idea they are the same states.</div>
+    <div class="caption">What to notice: 28 tree nodes from 12 states. Slide the contour down and the surviving nodes are exactly what UCS has expanded at that moment. At $c = 10$ the goal <strong>G (g = 10)</strong> lights up on the path $S\!-\!d\!-\!e\!-\!r\!-\!f\!-\!G$ — note how many nodes at costs 1–9 had to light up first, scattered across every branch, and that the duplicate <code>G</code> at $14$ and <code>c</code> at 11 and 15 are states the tree cannot tell apart.</div>
   </div>
 
   <div class="guided">
@@ -972,7 +911,7 @@
 
   <div class="box intuition">
     <span class="label">Intuition — never memorise this table</span>
-    <p>Derive it from two questions. <em>(1) What does the frontier hold at its worst moment?</em> A whole tier ⇒ $b^d$ space (BFS, UCS). One path plus siblings ⇒ $bm$ space (DFS, IDS). <em>(2) What does the algorithm have to look at before it can stop?</em> Everything shallower than the goal ⇒ $b^d$ time. Everything <em>cheaper</em> than the goal ⇒ $b^{C^*/\varepsilon}$ time. Optimality then falls out of question 2: if you must examine everything better than what you return, you cannot have missed anything better.</p>
+    <p>Derive it from two questions. <em>(1) What does the frontier hold at its worst moment?</em> A whole tier ⇒ $b^d$ space (BFS, UCS); one path plus siblings ⇒ $bm$ space (DFS, IDS). <em>(2) What must the algorithm look at before it can stop?</em> Everything shallower than the goal ⇒ $b^d$ time; everything <em>cheaper</em> ⇒ $b^{C^*/\varepsilon}$ time. Optimality falls out of (2): if you examine everything better than what you return, you cannot have missed anything better.</p>
   </div>
 
   <div class="quiz" data-answer="1">
@@ -985,13 +924,13 @@
 
   <h2 id="why-ucs-is-optimal">13. Why UCS is complete and optimal — the proof</h2>
 
-  <p>The slides assert “The good: UCS is complete and optimal!” and move on. Here is the actual argument. Assume every step cost satisfies $c(s,a,s') \ge \varepsilon > 0$.</p>
+  <p>The slides assert “UCS is complete and optimal!” and move on. Here is the argument. Assume every step cost satisfies $c(s,a,s') \ge \varepsilon > 0$.</p>
 
   <div class="box proof">
     <span class="label">Lemma 1 — popped costs never decrease</span>
     <p><strong>Claim.</strong> If UCS pops node $n_1$ and then later pops $n_2$, then $g(n_1) \le g(n_2)$.</p>
     <p><strong>Proof.</strong> When $n_1$ is popped it is the minimum of the frontier, so every node then on the frontier has $g \ge g(n_1)$. The only nodes ever added afterwards are children of expanded nodes, and a child's cost is $g(\text{parent}) + c \ge g(\text{parent}) \ge g(n_1)$, using $c \ge 0$ and the fact that every subsequently expanded parent was itself popped at or after $n_1$. Replacement only ever <em>lowers</em> a frontier node's $g$ — but never below the cost of the path that produced it, which by the same argument is $\ge g(n_1)$. Hence every node popped after $n_1$ has $g \ge g(n_1)$. $\blacksquare$</p>
-    <p class="tiny muted">This is exactly where non-negative costs are essential. With a negative edge, expanding a node could produce a child cheaper than the node just popped, and the “rings” would no longer be nested — which is why Dijkstra's algorithm (UCS by another name) fails on negative weights and you need Bellman–Ford.</p>
+    <p class="tiny muted">This is where non-negative costs are essential: a negative edge could produce a child cheaper than the node just popped, un-nesting the rings — which is why Dijkstra's algorithm (UCS by another name) fails on negative weights.</p>
   </div>
 
   <div class="box proof">
@@ -1010,48 +949,35 @@
 
   <div class="box key">
     <span class="label">Two corollaries you should be able to state</span>
-    <p><strong>Optimality.</strong> The first goal node UCS pops has optimal $g$ by the theorem, and by Lemma 1 nothing popped later could be cheaper. So the returned plan is a cheapest plan. Note how this uses goal-test-on-pop: if we returned on generation, the theorem would not apply, because a generated node's $g$ need not be optimal yet.</p>
-    <p><strong>Safety of the explored set.</strong> Since a state's $g$ is already optimal when it is popped, rediscovering that state later can never yield an improvement — which is precisely why the pseudocode is allowed to ignore children that are already in the explored set. <em>This step is what breaks for A* with a merely admissible (non-consistent) heuristic</em>, which is the subject of the <a href="informed-search.html">next chapter</a>.</p>
+    <p><strong>Optimality.</strong> The first goal node popped has optimal $g$ by the theorem, and by Lemma 1 nothing popped later could be cheaper, so the returned plan is a cheapest plan. This uses goal-test-on-pop: if we returned on generation the theorem would not apply, because a generated node's $g$ need not be optimal yet.</p>
+    <p><strong>Safety of the explored set.</strong> A state's $g$ is already optimal when it is popped, so rediscovering it later can never improve it — which is precisely why the pseudocode may ignore children already in the explored set. <em>This is the step that breaks for A* with a merely admissible (non-consistent) heuristic</em>, the subject of the <a href="informed-search.html">next chapter</a>.</p>
   </div>
 
   <div class="box proof">
     <span class="label">Completeness</span>
-    <p>Suppose a solution of finite cost $C^*$ exists. Every expansion pops a node with $g \ge$ the previous pop's $g$ (Lemma 1), and any path of $k$ steps costs at least $k\varepsilon$, so only finitely many <em>nodes</em> have $g \le C^*$ — at most the states within depth $\lfloor C^*/\varepsilon \rfloor$. UCS can therefore perform only finitely many pops with $g \le C^*$, and it cannot pop anything with $g > C^*$ while the goal's node (with key $\le C^*$) is on the frontier. Hence the goal is popped within finitely many steps. $\blacksquare$</p>
-    <p>If $\varepsilon = 0$ is allowed, the argument collapses: infinitely many nodes can share cost 0, and UCS can spin forever inside a zero-cost loop without ever raising the contour.</p>
+    <p>Suppose a solution of finite cost $C^*$ exists. Every pop has $g \ge$ the previous pop's $g$ (Lemma 1), and a $k$-step path costs at least $k\varepsilon$, so only finitely many <em>nodes</em> have $g \le C^*$ — at most the states within depth $\lfloor C^*/\varepsilon \rfloor$. UCS can therefore make only finitely many pops with $g \le C^*$, and it cannot pop anything with $g &gt; C^*$ while the goal's node (key $\le C^*$) is on the frontier. Hence the goal is popped within finitely many steps. $\blacksquare$</p>
+    <p>If $\varepsilon = 0$ is allowed the argument collapses: infinitely many nodes can share cost 0, and UCS can spin forever inside a zero-cost loop without raising the contour.</p>
   </div>
 
   <h2 id="where-ucs-falls-short">14. What's wrong with UCS — and what fixes it</h2>
 
-  <p>The slides end the uninformed-search section with a two-item complaint list. Both items are visible in Figure 4:</p>
+  <p>Two complaints, both visible in Figure 4:</p>
 
   <ul>
-    <li><strong>It explores options in every “direction.”</strong> The contours are circles centred on the start. UCS spends just as much effort walking away from the goal as towards it, because $g$ is blind to where the goal is.</li>
-    <li><strong>It has no information about goal location.</strong> Nothing in $\text{Actions}$, $\text{Result}$ or $c$ tells UCS which way the goal lies. It is, quite literally, searching with its eyes shut — the definition of an <em>uninformed</em> (blind) search.</li>
+    <li><strong>It explores options in every “direction.”</strong> The contours are circles centred on the start, so UCS works as hard walking away from the goal as towards it: $g$ is blind to where the goal is.</li>
+    <li><strong>It has no information about goal location.</strong> Nothing in $\text{Actions}$, $\text{Result}$ or $c$ tells UCS which way the goal lies. That is what <em>uninformed</em> means.</li>
   </ul>
 
-  <div class="box intuition">
-    <span class="label">Intuition</span>
-    <p>You want donuts as fast as possible. UCS is the strategy “walk one minute in every possible direction, then two minutes in every possible direction, …” until you trip over a donut shop. It <em>will</em> find the nearest one, and it will have walked most of the city to do it. What you actually do is glance at a map and walk roughly towards the shop, adjusting as you go. That glance — a cheap estimate of remaining distance — is a <strong>heuristic</strong>.</p>
-  </div>
-
-  <p>The fix is to add a second number to the priority. Keep $g(n)$, the <em>backward</em> cost you have already paid, and add $h(n)$, an estimate of the <em>forward</em> cost still to pay. Order the frontier by $h$ alone and you get greedy best-first search (fast, not optimal). Order by $f(n) = g(n) + h(n)$ and you get A*: the contours stop being circles and stretch into ellipses aimed at the goal, while optimality survives as long as $h$ never overestimates.</p>
+  <p>The fix is a second number in the priority: keep $g(n)$, the backward cost paid, and add $h(n)$, an estimate of the forward cost still to pay. Order by $h$ alone and you get greedy best-first search (fast, not optimal); order by $f(n) = g(n) + h(n)$ and you get A*, whose contours stretch from circles into ellipses aimed at the goal, with optimality surviving as long as $h$ never overestimates.</p>
 
   <div class="box key">
     <span class="label">Where this is going</span>
-    <p>UCS is A* with $h \equiv 0$. Everything you just learned — the frontier, the explored set, the replacement rule, goal-test-on-pop, the contour argument, even the structure of the optimality proof — carries over unchanged. The only edit is the priority. Continue with <a href="informed-search.html">Chapter 2: Heuristics, Greedy search and A*</a>.</p>
+    <p>UCS is A* with $h \equiv 0$: the frontier, the explored set, the replacement rule, goal-test-on-pop, the contour argument and even the shape of the optimality proof all carry over unchanged. Only the priority changes. Continue with <a href="informed-search.html">Chapter 2: Heuristics, Greedy search and A*</a>.</p>
   </div>
 
   <h2 id="recap">15. Recap and self-check</h2>
 
-  <ol>
-    <li>A <strong>search problem</strong> is a state space, $\text{Actions}(s)$, $\text{Result}(s,a)$, $c(s,a,s')$, a start state and a goal test. A solution is a <strong>plan</strong>: a sequence of actions.</li>
-    <li><strong>Abstraction</strong> — keeping only the variables the problem reads — is what turns $120 \cdot 2^{30} \cdot 12^2 \cdot 4$ into $120$.</li>
-    <li>A <strong>state space graph</strong> holds each state once; a <strong>search tree</strong> holds one node per path, and is infinite whenever the graph has a cycle.</li>
-    <li>Every algorithm here is the same loop; only the <strong>frontier discipline</strong> changes: FIFO ⇒ BFS, LIFO ⇒ DFS, priority-by-$g$ ⇒ UCS, priority-by-$g+h$ ⇒ A*.</li>
-    <li>A node stores <code>state, parent, action, path-cost</code>, with $g(\text{child}) = g(\text{parent}) + c$; the plan is recovered by following parent pointers back.</li>
-    <li>In UCS, a state keeps <strong>one</strong> frontier node, which is <strong>replaced</strong> when a cheaper path to it appears, and the goal test happens <strong>on pop</strong>.</li>
-    <li>UCS is complete (given $\varepsilon &gt; 0$) and optimal, in $O(b^{1+\lfloor C^*/\varepsilon\rfloor})$ time and space, and it expands states in <strong>cost contours</strong> — in all directions, blindly.</li>
-  </ol>
+  <p>The Essentials box at the top of this page is the recap — read it once more, then take these two checks cold.</p>
 
   <div class="quiz" data-answer="2">
     <div class="q">Your classmate's UCS trace on the §10 walkthrough graph ends with the frontier containing both <code>S-A-C-D: 7</code> and <code>S-B-D: 5</code>, and reports the answer <code>S-A-C-D-G</code> with cost 8. Name every error.</div>

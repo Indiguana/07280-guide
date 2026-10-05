@@ -16,33 +16,33 @@
 
   <div data-toc></div>
 
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>How to model a problem as a CSP and solve it: backtracking search, plus filtering and ordering so that you discover you are doomed as early as possible.</p>
+    <ul>
+      <li><strong>CSP</strong> — a triple $(X, D, C)$: variables, domains, constraints over <em>subsets</em> of the variables. A <em>solution</em> is a complete, consistent assignment. Every solution sits at depth $n$, so path cost and distance heuristics are meaningless.</li>
+      <li><strong>Search space</strong> — $d^{\,n}$ complete assignments, $O(d^{\,n})$ to enumerate; deciding satisfiability is NP-hard, since SAT is a Boolean CSP ($d = 2$).</li>
+      <li><strong>Backtracking search</strong> $=$ DFS $+$ one variable at a time (kills the $n!$ duplicate orderings: $n!\,d^{\,n}$ leaves $\to d^{\,n}$) $+$ fail-on-violation, the incremental goal test. Solves n-queens to $n \approx 25$.</li>
+      <li><strong>Forward checking</strong> — after $X = c$, delete $c$ from the domain of every unassigned neighbour; fail when a domain empties. Cost $O(\deg \cdot d)$. Blind spot: it never compares two <em>unassigned</em> variables.</li>
+      <li><strong>Arc consistency</strong> — the arc $X \to Y$ is consistent iff every value in the tail $D_X$ has at least one support in the head $D_Y$. Enforcing it <strong>deletes from the tail</strong>; the head is only read.</li>
+      <li><strong>AC-3</strong> — queue of arcs; when a value dies in $D_{X_i}$, re-enqueue $(X_k, X_i)$ for every neighbour $X_k$ — the arcs <em>into</em> the shrunken domain. Cost $O(n^2 d^3)$, from $O(nd)$ deletions $\times$ $\le n$ arcs enqueued each $\times$ $O(d^2)$ per REVISE. Strictly stronger than forward checking: never fails later, sometimes earlier.</li>
+      <li><strong>Limitation</strong> — arc consistency is a <em>two-variable</em> property. An arc-consistent CSP with every domain non-empty may have no solution (three variables, pairwise $\neq$, two colours). The search decides satisfiability; AC-3 only prunes.</li>
+      <li><strong>MRV</strong> — assign the unassigned variable with the <em>fewest</em> values left, tie-broken by degree. Variables are an <strong>AND</strong>: all must be satisfied, so <em>fail fast</em>.</li>
+      <li><strong>LCV</strong> — try the value that rules out the <em>fewest</em> options for the neighbours. Values are an <strong>OR</strong>: only one must work, so <em>succeed fast</em>. With filtering, these make 1000-queens feasible.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="planning-vs-identification">1. Planning problems vs. identification problems</h2>
 
-  <p>Every search problem you have met so far — <a href="search-foundations.html">BFS, DFS, UCS</a> and <a href="informed-search.html">A*</a> — was a <strong>planning</strong> problem. You were not really asked "what is the goal?" You already knew the goal: get the taxi to Bucharest, get the 8-puzzle into the sorted configuration. What you were asked was <em>how to get there</em>. The answer you hand in is a <strong>sequence of actions</strong>.</p>
+  <p>Every search problem so far — <a href="search-foundations.html">BFS, DFS, UCS</a> and <a href="informed-search.html">A*</a> — was a <strong>planning</strong> problem: you knew the goal and were asked <em>how to get there</em>, so the answer is a <strong>sequence of actions</strong>. Paths have costs (there is a best one) and depths (a shallow goal is cheaper, which is why BFS is complete and DFS is not), and a heuristic $h(n)$ is useful because it estimates remaining <em>distance</em>.</p>
 
-  <p>That single fact drives everything in the first three chapters. Because the answer is a path:</p>
-
-  <ul>
-    <li>paths have <strong>costs</strong>, so it matters which path you return — there is a best one;</li>
-    <li>paths have <strong>different depths</strong>, so a shallow goal is cheaper to reach than a deep one, which is exactly why BFS is complete and DFS is not;</li>
-    <li><strong>heuristics</strong> are useful, because a heuristic $h(n)$ estimates the remaining <em>distance</em> — a quantity that only makes sense when distance is the thing you are optimizing.</li>
-  </ul>
-
-  <p>CSPs are the other kind of problem. In an <strong>identification</strong> problem the answer is an <strong>assignment of values to variables</strong>, and nobody cares how you found it.</p>
+  <p>In an <strong>identification</strong> problem the answer is an <strong>assignment of values to variables</strong>, and nobody cares how you found it — like a completed crossword, where the order in which you wrote the letters is not part of the answer.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p><strong>Planning:</strong> the <em>path</em> to the goal is the important thing. Paths have various costs and depths; heuristics give problem-specific guidance.</p>
-    <p><strong>Identification:</strong> the <em>goal itself</em> is the important thing, not the path. Under the standard formulation, every solution sits at exactly the same depth.</p>
-    <p class="muted" style="margin-bottom:0">CSPs are (mostly) identification problems, and they get their own specialised algorithms because of it.</p>
+    <p style="margin-bottom:0"><strong>Identification:</strong> the <em>goal itself</em> is the important thing, not the path. Every solution sits at exactly the same depth — which is why CSPs get their own algorithms.</p>
   </div>
-
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>Planning is <em>driving</em>: the route is the deliverable, and a shorter route is a better answer.</p>
-    <p>Identification is <em>filling in a crossword</em>. There is no "route" to a completed crossword. If you write 3-Down before 1-Across, or the other way round, you end up holding the identical grid. The grid is the answer; the order in which you wrote the letters is not part of it and nobody grades it.</p>
-    <p class="muted" style="margin-bottom:0">Where the analogy bends: in a crossword you can erase letters, and "erasing" is exactly what backtracking does — so the analogy is honest even about the search process.</p>
-  </div>
-
-  <p>Read the three bullets again and notice what each one <em>costs us</em> once we move to identification:</p>
 
   <table>
     <thead><tr><th>Property</th><th>Planning (Ch. 1–3)</th><th>Identification (CSPs)</th></tr></thead>
@@ -55,68 +55,45 @@
     </tbody>
   </table>
 
-  <p>That last row is the whole chapter. Because every solution is at depth $n$, a heuristic that says "you're getting closer" tells us nothing — we are always exactly $n - |\text{assigned}|$ steps from a complete assignment, on every branch. The guidance that <em>does</em> help is structural: <em>which</em> variable to commit to next, <em>which</em> value to try first, and <em>which</em> parts of the tree are already dead.</p>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>In planning you ask "am I close?". In identification you ask "am I doomed?". Chapters 1–3 are about the first question. This chapter is about the second — every algorithm below is a device for discovering that you are doomed <em>as early as possible</em>, so you can stop digging.</p>
-  </div>
+  <p>That last row is the whole chapter. Because every solution is at depth $n$, a heuristic saying "you're getting closer" tells us nothing — on every branch we are exactly $n - |\text{assigned}|$ steps from completion. In planning you ask "am I close?"; in identification you ask "am I doomed?", and every algorithm below is a device for discovering that you are doomed <em>as early as possible</em>, so you can stop digging.</p>
 
   <h2 id="what-is-a-csp">2. What exactly is a CSP?</h2>
 
-  <p>A CSP is a search problem with two extra restrictions bolted on. In a standard search problem you are allowed to be completely unstructured:</p>
-
-  <ul>
-    <li>a <strong>state</strong> is an arbitrary data structure (a board, a city, a tuple of jug volumes);</li>
-    <li>a <strong>goal test</strong> is any function over states — any code at all that returns true or false.</li>
-  </ul>
-
-  <p>That generality is why generic search algorithms can do nothing clever: they cannot look <em>inside</em> a state, and they cannot look inside the goal test. A CSP gives up that generality on purpose, and gets algorithms in exchange.</p>
+  <p>In a standard search problem a <strong>state</strong> is an arbitrary data structure and the <strong>goal test</strong> is any function over states. That generality is why generic search can do nothing clever — it cannot look inside either one. A CSP gives up the generality on purpose and gets algorithms in exchange.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A <strong>constraint satisfaction problem</strong> is a triple $(X, D, C)$:</p>
     <ul>
-      <li><strong>Variables</strong> $X = \{X_1, X_2, \dots, X_n\}$. A <em>state</em> is an assignment of values to these variables. $n$ is the number of variables.</li>
-      <li><strong>Domains</strong> $D$: the set of values a variable may take. Often one shared domain $D$ of size $d$, but in general each variable has its own domain $D_i$ — the course writes "sometimes $D$ depends on $i$". We write $D_i$ for the values still available to $X_i$.</li>
-      <li><strong>Constraints</strong> $C$: the goal test, but written as a <em>set of constraints</em>, where each constraint specifies the allowable combinations of values for some <em>subset</em> of the variables.</li>
+      <li><strong>Variables</strong> $X = \{X_1, \dots, X_n\}$. A <em>state</em> is an assignment of values to these variables.</li>
+      <li><strong>Domains</strong> $D$: the values a variable may take. Often one shared domain of size $d$, but in general each variable has its own $D_i$ — the course writes "sometimes $D$ depends on $i$". We write $D_i$ for the values still available to $X_i$.</li>
+      <li><strong>Constraints</strong> $C$: the goal test, written as a <em>set of constraints</em>, each specifying the allowable combinations of values for some <em>subset</em> of the variables.</li>
     </ul>
     <p style="margin-bottom:0">A <strong>solution</strong> is a <em>complete</em> assignment (every variable has a value) that is <em>consistent</em> (every constraint is satisfied).</p>
   </div>
 
-  <p>The clause that does all the work is "for <strong>subsets</strong> of the variables". A general goal test is a black box over the <em>whole</em> state: you must fill in every variable before you may call it. A constraint mentions only two or three variables, so it can be evaluated on a <em>partial</em> assignment the instant those few variables are filled. That is what lets us detect failure early, and early failure detection is the entire performance story of this chapter.</p>
-
-  <div class="box key"><span class="label">Key idea</span>
-    <p>Standard search: state = arbitrary data structure, goal test = arbitrary function over states.</p>
-    <p style="margin-bottom:0">CSP: state = assignment to variables $X_i$ with values from a domain $D$ (possibly $D_i$ per variable), goal test = a set of constraints over <em>subsets</em> of the variables. The structure in the goal test is not a limitation — it is the information the algorithms exploit.</p>
-  </div>
+  <p>The clause that does all the work is "for <strong>subsets</strong> of the variables". A general goal test is a black box over the <em>whole</em> state, so every variable must be filled before you may call it. A constraint mentions two or three variables, so it can be evaluated on a <em>partial</em> assignment the instant those few are filled. Early failure detection is the entire performance story of this chapter.</p>
 
   <h2 id="why-csps">3. Why bother? Where CSPs show up</h2>
 
-  <p>The reason this formalism earns a lecture is that an enormous number of real problems are, once you squint, "assign values to variables so that a pile of local rules all hold". The course lists:</p>
+  <p>An enormous number of real problems are, once you squint, "assign values to variables so that a pile of local rules all hold". The course's list:</p>
 
   <div class="grid2">
     <div class="card">
       <div class="kicker">Assignment &amp; timetabling</div>
-      <p><strong>Assignment problems:</strong> who teaches what class. Variables = courses, domain = faculty, constraints = nobody teaches two things at once, everybody is qualified, nobody exceeds their load.</p>
-      <p style="margin-top:8px"><strong>Timetabling:</strong> which class is offered when and where. Variables = courses, domain = (time slot, room) pairs, constraints = no room double-booked, required courses not in conflict, room big enough.</p>
+      <p><strong>Assignment:</strong> who teaches what class. Variables = courses, domain = faculty, constraints = nobody teaches two things at once, everybody qualified, nobody over their load.</p>
+      <p style="margin-top:8px"><strong>Timetabling:</strong> variables = courses, domain = (time slot, room) pairs, constraints = no room double-booked, required courses not in conflict, room big enough.</p>
     </div>
     <div class="card">
       <div class="kicker">Engineering &amp; industry</div>
-      <p><strong>Hardware configuration:</strong> pick components so every interface, power budget and form factor is compatible.</p>
-      <p style="margin-top:8px"><strong>Transportation scheduling</strong> and <strong>factory scheduling</strong>: variables are the start times of jobs, constraints say job B cannot start before job A ends and two jobs cannot use the same machine at once.</p>
-      <p style="margin-top:8px"><strong>Circuit layout:</strong> place and route components without overlaps or crossings.</p>
-      <p style="margin-top:8px"><strong>Fault diagnosis:</strong> variables are "is component $i$ broken?", constraints are the observed symptoms.</p>
+      <p><strong>Hardware configuration:</strong> components whose interfaces, power budgets and form factors are compatible. <strong>Transportation and factory scheduling:</strong> variables are job start times; B cannot start before A ends, two jobs cannot share a machine. <strong>Circuit layout:</strong> place and route without overlaps. <strong>Fault diagnosis:</strong> variables are "is component $i$ broken?", constraints are the observed symptoms.</p>
     </div>
   </div>
 
-  <p>…and many more. Note also that real instances sometimes involve <strong>real-valued</strong> variables (a start time is a real number, not a colour), which we will come back to in <a href="#varieties">§8</a>.</p>
-
-  <div class="box example"><span class="label">Example</span>
-    <p style="margin-bottom:0">Sanity check that a familiar problem fits: <em>Sudoku</em> is an assignment problem (which digit goes in each square), not a planning problem (nobody asks for the order in which you filled the squares). It is therefore an identification problem, and every solution is at depth "number of blank squares". We formalise it in <a href="#sudoku">§7</a>.</p>
-  </div>
+  <p>Some instances involve <strong>real-valued</strong> variables — a start time is a real number, not a colour — which <a href="#varieties">§8</a> returns to.</p>
 
   <h2 id="map-colouring">4. The running example: colouring Australia</h2>
 
-  <p>The whole lecture runs on one instance, so it is worth setting up carefully. We must colour the seven regions of Australia so that no two regions sharing a border get the same colour, using only three colours.</p>
+  <p>The whole lecture runs on one instance, so it is worth setting up carefully: colour the seven regions of Australia so that no two regions sharing a border get the same colour, using only three colours.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Variables:</strong> $\text{WA},\ \text{NT},\ \text{Q},\ \text{NSW},\ \text{V},\ \text{SA},\ \text{T}$ — Western Australia, Northern Territory, Queensland, New South Wales, Victoria, South Australia, Tasmania. So $n = 7$.</p>
@@ -131,7 +108,7 @@
   <p class="center"><code>WA–NT &nbsp; WA–SA &nbsp; NT–SA &nbsp; NT–Q &nbsp; SA–Q &nbsp; SA–NSW &nbsp; SA–V &nbsp; Q–NSW &nbsp; NSW–V</code><br>
   <span class="muted tiny">Tasmania borders nothing.</span></p>
 
-  <p>Let us verify the solution above by hand, border by border, so that you trust it: WA(red)≠NT(green) ✓, WA(red)≠SA(blue) ✓, NT(green)≠SA(blue) ✓, NT(green)≠Q(red) ✓, SA(blue)≠Q(red) ✓, SA(blue)≠NSW(green) ✓, SA(blue)≠V(red) ✓, Q(red)≠NSW(green) ✓, NSW(green)≠V(red) ✓. All nine hold, so it is a solution. T is unconstrained, so any of its three colours works — which is our first hint about structure.</p>
+  <p>Verify that solution border by border: WA(red)≠NT(green) ✓, WA(red)≠SA(blue) ✓, NT(green)≠SA(blue) ✓, NT(green)≠Q(red) ✓, SA(blue)≠Q(red) ✓, SA(blue)≠NSW(green) ✓, SA(blue)≠V(red) ✓, Q(red)≠NSW(green) ✓, NSW(green)≠V(red) ✓. All nine hold. T is unconstrained, so any of its three colours works — our first hint about structure.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 — the map, and the same instance as a constraint graph</div>
@@ -201,21 +178,19 @@
 
   <h2 id="constraint-graphs">5. Constraint graphs</h2>
 
-  <p>The right-hand picture above is a <strong>constraint graph</strong>, and it is the data structure the general-purpose algorithms actually operate on.</p>
-
   <div class="box defn"><span class="label">Definition</span>
     <p>A CSP is <strong>binary</strong> if each constraint relates <em>at most two</em> variables.</p>
     <p style="margin-bottom:0">For a binary CSP, the <strong>binary constraint graph</strong> has one <strong>node per variable</strong> and one <strong>edge (arc) per constraint</strong>: an edge between $X$ and $Y$ means "there is a constraint restricting which pairs $(x,y)$ are allowed".</p>
   </div>
 
-  <p>Note what the graph deliberately throws away: it records <em>that</em> WA and NT are constrained, not <em>how</em>. That abstraction is the point. An algorithm written against the graph works for map colouring, for scheduling, for n-queens — anything binary — because it never needs to know the semantics of the constraint, only its scope.</p>
+  <p>The right-hand picture above is such a graph, and it is what the general-purpose algorithms operate on. Note what it throws away: it records <em>that</em> WA and NT are constrained, not <em>how</em>. That is the point — an algorithm written against the graph works for map colouring, scheduling and n-queens alike, because it needs a constraint's scope, never its semantics.</p>
 
-  <p>General-purpose CSP algorithms use graph structure to speed up search. Three examples, in increasing order of cleverness:</p>
+  <p>Three ways graph structure speeds up search:</p>
 
   <ol>
-    <li><strong>Connected components.</strong> Tasmania is an isolated node, so it is an <em>independent subproblem</em>: colouring T has no effect on anything else and vice versa. Solving two components of sizes $n_1$ and $n_2$ separately costs $O(d^{n_1}) + O(d^{n_2})$ instead of $O(d^{n_1 + n_2})$. For Australia that is $3^6 + 3^1 = 732$ instead of $3^7 = 2187$.</li>
-    <li><strong>Degree.</strong> A high-degree node (SA, degree 5) constrains many neighbours, so assigning it early prunes a lot — this is the "degree heuristic", MRV's tie-breaker.</li>
-    <li><strong>Global shape.</strong> If the constraint graph is a <em>tree</em>, the CSP can be solved in $O(n d^2)$ with no backtracking at all. <span class="pill">beyond syllabus</span> See <a href="#summary">§18</a>.</li>
+    <li><strong>Connected components.</strong> Tasmania is isolated, so it is an <em>independent subproblem</em>: components of sizes $n_1, n_2$ solved separately cost $O(d^{n_1}) + O(d^{n_2})$ instead of $O(d^{n_1 + n_2})$ — for Australia, $3^6 + 3^1 = 732$ instead of $3^7 = 2187$.</li>
+    <li><strong>Degree.</strong> A high-degree node (SA, degree 5) constrains many neighbours, so assigning it early prunes a lot — the "degree heuristic", MRV's tie-breaker.</li>
+    <li><strong>Global shape.</strong> If the graph is a <em>tree</em>, the CSP is solvable in $O(n d^2)$ with no backtracking. <span class="pill">beyond syllabus</span> See <a href="#summary">§18</a>.</li>
   </ol>
 
   <div class="box warn"><span class="label">Common mistake</span>
@@ -233,9 +208,9 @@
 
   <h2 id="n-queens">6. N-queens, modelled twice</h2>
 
-  <p>The lecture puts up two formulations of n-queens and leaves both of them blank. That blank is the single most useful exercise in the chapter, because it shows that <strong>modelling choices are algorithmic choices</strong>. The same puzzle, written down two ways, differs by a factor of $10^{12}$ in search-space size before any clever algorithm is applied.</p>
+  <p>The lecture puts up two formulations of n-queens and leaves both blank. That blank is the single most useful exercise in the chapter, because it shows that <strong>modelling choices are algorithmic choices</strong>: the same puzzle, written down two ways, differs by a factor of $10^{12}$ in search-space size before any clever algorithm is applied.</p>
 
-  <p>The puzzle: place $n$ queens on an $n \times n$ chessboard so that no two attack each other. Two queens attack each other if they share a row, a column, or a diagonal.</p>
+  <p>The puzzle: place $n$ queens on an $n \times n$ chessboard so that no two attack each other — no shared row, column or diagonal.</p>
 
   <h3>Formulation 1 — one Boolean per square</h3>
 
@@ -260,7 +235,7 @@
   </table>
   </div>
 
-  <p>Every index above is understood to stay on the board ($1 \le i+k \le n$ and so on). The first four families are <strong>binary</strong> — each mentions exactly two squares — so they fit the constraint-graph picture of <a href="#constraint-graphs">§5</a> perfectly. The fifth does not: the count constraint mentions all $n^2$ variables at once. That is a <em>global</em> constraint, and it is the ugly part of this model.</p>
+  <p>Indices stay on the board ($1 \le i+k \le n$ and so on). The first four families are <strong>binary</strong>, so they fit the constraint-graph picture of <a href="#constraint-graphs">§5</a>; the fifth does not — the count constraint mentions all $n^2$ variables at once. That <em>global</em> constraint is the ugly part of this model.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
     <p style="margin-bottom:0">Forgetting the count constraint. Without it, $X_{ij} = 0$ for every square satisfies every attack constraint — an empty board is a perfectly legal "solution". The attack constraints only say <em>not too many</em> queens; something has to say <em>enough</em> queens. This is a general lesson: a CSP whose constraints are all "forbid" constraints usually has a trivial degenerate solution, and you must add the constraint that rules it out.</p>
@@ -274,7 +249,7 @@
 
   <h3>Formulation 2 — one variable per column</h3>
 
-  <p>Now use a modelling trick that appears everywhere in CSPs: <em>build a constraint into the variables themselves</em>. Exactly one queen goes in each column (if a column had two they would share the column; if some column had none then with $n$ queens in $n$ columns some other column has two). So instead of asking "is there a queen here?", ask "<em>which row</em> holds column $k$'s queen?".</p>
+  <p>Use a modelling trick that appears everywhere in CSPs: <em>build a constraint into the variables themselves</em>. Exactly one queen goes in each column (two would share the column; if some column had none then with $n$ queens in $n$ columns another has two). So instead of "is there a queen here?", ask "<em>which row</em> holds column $k$'s queen?".</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Variables:</strong> $Q_1, Q_2, \dots, Q_n$ — one per column. $n$ variables.</p>
@@ -285,9 +260,9 @@
     $$(Q_1, Q_2) \in \{(1,3),\,(1,4),\,(2,4),\,(3,1),\,(4,1),\,(4,2)\}.$$</p>
   </div>
 
-  <p>Take a moment on the diagonal condition, because it is the one people mis-derive. Two queens sit at $(i, Q_i)$ and $(j, Q_j)$ in (column, row) coordinates. They share a diagonal exactly when the horizontal distance equals the vertical distance, i.e. $|i - j| = |Q_i - Q_j|$. Forbidding that gives $|Q_i - Q_j| \neq |i-j|$. Both diagonal directions are covered by the single absolute-value equation, which is why formulation 2 needs one condition where formulation 1 needed two families.</p>
+  <p>The diagonal condition is the one people mis-derive. Two queens sit at $(i, Q_i)$ and $(j, Q_j)$ in (column, row) coordinates, and they share a diagonal exactly when the horizontal distance equals the vertical distance, $|i - j| = |Q_i - Q_j|$. Forbidding that gives $|Q_i - Q_j| \neq |i-j|$. One absolute-value equation covers both diagonal directions, which is why formulation 2 needs one condition where formulation 1 needed two families.</p>
 
-  <p>And let us verify that explicit list for $n=4$ by hand, since the course writes it with a "…" and moves on. We need $Q_1 \neq Q_2$ and $|Q_1 - Q_2| \neq |1-2| = 1$ — i.e. the two rows must differ by at least $2$:</p>
+  <p>Verify the explicit list for $n=4$, which the course writes with a "…" and moves on. We need $Q_1 \neq Q_2$ and $|Q_1 - Q_2| \neq |1-2| = 1$ — the two rows must differ by at least $2$:</p>
 
   <div class="scroll-x">
   <table class="tight center">
@@ -301,7 +276,7 @@
   </table>
   </div>
 
-  <p>Six allowed pairs out of sixteen: $(1,3), (1,4), (2,4), (3,1), (4,1), (4,2)$ — exactly the set above. Notice how much writing that took for <em>one</em> of the $\binom{4}{2} = 6$ constraints. For $n = 8$ you would fill $\binom{8}{2} = 28$ tables of $64$ cells each. The implicit form says the same thing in two lines of algebra, which is the practical argument for implicit constraints: they are short to write and cheap to test, and a solver can evaluate $|Q_i - Q_j| \neq |i-j|$ in two instructions instead of searching a stored table.</p>
+  <p>Six allowed pairs out of sixteen: $(1,3), (1,4), (2,4), (3,1), (4,1), (4,2)$ — exactly the set above. That was <em>one</em> of the $\binom{4}{2} = 6$ constraints; for $n = 8$ you would fill $\binom{8}{2} = 28$ tables of $64$ cells. The implicit form says the same thing in two lines of algebra and costs two instructions to test instead of a table lookup.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p><strong>Implicit constraint:</strong> a formula or piece of code that returns true/false for a tuple of values. Compact, but opaque — the solver cannot look inside it.</p>
@@ -325,14 +300,12 @@
   </table>
   </div>
 
-  <p>For $n = 8$: <strong>16.8 million</strong> assignments instead of <strong>18.4 quintillion</strong>. A laptop enumerates the first number in under a second and will never finish the second.</p>
-
-  <p>But the count is only half the story. Three more things improve, and they matter more than the raw number:</p>
+  <p>For $n = 8$: <strong>16.8 million</strong> assignments instead of <strong>18.4 quintillion</strong>. Three further things improve, and they matter more than the raw count:</p>
 
   <ol>
-    <li><strong>Two constraint families vanish.</strong> "One queen per column" and "exactly $n$ queens" are now <em>structurally impossible to violate</em> — every complete assignment automatically has one queen per column and $n$ queens total. A constraint you cannot violate costs nothing to enforce. This is the real trick: <em>the best way to satisfy a constraint is to choose variables that cannot express its violation.</em></li>
-    <li><strong>The CSP becomes purely binary.</strong> The $n^2$-ary count constraint is gone, so the constraint graph is a clean $K_n$ (every pair of columns is constrained) and every algorithm in this chapter applies directly.</li>
-    <li><strong>Every assignment is closer to being a solution.</strong> In formulation 1, almost every one of the $2^{64}$ assignments is garbage — the wrong number of queens entirely. In formulation 2 every assignment is at least a legal-looking board, and $40{,}320$ of the $16{,}777{,}216$ are even row-distinct permutations. The search is dense in near-solutions, which is precisely what makes filtering effective.</li>
+    <li><strong>Two constraint families vanish.</strong> "One queen per column" and "exactly $n$ queens" are now <em>impossible to violate</em>, and a constraint you cannot violate costs nothing to enforce. <em>The best way to satisfy a constraint is to choose variables that cannot express its violation.</em></li>
+    <li><strong>The CSP becomes purely binary.</strong> The $n^2$-ary count constraint is gone, so the constraint graph is a clean $K_n$ and every algorithm here applies directly.</li>
+    <li><strong>Every assignment is closer to a solution.</strong> Formulation 1's assignments mostly have the wrong number of queens entirely; in formulation 2 every assignment is a legal-looking board and $40{,}320$ of the $16{,}777{,}216$ are row-distinct permutations. A space dense in near-solutions is what makes filtering effective.</li>
   </ol>
 
   <div class="viz">
@@ -407,7 +380,7 @@
 
   <h2 id="sudoku">7. Sudoku as a CSP</h2>
 
-  <p>Sudoku is the canonical CSP because it is the one the reader has already solved by hand, using — whether they knew it or not — exactly the algorithms in this chapter.</p>
+  <p>Sudoku is the canonical CSP because it is the one you have already solved by hand, using — whether you knew it or not — exactly the algorithms in this chapter.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Variables:</strong> each <em>open</em> (blank) square. The given digits are not variables; they are fixed. A typical puzzle has around 50–60 open squares out of 81.</p>
@@ -415,17 +388,17 @@
     <p style="margin-bottom:0"><strong>Constraints:</strong> a 9-way <code>alldiff</code> for each row, each column, and each $3\times 3$ region — 27 constraints in total. ("Region" is the course's word for what puzzle books call a box or block.)</p>
   </div>
 
-  <p><code>alldiff</code>$(V_1,\dots,V_9)$ is satisfied exactly when all nine values are pairwise distinct. Each such constraint mentions nine variables, so this is a <strong>higher-order</strong> CSP, not a binary one, and the constraint-graph machinery of <a href="#constraint-graphs">§5</a> does not literally apply.</p>
+  <p><code>alldiff</code>$(V_1,\dots,V_9)$ holds exactly when all nine values are pairwise distinct. Each mentions nine variables, so this is a <strong>higher-order</strong> CSP and the constraint-graph machinery of <a href="#constraint-graphs">§5</a> does not literally apply.</p>
 
   <h3>Decomposing into binary constraints</h3>
 
-  <p>The course notes the alternative: "or can have a bunch of pairwise inequality constraints". Replace each 9-way <code>alldiff</code> by all $\binom{9}{2} = 36$ pairwise $\neq$ constraints. Then the CSP is binary and every algorithm below runs unmodified.</p>
+  <p>The course's alternative: replace each 9-way <code>alldiff</code> by all $\binom{9}{2} = 36$ pairwise $\neq$ constraints. The CSP is then binary and every algorithm below runs unmodified.</p>
 
-  <p>How many pairwise constraints is that? Naively $27 \times 36 = 972$, but that double-counts: two squares in the same row <em>and</em> the same region generate the same $\neq$ constraint twice. Count instead by squares. Every square has $8$ row-peers, $8$ column-peers, and $8$ region-peers, of which $4$ are already row- or column-peers — so $8 + 8 + 4 = 20$ distinct peers. Total distinct constraints:</p>
+  <p>How many? Naively $27 \times 36 = 972$, but that double-counts — two squares in the same row <em>and</em> region generate the same constraint twice. Count by squares: each has $8$ row-peers, $8$ column-peers and $8$ region-peers of which $4$ are already row- or column-peers, so $8+8+4 = 20$ distinct peers, and</p>
 
-  $$\frac{81 \times 20}{2} = 810.$$
+  $$\frac{81 \times 20}{2} = 810$$
 
-  <p>(Divide by two because each constraint is shared by the two squares it relates.) So the binary Sudoku has $810$ edges over $81$ nodes — a dense but perfectly ordinary constraint graph.</p>
+  <p>distinct constraints — divide by two because each is shared by the two squares it relates. So $810$ edges over $81$ nodes.</p>
 
   <div class="box key"><span class="label">Key idea — the higher-order/binary tradeoff</span>
     <p><strong>Higher-order form (27 alldiffs):</strong> fewer, larger constraints. Each one can be propagated by a specialised, <em>strong</em> algorithm that sees all nine variables at once.</p>
@@ -440,91 +413,44 @@
     <p style="margin-bottom:0">Under the <strong>9-way alldiff</strong> reading, three variables need three distinct values but only two values exist between them. By the pigeonhole principle the puzzle is already dead. A dedicated <code>alldiff</code> propagator (Régin's algorithm, via bipartite matching) detects exactly this and fails immediately. <span class="pill">beyond syllabus</span> The general phenomenon — that local pairwise consistency misses global infeasibility — is the subject of <a href="#limitations">§15</a>.</p>
   </div>
 
-  <p>A last observation that will matter in <a href="#ordering">§17</a>: when a human solves Sudoku, the move "this square can only be a 7, so write 7" is precisely <strong>minimum remaining values</strong> — choosing the variable whose domain has shrunk to size one. And "cross 7 off every peer of this square" is precisely <strong>forward checking</strong>. You already run these algorithms; this chapter just names them.</p>
+  <p>One observation for <a href="#ordering">§17</a>: when a human solves Sudoku, "this square can only be a 7, so write 7" is precisely <strong>minimum remaining values</strong>, and "cross 7 off every peer of this square" is precisely <strong>forward checking</strong>. You already run these algorithms; this chapter names them.</p>
 
   <h2 id="varieties">8. Varieties of CSPs</h2>
 
-  <p>Everything so far assumed finite domains of colours or row indices. The formalism is wider than that, and it is worth knowing which parts of it today's algorithms cover.</p>
-
-  <h3>Discrete variables, finite domains</h3>
-
-  <p>This is our case. With $n$ variables and domain size $d$, the number of complete assignments is</p>
-
-  $$d^n,$$
-
-  <p>so brute-force enumeration is $O(d^n)$ — exponential in the number of variables, and it is exponential no matter how clever we are, because:</p>
+  <p>Everything so far assumed <strong>discrete variables with finite domains</strong>. With $n$ variables and domain size $d$ there are $d^{\,n}$ complete assignments, so brute-force enumeration is $O(d^{\,n})$ — and it stays exponential no matter how clever we are, because:</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A <strong>Boolean CSP</strong> is a finite-domain CSP with $d = 2$. The most famous one is <strong>Boolean satisfiability (SAT)</strong>: variables are propositional atoms with domain $\{\text{true},\text{false}\}$, and each constraint is a clause such as $(x_1 \vee \neg x_2 \vee x_3)$, which forbids exactly one of the eight assignments to those three variables.</p>
     <p style="margin-bottom:0">SAT is <strong>NP-complete</strong> (Cook–Levin, 1971). Since SAT is a special case of finite-domain CSP, <em>deciding whether a CSP has a solution is NP-hard in general.</em></p>
   </div>
 
-  <p>Read that consequence carefully, because it sets expectations for the rest of the chapter. No algorithm below changes the worst-case complexity. Forward checking, AC-3, MRV and LCV are all <strong>heuristics and pruning rules</strong>: they shrink the tree enormously on realistic instances, and they change nothing at all in the worst case. That is not a failure — it is the only honest thing an exponential-hard problem allows.</p>
+  <p>So no algorithm below changes the worst-case complexity. Forward checking, AC-3, MRV and LCV are <strong>heuristics and pruning rules</strong>: they shrink the tree enormously on realistic instances and change nothing at all in the worst case.</p>
 
-  <h3>Discrete variables, infinite domains</h3>
+  <p>The formalism is wider than finite domains, and the slides hand the rest to 07-380. Domains can be <strong>discrete but infinite</strong> — job scheduling with integer start times — where an explicit table of allowed tuples is not a data structure and you need a constraint language instead, writing things like $\text{Start}_{J_1} + 5 \le \text{Start}_{J_3}$; linear integer constraints are <em>solvable</em>, nonlinear ones are <em>undecidable</em> (Matiyasevich 1970, Hilbert's tenth problem). Or variables can be <strong>continuous</strong> — Hubble observation windows — where with linear constraints feasibility is solvable in <em>polynomial</em> time by linear programming.</p>
 
-  <p>Domains may be infinite but still discrete: the integers, or the set of all strings.</p>
-
-  <p>The course's example is <strong>job scheduling</strong>, where the variables are the start and end times of each job. If jobs can start at any integer minute, the domain is $\mathbb{Z}$ and you cannot enumerate it. You therefore cannot write constraints as explicit tables of allowed tuples — an infinite table is not a data structure. You need a <strong>constraint language</strong> instead, and you write things like</p>
-
-  $$\text{Start}_{J_1} + 5 \le \text{Start}_{J_3},$$
-
-  <p>meaning "job $J_1$ takes five minutes and $J_3$ cannot begin until it is finished".</p>
-
-  <ul>
-    <li><strong>Linear constraints</strong> over integers (sums of variables with integer coefficients, compared by $\le$, $=$, $\ge$) are <strong>solvable</strong> — decidable, by integer programming methods.</li>
-    <li><strong>Nonlinear</strong> integer constraints are <strong>undecidable</strong>: there is no algorithm that decides, for every such system, whether a solution exists. This is Matiyasevich's 1970 theorem resolving Hilbert's tenth problem about Diophantine equations. <span class="pill">beyond syllabus</span> "Undecidable" is much stronger than "slow": it is not that we lack a fast algorithm, it is that no algorithm exists.</li>
-  </ul>
-
-  <h3>Continuous variables</h3>
-
-  <p>The course's example is scheduling <strong>Hubble Space Telescope observations</strong>: the start and end times of each observation are real numbers, subject to constraints such as "this observation must finish before Earth occults the target" and "the slew between these two targets takes at least 12 minutes".</p>
-
-  <p>Here the news is unexpectedly good: with <strong>linear</strong> constraints on continuous variables, feasibility is solvable in <em>polynomial</em> time — this is linear programming, and it is one of the genuinely tractable corners of optimisation.</p>
-
-  <div class="box warn"><span class="label">Out of scope</span>
-    <p style="margin-bottom:0">The slides mark continuous CSPs "we will cover in 07-380". Linear and convex optimisation is a different course; do not expect it on this exam. Note only the shape of the landscape: <em>continuous + linear</em> is polynomial, <em>discrete + finite</em> is NP-hard, and <em>discrete + infinite + nonlinear</em> is undecidable. Discreteness, not size, is what makes CSPs hard.</p>
-  </div>
-
-  <div class="scroll-x">
-  <table>
-    <thead><tr><th>Variable type</th><th>Example</th><th>Status</th><th>Covered here?</th></tr></thead>
-    <tbody>
-      <tr><td>Discrete, finite domain</td><td>map colouring, n-queens, Sudoku, SAT</td><td>$O(d^n)$ to enumerate; NP-complete to decide</td><td>yes — all of today</td></tr>
-      <tr><td>Discrete, infinite domain, linear</td><td>job scheduling on integer minutes</td><td>solvable</td><td>mentioned only</td></tr>
-      <tr><td>Discrete, infinite domain, nonlinear</td><td>general Diophantine systems</td><td>undecidable</td><td>mentioned only</td></tr>
-      <tr><td>Continuous, linear</td><td>Hubble observation windows</td><td>polynomial time</td><td>no — 07-380</td></tr>
-    </tbody>
-  </table>
+  <div class="box key"><span class="label">Key idea</span>
+    <p style="margin-bottom:0">The landscape: <em>continuous + linear</em> is polynomial, <em>discrete + finite</em> is NP-hard, <em>discrete + infinite + nonlinear</em> is undecidable. Discreteness, not size, is what makes CSPs hard. Only the finite-domain case is examinable here.</p>
   </div>
 
   <h2 id="varieties-of-constraints">9. Varieties of constraints</h2>
 
-  <p>Constraints vary along a second axis: how many variables one constraint mentions — its <strong>arity</strong>.</p>
+  <p>Constraints vary along a second axis: <strong>arity</strong>, how many variables one constraint mentions.</p>
 
   <h3>Unary constraints</h3>
 
-  <p>A unary constraint mentions a single variable: "South Australia dislikes green", $\text{SA} \neq \text{green}$.</p>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p style="margin-bottom:0">Unary constraints are <em>free</em>. A constraint on one variable is simply a statement about which values that variable may take — which is what a domain is. So you delete the forbidden values from the domain once, before search starts, and then forget the constraint ever existed. In the course's words, unary constraints are "equivalent to reducing domains". No algorithm in this chapter needs to handle them at run time.</p>
-  </div>
-
-  <p>Worked instance: $D_{\text{SA}} = \{\text{red},\text{green},\text{blue}\}$ with the unary constraint $\text{SA} \neq \text{green}$ becomes $D_{\text{SA}} = \{\text{red},\text{blue}\}$, and the constraint set drops that constraint. Done in $O(d)$, once, forever.</p>
+  <p>One variable: "South Australia dislikes green", $\text{SA} \neq \text{green}$. These are <em>free</em>, because a statement about which values one variable may take <em>is</em> a domain. Delete the forbidden values once, before search, and forget the constraint existed — the course's "equivalent to reducing domains". So $D_{\text{SA}} = \{\text{red},\text{green},\text{blue}\}$ becomes $\{\text{red},\text{blue}\}$, in $O(d)$, once, forever.</p>
 
   <h3>Binary constraints</h3>
 
-  <p>A binary constraint mentions exactly two variables: $\text{SA} \neq \text{NSW}$. This is the focus of the whole lecture, because binary constraints are exactly the ones that give a constraint <em>graph</em>, and a graph is a thing algorithms can walk.</p>
+  <p>Exactly two variables: $\text{SA} \neq \text{NSW}$. The focus of the lecture, because these are exactly the constraints that give a constraint <em>graph</em>, and a graph is a thing algorithms can walk.</p>
 
   <h3>Higher-order constraints</h3>
 
-  <p>Three or more variables: the Sudoku <code>alldiff</code> of <a href="#sudoku">§7</a>, or the column constraints of a cryptarithmetic puzzle (TWO + TWO = FOUR, where one column relates two digits, a carry in and a carry out — four variables at once).</p>
-
-  <p>A higher-order constraint over $k$ variables corresponds to a <em>hyperedge</em> joining $k$ nodes, giving a constraint hypergraph rather than a graph. The standard move, as in §7, is to decompose into binary constraints so the binary machinery applies.</p>
+  <p>Three or more: the Sudoku <code>alldiff</code> of <a href="#sudoku">§7</a>, or a cryptarithmetic column (two digits, a carry in and a carry out — four variables). A $k$-ary constraint is a <em>hyperedge</em> on $k$ nodes, giving a hypergraph; the standard move is to decompose into binary constraints.</p>
 
   <h3>Soft constraints (preferences)</h3>
 
-  <p>Everything so far is <em>hard</em>: an assignment either satisfies the constraints or it is not a solution. Real problems also have preferences — the course's example is "red is better than green".</p>
+  <p>Everything so far is <em>hard</em>: an assignment satisfies the constraints or it is not a solution. Real problems also have preferences — the course's example is "red is better than green".</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A <strong>soft constraint</strong> or <strong>preference</strong> is often represented by attaching a <em>cost</em> to each variable assignment. The cost of a complete assignment is the sum of the costs of its parts, and we seek the cheapest assignment that satisfies all the hard constraints:</p>
@@ -536,11 +462,11 @@
     <p style="margin-bottom:0">Thinking preferences are a small extension. They are not: they break the defining property of identification problems from <a href="#planning-vs-identification">§1</a>. Once assignments have costs, the <em>first</em> solution you find is no longer good enough — you must keep searching to prove no cheaper one exists, or use branch-and-bound. Every algorithm below stops at the first solution, and that is only correct because all solutions are equally good.</p>
   </div>
 
-  <p>A quick example to make the arithmetic concrete. Suppose in Australia every region costs $0$ for red, $1$ for green and $3$ for blue. The solution from <a href="#map-colouring">§4</a> — WA red, NT green, SA blue, Q red, NSW green, V red, T green — costs $0+1+3+0+1+0+1 = 6$. Recolouring T from green to red is still legal (T has no neighbours) and costs $5$. So that solution was not optimal, even though it was perfectly valid. Under hard constraints only, both are equally correct answers; under preferences, only one is.</p>
+  <p>Concretely: suppose every region costs $0$ for red, $1$ for green and $3$ for blue. The solution from <a href="#map-colouring">§4</a> — WA red, NT green, SA blue, Q red, NSW green, V red, T green — costs $0+1+3+0+1+0+1 = 6$. Recolouring T from green to red is still legal (T has no neighbours) and costs $5$, so that solution was valid but not optimal. Under hard constraints only, both are equally correct answers; under preferences, only one is.</p>
 
   <h2 id="csp-as-search">10. A CSP <em>is</em> a search problem</h2>
 
-  <p>Before inventing anything new, let us check that the search machinery of <a href="search-foundations.html">Chapter 2</a> already applies. It does, verbatim.</p>
+  <p>Before inventing anything new, check that the search machinery of <a href="search-foundations.html">Chapter 2</a> already applies. It does, verbatim.</p>
 
   <div class="box defn"><span class="label">Definition — standard search formulation of a CSP</span>
     <ul>
@@ -551,49 +477,38 @@
     </ul>
   </div>
 
-  <p>Three consequences follow immediately and they are worth stating out loud:</p>
+  <p>Three consequences follow immediately:</p>
 
   <ol>
-    <li>Solutions appear only at <strong>depth $n$</strong>, because each successor step assigns exactly one variable and the goal test demands all $n$.</li>
-    <li>The tree has <strong>no infinite paths</strong> and no cycles: every step strictly increases the number of assigned variables, so the deepest any path can go is $n$.</li>
-    <li>The <strong>branching factor is $(n-\ell)\,d$</strong> at depth $\ell$: any of the $n - \ell$ still-unassigned variables, times any of its $d$ values.</li>
+    <li>Solutions appear only at <strong>depth $n$</strong>: each step assigns one variable, and the goal test demands all $n$.</li>
+    <li>There are <strong>no infinite paths</strong> and no cycles — every step strictly increases the number of assigned variables.</li>
+    <li>The <strong>branching factor is $(n-\ell)\,d$</strong> at depth $\ell$: any of the $n - \ell$ unassigned variables, times any of its $d$ values.</li>
   </ol>
 
-  <p>That third point is a disaster. Multiply the branching factors down the tree:</p>
+  <p>That third point is a disaster. Multiplying the branching factors down the tree,</p>
 
-  $$\#\text{leaves} \;=\; (n d)\big((n-1)d\big)\cdots(1\cdot d) \;=\; n!\, d^{\,n}.$$
+  $$\#\text{leaves} \;=\; (n d)\big((n-1)d\big)\cdots(1\cdot d) \;=\; n!\, d^{\,n},$$
 
-  <p>For Australia, $n = 7$, $d = 3$:</p>
+  <p>and for Australia ($n = 7$, $d = 3$),</p>
 
   $$7! \cdot 3^7 = 5040 \times 2187 = 11{,}022{,}480 \ \text{leaves},$$
 
-  <p>while there are only $3^7 = 2187$ distinct complete assignments. Every assignment is reached $5040$ times, once per ordering of the seven variables. We are doing five thousand times more work than the problem contains. Fixing that is Idea 1 of <a href="#backtracking">§11</a>.</p>
+  <p>while there are only $3^7 = 2187$ distinct complete assignments. Every assignment is reached $5040$ times, once per ordering of the seven variables. Fixing that is Idea 1 of <a href="#backtracking">§11</a>.</p>
 
   <h3>The naive algorithm: DFS with the goal test at the bottom</h3>
 
-  <p>The course's starting point is deliberately dumb, and worth running once so you feel the pain:</p>
-
-  <ul>
-    <li>At each node, assign a value from the domain to a variable.</li>
-    <li>Check feasibility (the constraints) <em>only when the assignment is complete</em>.</li>
-  </ul>
-
-  <p>This treats the goal test as the black box of general search: you may not call it until every variable has a value. So we build $\text{WA}=\text{red},\ \text{NT}=\text{red}$ — already illegal, they share a border — and cheerfully extend it through five more variables, generating $3^5 = 243$ complete assignments underneath a prefix that was dead on arrival, and rejecting all $243$ one at a time.</p>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p style="margin-bottom:0">This is like filling in a crossword entirely at random, checking nothing, then at the very end reading the whole grid to see if it happens to be right. You know instantly that the right move is to check each word as you write it. That instinct is exactly "backtracking search", and the fact that it is obvious to you is the point: the algorithm is not clever, it is just refusing to be stupid.</p>
-  </div>
+  <p>The course's starting point is deliberately dumb: assign a value at each node, and check the constraints <em>only when the assignment is complete</em> — the goal test as the black box of general search. So we build $\text{WA}=\text{red},\ \text{NT}=\text{red}$, already illegal, and extend it through five more variables, generating $3^5 = 243$ complete assignments under a prefix that was dead on arrival and rejecting all $243$ one at a time.</p>
 
   <h3>Poll 1 — should we use BFS or DFS?</h3>
 
   <div class="box key"><span class="label">Answer: DFS — and it is not close.</span>
-    <p><strong>1. BFS's advantage is unavailable.</strong> BFS is preferred when it matters that you find the <em>shallowest</em> goal, because shallowest means cheapest when every step costs the same. Here every solution sits at exactly depth $n$ (<a href="#planning-vs-identification">§1</a>). There is no shallow solution to find, so BFS's optimality guarantee buys literally nothing.</p>
-    <p><strong>2. DFS's disadvantage is unavailable too.</strong> DFS is normally incomplete because it can dive down an infinite path and never return. The CSP tree has depth exactly $n$ — every path terminates after $n$ assignments. So DFS is <em>complete</em> here, for free.</p>
-    <p><strong>3. Memory.</strong> This is the decisive argument. BFS must hold an entire level of the frontier: expanding level $n-1$ means storing on the order of $d^{\,n}$ nodes (for Australia, at least $2187$ partial assignments, and $11$ million if you count the duplicated orderings). DFS stores one root-to-leaf path: $O(n)$ nodes, or $O(nd)$ if you also remember which values remain to try at each level. For Australia that is <strong>7 nodes versus thousands</strong>, and the gap is exponential in $n$.</p>
-    <p style="margin-bottom:0"><strong>4. Time to first solution.</strong> BFS would generate every partial assignment of size $1$, then every one of size $2$, and so on — it reaches its first <em>complete</em> assignment only after enumerating all the incomplete ones. DFS reaches a complete assignment after $n$ expansions. Since any solution is as good as any other, getting to the bottom fast is exactly what we want.</p>
+    <p><strong>1. BFS's advantage is unavailable.</strong> BFS is preferred when the <em>shallowest</em> goal is the cheapest. Every solution here sits at depth $n$, so BFS's optimality guarantee buys nothing.</p>
+    <p><strong>2. DFS's disadvantage is unavailable too.</strong> DFS is incomplete only because it can dive down an infinite path; this tree has depth exactly $n$, so DFS is <em>complete</em> here for free.</p>
+    <p><strong>3. Memory — the decisive argument.</strong> BFS holds a whole level of the frontier, on the order of $d^{\,n}$ nodes (for Australia at least $2187$ partial assignments). DFS stores one root-to-leaf path: $O(n)$ nodes, or $O(nd)$ if it also remembers which values remain at each level. <strong>7 nodes versus thousands</strong>, and the gap is exponential in $n$.</p>
+    <p style="margin-bottom:0"><strong>4. Time to first solution.</strong> BFS reaches its first <em>complete</em> assignment only after enumerating every incomplete one; DFS gets there in $n$ expansions. Any solution is as good as any other, so reaching the bottom fast is exactly what we want.</p>
   </div>
 
-  <p>So: <strong>depth-first search</strong>, and everything below is DFS with improvements bolted on.</p>
+  <p>So: <strong>depth-first search</strong>, with improvements bolted on.</p>
 
   <div class="quiz" data-answer="2">
     <div class="q">Why is DFS complete for a CSP even though DFS is incomplete for search problems in general?</div>
@@ -616,14 +531,11 @@
 
   $$[\,\text{WA}=\text{red} \text{ then } \text{NT}=\text{green}\,] \quad\text{is the same state as}\quad [\,\text{NT}=\text{green} \text{ then } \text{WA}=\text{red}\,].$$
 
-  <p>Both are the set $\{\text{WA}=\text{red},\ \text{NT}=\text{green}\}$. A <em>set</em> has no order. So a search that explores both orderings explores the same state twice, and in general explores each state $\ell!$ times at depth $\ell$.</p>
-
-  <p>The fix is a single line of code: at each node, <strong>fix one variable and branch only on its values</strong>. Which variable you pick is up to you; what matters is that you pick <em>one</em> and do not consider the others at this node.</p>
+  <p>Both are the set $\{\text{WA}=\text{red},\ \text{NT}=\text{green}\}$, and a set has no order, so a search exploring both orderings explores each state $\ell!$ times at depth $\ell$. The fix is one line of code: at each node, <strong>fix one variable and branch only on its values</strong>. Which variable is up to you; what matters is that you pick <em>one</em> and do not consider the others at this node.</p>
 
   <div class="box proof"><span class="label">Why this is sound</span>
-    <p>It looks like we are throwing away options — at the root we now generate $3$ children instead of $21$. Could we lose a solution?</p>
-    <p>No. Let $S$ be any solution, a complete assignment. Suppose at the root we commit to branching on $\text{WA}$. $S$ gives $\text{WA}$ some value $v$, so $S$ lies in the subtree under the child $\text{WA}=v$ — that child exists, because we generate a child for every value in $D_{\text{WA}}$. Recurse: at every node, whichever variable we choose to branch on, $S$ assigns it some value, and that branch exists. By induction $S$ is reachable.</p>
-    <p style="margin-bottom:0">What we discarded were <em>alternative orderings</em> of the same assignments, never alternative assignments. Completeness is preserved exactly. (Note the proof also shows that <em>any</em> variable-selection rule is sound — which is what licenses MRV in <a href="#ordering">§17</a>.)</p>
+    <p>At the root we now generate $3$ children instead of $21$. Could we lose a solution? No. Let $S$ be any solution, a complete assignment, and suppose we branch on $\text{WA}$. $S$ gives $\text{WA}$ some value $v$, and the child $\text{WA}=v$ exists because we generate a child for every value in $D_{\text{WA}}$ — so $S$ lies in its subtree. Recurse: at every node, whichever variable we branch on, $S$ assigns it some value and that branch exists. By induction $S$ is reachable.</p>
+    <p style="margin-bottom:0">What we discarded were <em>alternative orderings</em> of the same assignments, never alternative assignments, so completeness is preserved exactly. The proof also shows that <em>any</em> variable-selection rule is sound — which is what licenses MRV in <a href="#ordering">§17</a>. $\square$</p>
   </div>
 
   <p><strong>Quantifying the saving.</strong> Branching factor drops from $nd$ to $d$; the leaf count drops from $n!\,d^{\,n}$ to $d^{\,n}$; that is a factor of $n!$.</p>
@@ -641,9 +553,7 @@
 
   <h3>Idea 2 — check constraints as you go</h3>
 
-  <p>Consider only values which do not conflict with previous assignments. This may need some computation to check the constraints — for each candidate value you must test it against the already-assigned neighbours — but that cost is trivial compared to the subtree you avoid. The course calls this the <strong>incremental goal test</strong>: rather than one big test at depth $n$, a small test at every node.</p>
-
-  <p>Concretely, in Australia with $\text{WA}=\text{red}$ already assigned, when we come to $\text{NT}$ we simply never generate the child $\text{NT}=\text{red}$. The naive DFS would have generated it and then built all $3^5 = 243$ complete assignments below it before noticing.</p>
+  <p>Consider only values that do not conflict with previous assignments. Testing each candidate against the already-assigned neighbours costs a little computation, but nothing compared with the subtree avoided. The course calls this the <strong>incremental goal test</strong>: a small test at every node instead of one big test at depth $n$. Concretely, with $\text{WA}=\text{red}$ assigned, we simply never generate the child $\text{NT}=\text{red}$ — which naive DFS would have grown $3^5 = 243$ complete assignments beneath before noticing.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 3 — naive DFS versus backtracking, top two levels</div>
@@ -726,28 +636,23 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
 
     return failure                                 # no value for var works; tell the caller</code></pre>
 
-  <p>Every line earns its place, so read them one at a time.</p>
+  <p>Three lines are worth reading twice.</p>
 
   <ul>
-    <li><code>if assignment is complete then return assignment</code> — note there is <strong>no constraint check here</strong>. We do not need one: every value was checked against the existing assignment at the moment it was added, so a complete assignment is automatically consistent. The course states this explicitly ("no need to check constraints for a complete assignment"), and it is the pay-off of the incremental goal test.</li>
-    <li><code>SELECT-UNASSIGNED-VARIABLE</code> — returns any unassigned variable. Sound for <em>any</em> choice, by the proof above. Plain backtracking takes the next one in a fixed order; MRV makes this smart.</li>
-    <li><code>ORDER-DOMAIN-VALUES</code> — returns the values of $D_{var}$ in some order. Sound for any order, since the loop tries them all. LCV makes this smart.</li>
-    <li><code>if value is consistent with assignment</code> — this is Idea 2, the fail-on-violation test. It checks only the constraints between <code>var</code> and the <em>already assigned</em> variables; constraints involving two unassigned variables are not testable yet.</li>
-    <li><code>remove {var = value} from assignment</code> — the actual backtrack. We undo the assignment and try the next value. In an implementation that also maintains filtered domains, this line must additionally <em>restore the domains</em> to their pre-assignment state.</li>
-    <li><code>return failure</code> — reached when the <code>for</code> loop is exhausted: no value of <code>var</code> can work, so this whole subtree is dead and the parent must try something else.</li>
+    <li><code>if assignment is complete then return assignment</code> — <strong>no constraint check here</strong>, and none is needed: every value was checked when it was added, so a complete assignment is automatically consistent. The course states this explicitly ("no need to check constraints for a complete assignment"); it is the pay-off of the incremental goal test.</li>
+    <li><code>if value is consistent with assignment</code> — Idea 2. It checks only constraints between <code>var</code> and the <em>already assigned</em> variables; constraints between two unassigned variables are not testable yet.</li>
+    <li><code>remove {var = value} from assignment</code> — the actual backtrack. An implementation that maintains filtered domains must also <em>restore the domains</em> here. <code>return failure</code> is reached when the loop is exhausted: no value of <code>var</code> works, so the subtree is dead. (<code>SELECT-UNASSIGNED-VARIABLE</code> and <code>ORDER-DOMAIN-VALUES</code> are sound for any choice and any order; MRV and LCV make them smart in <a href="#ordering">§17</a>.)</li>
   </ul>
 
   <div class="box key"><span class="label">Say it in one line</span>
     <p style="margin-bottom:0"><strong>Backtracking = DFS + variable ordering + fail-on-violation.</strong> And the <strong>decision points</strong> — the three places where a smarter policy can be dropped in without touching correctness — are: <em>(1) which variable next</em> (<a href="#ordering">§17</a>, MRV), <em>(2) which value first</em> (§17, LCV), and <em>(3) how hard to look for trouble at each node</em> (<a href="#forward-checking">§12</a> forward checking, <a href="#ac3">§14</a> AC-3). A fourth, beyond this course, is <em>(4) how far to jump back on failure</em> — plain backtracking undoes one assignment; <em>backjumping</em> undoes several at once. <span class="pill">beyond syllabus</span></p>
   </div>
 
-  <p>With just these two improvements, backtracking search <strong>solves n-queens for $n \approx 25$</strong>. That is the honest number from the course: not thousands, twenty-five. Holding onto that figure makes the improvements in the rest of the chapter feel necessary rather than decorative — by <a href="#ordering">§17</a> the same basic algorithm will handle $n = 1000$.</p>
-
-  <p class="muted tiny">The course links an interactive demo of plain backtracking on map colouring at <code>https://www.cs.cmu.edu/~15281/demos/csp_backtracking</code>. The widget in <a href="#ordering">§17</a> below does the same job without leaving this page, and adds the filtering and ordering variants side by side.</p>
+  <p>With just these two improvements, backtracking search <strong>solves n-queens for $n \approx 25$</strong>. That is the honest number from the course: not thousands, twenty-five. Hold onto it — by <a href="#ordering">§17</a> the same basic algorithm will handle $n = 1000$.</p>
 
   <h2 id="forward-checking">12. Filtering, part 1: forward checking</h2>
 
-  <p>Backtracking still wastes effort in a specific, diagnosable way. Look at the state $\{\text{WA}=\text{red},\ \text{Q}=\text{green},\ \text{V}=\text{blue}\}$. It is perfectly consistent — no two of WA, Q, V even share a border. Plain backtracking sees nothing wrong and carries on assigning NT, then NSW, then SA. But it is <em>already dead</em>: SA borders all three of WA, Q and V, so SA can be neither red nor green nor blue. Plain backtracking will not discover this until it actually gets to SA, after building every combination of NT and NSW above it.</p>
+  <p>Backtracking still wastes effort in a specific, diagnosable way. The state $\{\text{WA}=\text{red},\ \text{Q}=\text{green},\ \text{V}=\text{blue}\}$ is perfectly consistent — no two of WA, Q, V even share a border — but it is <em>already dead</em>: SA borders all three, so SA can be neither red nor green nor blue. Plain backtracking will not discover this until it actually gets to SA, after building every combination of NT and NSW above it.</p>
 
   <div class="box key"><span class="label">Key idea — filtering</span>
     <p style="margin-bottom:0"><strong>Filtering:</strong> keep track of the domains of the <em>unassigned</em> variables, and cross off bad options as you go. Failure is detected the moment some variable has <em>no values remaining</em> — which can be long before that variable is reached by the search.</p>
@@ -758,20 +663,18 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
   </div>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p style="margin-bottom:0">Forward checking is the pencil marks in a Sudoku grid. You do not just write a 7 into a square; you immediately rub the little 7 out of every square in that row, column and box. The instant a square has no pencil marks left, you know you went wrong earlier — without having to reach that square in your solving order. Forward checking is the algorithmic version of that habit, and it costs the same as the habit does: a little bookkeeping per move.</p>
+    <p style="margin-bottom:0">Forward checking is the pencil marks in a Sudoku grid. You do not just write a 7 into a square; you immediately rub the little 7 out of every square in that row, column and box. The instant a square has no pencil marks left, you know you went wrong earlier — without having to reach that square in your solving order.</p>
   </div>
 
-  <h3>The Australia trace, worked in full</h3>
+  <h3>The Australia trace</h3>
 
-  <p>Assign, in order, $\text{WA}=\text{red}$, then $\text{Q}=\text{green}$, then $\text{V}=\text{blue}$, maintaining domains. Recall the borders: WA–NT, WA–SA, NT–SA, NT–Q, SA–Q, SA–NSW, SA–V, Q–NSW, NSW–V.</p>
+  <p>Assign $\text{WA}=\text{red}$, then $\text{Q}=\text{green}$, then $\text{V}=\text{blue}$, maintaining domains. Every domain starts $\{\text{R},\text{G},\text{B}\}$. Borders: WA–NT, WA–SA, NT–SA, NT–Q, SA–Q, SA–NSW, SA–V, Q–NSW, NSW–V.</p>
 
-  <p><strong>Step 0 (start).</strong> Every domain is $\{\text{R},\text{G},\text{B}\}$.</p>
-
-  <p><strong>Step 1: WA = red.</strong> WA's unassigned neighbours are NT and SA. Delete R from both. Nobody else is touched — Q, NSW, V, T do not border WA.</p>
-
-  <p><strong>Step 2: Q = green.</strong> Q's unassigned neighbours are NT, SA and NSW. Delete G from each. NT was $\{\text{G},\text{B}\}$ and becomes $\{\text{B}\}$; SA was $\{\text{G},\text{B}\}$ and becomes $\{\text{B}\}$; NSW was $\{\text{R},\text{G},\text{B}\}$ and becomes $\{\text{R},\text{B}\}$. No domain is empty, so forward checking permits the search to continue.</p>
-
-  <p><strong>Step 3: V = blue.</strong> V's unassigned neighbours are SA and NSW. Delete B from each. NSW $\{\text{R},\text{B}\} \to \{\text{R}\}$, fine. SA $\{\text{B}\} \to \{\,\}$ — <strong>empty</strong>. <span style="color:var(--rose);font-weight:700">FAIL: a variable with no possible values.</span> Backtrack.</p>
+  <ul>
+    <li><strong>WA = red.</strong> Unassigned neighbours NT and SA: delete R from both. Q, NSW, V and T do not border WA and are untouched.</li>
+    <li><strong>Q = green.</strong> Unassigned neighbours NT, SA, NSW: delete G from each. NT $\{$G,B$\} \to \{$B$\}$, SA $\{$G,B$\} \to \{$B$\}$, NSW $\{$R,G,B$\} \to \{$R,B$\}$. No domain is empty, so forward checking permits the search to continue.</li>
+    <li><strong>V = blue.</strong> Unassigned neighbours SA and NSW: delete B from each. NSW $\{$R,B$\} \to \{$R$\}$, fine. SA $\{$B$\} \to \{\,\}$ — <strong>empty</strong>. <span style="color:var(--rose);font-weight:700">FAIL: a variable with no possible values.</span> Backtrack.</li>
+  </ul>
 
   <div class="viz">
     <div class="viz-title">Figure 4 — the forward-checking domain table, row by row</div>
@@ -831,9 +734,7 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
     <p style="margin-bottom:0">The arc $X \to Y$ is <strong>consistent</strong> iff <em>for every value $x$ in the tail's domain $D_X$, there is some value $y$ in the head's domain $D_Y$ such that the pair $(x,y)$ does not violate the constraint between $X$ and $Y$.</em></p>
   </div>
 
-  <p>Every symbol, named: $x$ ranges over the values currently left in $D_X$; $y$ ranges over the values currently left in $D_Y$; "does not violate" means the pair is allowed by the constraint (for map colouring, $x \neq y$). A $y$ that works for a given $x$ is called a <strong>support</strong> for $x$.</p>
-
-  <p>So: <em>the arc $X \to Y$ is consistent iff every value in the tail has at least one support in the head.</em></p>
+  <p>$x$ ranges over the values left in $D_X$, $y$ over those left in $D_Y$, and "does not violate" means the pair is allowed by the constraint (for map colouring, $x \neq y$). A $y$ that works for a given $x$ is a <strong>support</strong> for $x$. So: <em>the arc $X \to Y$ is consistent iff every value in the tail has at least one support in the head.</em></p>
 
   <div class="box key"><span class="label">ENFORCING AN ARC DELETES FROM THE TAIL</span>
     <p>To <strong>enforce</strong> arc consistency on $X \to Y$: <strong>remove from $D_X$</strong> every value that has no support in $D_Y$.</p>
@@ -886,31 +787,29 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
 
   <h3>Forward checking, re-read as arc consistency</h3>
 
-  <p>Now the punchline of the section. The course writes forward checking as:</p>
+  <p>The course writes forward checking as</p>
 
   $$\text{enforce } X \to Y \quad\text{for all } (X,Y) \in E \text{ with } Y \text{ newly assigned.}$$
 
-  <p>Unpack it. $E$ is the edge set of the constraint graph. $Y$ is the variable we just assigned, so $D_Y$ is a singleton $\{c\}$. $X$ ranges over $Y$'s neighbours. Enforcing $X \to Y$ deletes from $D_X$ every value with no support in $\{c\}$ — and for a $\neq$ constraint the only value without support is $c$ itself. So enforcing those arcs deletes exactly $c$ from each neighbour's domain. That is forward checking, verbatim.</p>
+  <p>Unpack it. $Y$ was just assigned, so $D_Y$ is a singleton $\{c\}$, and $X$ ranges over $Y$'s neighbours. Enforcing $X \to Y$ deletes from $D_X$ every value with no support in $\{c\}$ — and for a $\neq$ constraint the only value without support is $c$ itself. So those arcs delete exactly $c$ from each neighbour's domain: forward checking, verbatim.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p><strong>Forward checking = enforce arc consistency on the arcs pointing at the newly assigned variable, once.</strong></p>
     <p style="margin-bottom:0"><strong>Full arc consistency = enforce it on <em>every</em> arc, repeatedly, until nothing changes.</strong></p>
   </div>
 
-  <p>Full arc consistency is <strong>strictly stronger</strong>, in the precise sense that it makes every deletion forward checking makes and possibly more. Two separate reasons, and it is worth keeping them apart:</p>
+  <p>Full arc consistency is <strong>strictly stronger</strong>: it makes every deletion forward checking makes, and possibly more, for two separate reasons worth keeping apart.</p>
 
   <ol>
-    <li><strong>More arcs.</strong> Forward checking only ever examines arcs $X \to Y$ where $Y$ has just been assigned. It <em>never</em> examines an arc between two unassigned variables. Arc consistency examines all of them — which is exactly how it catches "NT and SA are both forced to blue and share a border".</li>
-    <li><strong>Propagation.</strong> When forward checking removes a value from $D_X$, it stops. Arc consistency asks: did shrinking $D_X$ destroy the support of some value in a <em>third</em> variable $W$ that neighbours $X$? If so, that value dies too, which may destroy support elsewhere, and so on. Deletions cascade. Forward checking has no cascade — it is one layer deep.</li>
+    <li><strong>More arcs.</strong> Forward checking only examines arcs $X \to Y$ with $Y$ just assigned, <em>never</em> an arc between two unassigned variables. Arc consistency examines all of them — which is exactly how it catches "NT and SA are both forced to blue and share a border".</li>
+    <li><strong>Propagation.</strong> When forward checking removes a value from $D_X$ it stops. Arc consistency asks whether shrinking $D_X$ destroyed the support of some value in a <em>third</em> variable $W$ neighbouring $X$; if so that value dies too, which may destroy support elsewhere, and so on. Deletions cascade. Forward checking has no cascade — it is one layer deep.</li>
   </ol>
 
   <div class="box proof"><span class="label">Why "strictly stronger" is literally true</span>
-    <p>Claim: let $D^{\text{FC}}$ be the domains after forward checking on assignment of $Y$, and $D^{\text{AC}}$ the domains after enforcing full arc consistency from the same starting point. Then $D^{\text{AC}}_X \subseteq D^{\text{FC}}_X$ for every $X$.</p>
-    <p>Proof: the arcs forward checking enforces are a subset of the arcs arc consistency enforces, and enforcing an arc only ever <em>removes</em> values. A value removed by enforcing some arc is removed by any procedure that enforces that arc and reaches a fixed point. Hence every value FC removes, AC also removes; AC may additionally remove values via arcs FC never looked at. $\square$</p>
-    <p style="margin-bottom:0">"Strictly": the Australia trace of <a href="#ac3">§14</a> exhibits a case where AC empties a domain and FC does not, so the inclusion can be proper.</p>
+    <p>Let $D^{\text{FC}}$ be the domains after forward checking on the assignment of $Y$, and $D^{\text{AC}}$ the domains after enforcing full arc consistency from the same starting point. Claim: $D^{\text{AC}}_X \subseteq D^{\text{FC}}_X$ for every $X$.</p>
+    <p>The arcs forward checking enforces are a subset of the arcs arc consistency enforces, and enforcing an arc only ever <em>removes</em> values. A value removed by enforcing some arc is removed by any procedure that enforces that arc and reaches a fixed point. Hence every value FC removes, AC also removes; AC may additionally remove values via arcs FC never looked at. $\square$</p>
+    <p style="margin-bottom:0">"Strictly": the Australia trace of <a href="#ac3">§14</a> exhibits a case where AC empties a domain and FC does not. <strong>Corollary: arc consistency detects failure at least as early as forward checking, and never later.</strong></p>
   </div>
-
-  <p>And an immediate corollary that we will cash in shortly: <strong>arc consistency detects failure at least as early as forward checking, and sometimes earlier</strong> — never later.</p>
 
   <div class="quiz" data-answer="0">
     <div class="q">You enforce arc consistency on the arc $\text{NSW} \to \text{SA}$, where $D_{\text{NSW}} = \{\text{R},\text{G},\text{B}\}$ and $D_{\text{SA}} = \{\text{B}\}$. What changes?</div>
@@ -922,11 +821,9 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
 
   <h2 id="ac3">14. AC-3: enforcing arc consistency on the whole CSP</h2>
 
-  <p>Knowing how to enforce <em>one</em> arc, we need a procedure that makes <em>every</em> arc consistent simultaneously. The difficulty is that the arcs interact: enforcing $X \to Y$ shrinks $D_X$, which can break an arc $W \to X$ that was consistent a moment ago. So one pass is not enough.</p>
+  <p>Knowing how to enforce <em>one</em> arc, we need every arc consistent at once. The difficulty is that the arcs interact: enforcing $X \to Y$ shrinks $D_X$, which can break an arc $W \to X$ that was consistent a moment ago. One pass is not enough.</p>
 
   <h3>The simplistic algorithm</h3>
-
-  <p>The course's first proposal:</p>
 
   <pre><code>repeat
     changed &lt;- false
@@ -934,7 +831,7 @@ function RECURSIVE-BACKTRACKING(assignment, csp) returns a solution, or failure
         if enforcing X -> Y removes any value then changed &lt;- true
 until changed = false</code></pre>
 
-  <p>Cycle over the pairs of variables enforcing arc consistency, repeating the cycle until no domain changes for a whole cycle. It is obviously correct — it stops only at a fixed point, and a fixed point is by definition arc-consistent — and obviously wasteful. One full cycle costs $O(|E| d^2)$ even if the only thing that changed was a single value in a single domain, and you may need many cycles. In the worst case you re-check every arc after every single deletion.</p>
+  <p>Correct — it stops only at a fixed point, and a fixed point is by definition arc-consistent — and wasteful: one full cycle costs $O(|E| d^2)$ even if the only thing that changed was a single value, and you may need many cycles.</p>
 
   <h3>AC-3</h3>
 
@@ -969,52 +866,37 @@ function REVISE(csp, Xi, Xj) returns true iff we removed something from Di
 
   <div class="box key"><span class="label">The enqueue rule — the only subtle line</span>
     <p><strong>When a value is deleted from $D_X$, re-enqueue the arc $W \to X$ for every neighbour $W$ of $X$.</strong></p>
-    <p>Why <em>into</em> $X$ and not out of it? Because $D_X$ is the <em>head</em> of the arcs $W \to X$, and a head's domain is what supplies supports. Shrinking $D_X$ can destroy the support of some value in $D_W$, so every $W$ that leans on $X$ must be re-examined. Arcs <em>out</em> of $X$ ($X \to Z$) are unaffected: a smaller tail cannot create new unsupported values in some other variable.</p>
-    <p style="margin-bottom:0">The lecture's trace enqueues <em>all</em> neighbours $W$ of $X$, including the head $X_j$ we just compared against. The textbook writes $\text{NEIGHBORS}(X_i) \setminus \{X_j\}$, skipping it. Both are correct — see the box below for why skipping is safe — and skipping is simply a small optimisation. We follow the lecture's version in the trace so the queues match the slides exactly.</p>
+    <p>Why <em>into</em> $X$ and not out of it? Because $D_X$ is the <em>head</em> of the arcs $W \to X$, and a head's domain is what supplies supports, so shrinking $D_X$ can destroy the support of some value in $D_W$. Arcs <em>out</em> of $X$ are unaffected: a smaller tail cannot create new unsupported values in some other variable.</p>
+    <p style="margin-bottom:0">The lecture enqueues <em>all</em> neighbours $W$, including the head $X_j$ just compared against; the textbook writes $\text{NEIGHBORS}(X_i) \setminus \{X_j\}$. Both are correct — see below — and skipping is a small optimisation. The trace follows the lecture.</p>
   </div>
 
   <div class="box proof"><span class="label">Why it is safe to skip the arc back to the head</span>
-    <p>Suppose REVISE$(X_i, X_j)$ deleted the value $x$ from $D_i$. Could that deletion cost some value $y \in D_j$ its support, making the arc $X_j \to X_i$ newly inconsistent?</p>
-    <p>For that, $y$'s <em>only</em> support in $D_i$ would have to have been $x$ — i.e. $(y, x)$ satisfies the constraint. But $x$ was deleted precisely because <em>no</em> value of $D_j$ supports it: for every $y' \in D_j$, the pair $(x, y')$ violates the constraint. Taking $y' = y$ gives that $(x,y)$ violates the constraint, contradicting $(y,x)$ satisfying it. (For binary constraints the relation is symmetric in this sense: $(x,y)$ allowed iff $(y,x)$ allowed, reading each in the right order.)</p>
+    <p>Suppose REVISE$(X_i, X_j)$ deleted the value $x$ from $D_i$. Could that deletion cost some $y \in D_j$ its support, making $X_j \to X_i$ newly inconsistent? Only if $y$'s <em>only</em> support in $D_i$ had been $x$, i.e. $(y,x)$ satisfies the constraint. But $x$ was deleted precisely because <em>no</em> value of $D_j$ supports it: for every $y' \in D_j$, $(x,y')$ violates the constraint. Taking $y' = y$ gives that $(x,y)$ violates it, contradicting $(y,x)$ satisfying it — for binary constraints $(x,y)$ is allowed iff $(y,x)$ is, each read in the right order.</p>
     <p style="margin-bottom:0">So no value of $D_j$ ever depended on a value we deleted from $D_i$, and $X_j \to X_i$ cannot have been broken. $\square$</p>
   </div>
 
-  <h3>The lecture's Australia trace, reproduced</h3>
+  <h3>The lecture's Australia trace, compressed</h3>
 
-  <p>Now we reproduce the long trace the slides walk through. The setting: we are inside backtracking search, running AC-3 after each assignment. The assignments made so far are <strong>WA = red</strong>, and then <strong>Q = green</strong>.</p>
+  <p>We are inside backtracking search, running AC-3 after each assignment, with <strong>WA = red</strong> and then <strong>Q = green</strong>.</p>
 
-  <p><strong>Phase 1 — AC-3 after WA = red.</strong> Domains: $D_{\text{WA}} = \{\text{R}\}$, everything else $\{\text{R},\text{G},\text{B}\}$. The queue is seeded with the arcs pointing <em>at</em> the newly assigned variable: $\text{SA}\to\text{WA}$, $\text{NT}\to\text{WA}$.</p>
-
-  <div class="scroll-x">
-  <table>
-    <thead><tr><th>#</th><th>Arc popped</th><th>REVISE result</th><th>Queue afterwards (front first)</th></tr></thead>
-    <tbody>
-      <tr><td>1</td><td>SA → WA</td><td>R has no support in $\{$R$\}$ → <strong>delete R from SA</strong>. $D_{\text{SA}} = \{$G,B$\}$. Enqueue every arc into SA.</td><td>NT→WA, WA→SA, NT→SA, Q→SA, NSW→SA, V→SA</td></tr>
-      <tr><td>2</td><td>NT → WA</td><td>R has no support → <strong>delete R from NT</strong>. $D_{\text{NT}} = \{$G,B$\}$. Enqueue every arc into NT.</td><td>WA→SA, NT→SA, Q→SA, NSW→SA, V→SA, WA→NT, SA→NT, Q→NT</td></tr>
-      <tr><td>3</td><td>WA → SA</td><td>R is supported by G ∈ $D_{\text{SA}}$. No change, nothing enqueued.</td><td>NT→SA, Q→SA, NSW→SA, V→SA, WA→NT, SA→NT, Q→NT</td></tr>
-      <tr><td>4</td><td>NT → SA</td><td>$\{$G,B$\}$ vs $\{$G,B$\}$: G supported by B, B supported by G. No change.</td><td>Q→SA, NSW→SA, V→SA, WA→NT, SA→NT, Q→NT</td></tr>
-      <tr><td>5</td><td>Q → SA</td><td>$\{$R,G,B$\}$ vs $\{$G,B$\}$: all three supported. No change.</td><td>NSW→SA, V→SA, WA→NT, SA→NT, Q→NT</td></tr>
-      <tr><td>6–10</td><td>NSW→SA, V→SA, WA→NT, SA→NT, Q→NT</td><td>All consistent, no change.</td><td><em>empty</em></td></tr>
-    </tbody>
-  </table>
-  </div>
-
-  <p>Phase 1 leaves $D_{\text{WA}} = \{$R$\}$, $D_{\text{NT}} = D_{\text{SA}} = \{$G,B$\}$, and $D_{\text{Q}} = D_{\text{NSW}} = D_{\text{V}} = D_{\text{T}} = \{$R,G,B$\}$. The queue is empty, so the CSP is arc-consistent and search continues.</p>
+  <p><strong>Phase 1 — AC-3 after WA = red.</strong> $D_{\text{WA}} = \{$R$\}$, everything else $\{$R,G,B$\}$. The queue is seeded with the arcs pointing <em>at</em> the newly assigned variable, $\text{SA}\to\text{WA}$ and $\text{NT}\to\text{WA}$. Each deletes R from its tail — $D_{\text{SA}} = D_{\text{NT}} = \{$G,B$\}$ — and each enqueues every arc <em>into</em> the variable that shrank (WA→SA, NT→SA, Q→SA, NSW→SA, V→SA; then WA→NT, SA→NT, Q→NT). All of those pass: WA→SA finds R supported by G $\in D_{\text{SA}}$, NT→SA compares $\{$G,B$\}$ with $\{$G,B$\}$ and finds G supported by B and B by G, and so on. Nothing more is deleted, so nothing more is enqueued and the queue drains. The CSP is arc-consistent and search continues, leaving $D_{\text{WA}} = \{$R$\}$, $D_{\text{NT}} = D_{\text{SA}} = \{$G,B$\}$ and $D_{\text{Q}} = D_{\text{NSW}} = D_{\text{V}} = D_{\text{T}} = \{$R,G,B$\}$.</p>
 
   <p><strong>Phase 2 — AC-3 after Q = green.</strong> Set $D_{\text{Q}} = \{$G$\}$ and seed the queue with the arcs into Q: $\text{NT}\to\text{Q}$, $\text{SA}\to\text{Q}$, $\text{NSW}\to\text{Q}$.</p>
 
   <div class="scroll-x">
   <table>
-    <thead><tr><th>#</th><th>Arc popped</th><th>REVISE result</th><th>Queue afterwards (front first)</th></tr></thead>
+    <thead><tr><th>Arc popped</th><th>REVISE result</th><th>Enqueued</th></tr></thead>
     <tbody>
-      <tr><td>11</td><td>NT → Q</td><td>G has no support in $\{$G$\}$ → <strong>delete G from NT</strong>. $D_{\text{NT}} = \{$B$\}$. Enqueue arcs into NT.</td><td>SA→Q, NSW→Q, WA→NT, SA→NT, Q→NT</td></tr>
-      <tr><td>12</td><td>SA → Q</td><td>G unsupported → <strong>delete G from SA</strong>. $D_{\text{SA}} = \{$B$\}$. Enqueue arcs into SA.</td><td>NSW→Q, WA→NT, SA→NT, Q→NT, WA→SA, NT→SA, Q→SA, NSW→SA, V→SA</td></tr>
-      <tr><td>13</td><td>NSW → Q</td><td>G unsupported → <strong>delete G from NSW</strong>. $D_{\text{NSW}} = \{$R,B$\}$. Enqueue arcs into NSW.</td><td>WA→NT, SA→NT, Q→NT, WA→SA, NT→SA, Q→SA, NSW→SA, V→SA, V→NSW, Q→NSW, SA→NSW</td></tr>
-      <tr><td>14</td><td>WA → NT</td><td>$D_{\text{WA}} = \{$R$\}$, $D_{\text{NT}} = \{$B$\}$: R is supported by B. No change.</td><td>SA→NT, Q→NT, WA→SA, NT→SA, Q→SA, NSW→SA, V→SA, V→NSW, Q→NSW, SA→NSW</td></tr>
-      <tr><td style="color:var(--rose);font-weight:750">15</td><td style="color:var(--rose);font-weight:750">SA → NT</td><td style="color:var(--rose)">$D_{\text{SA}} = \{$B$\}$, $D_{\text{NT}} = \{$B$\}$. Is B supported? The only $y \in D_{\text{NT}}$ is B, and B = B violates SA ≠ NT. <strong>Delete B from SA.</strong> $D_{\text{SA}} = \varnothing$ &nbsp;<strong>!!!</strong></td><td style="color:var(--rose)">AC-3 returns <strong>false</strong> — wipeout.</td></tr>
+      <tr><td>NT → Q</td><td>G has no support in $\{$G$\}$ → <strong>delete G from NT</strong>. $D_{\text{NT}} = \{$B$\}$.</td><td>every arc into NT: WA→NT, SA→NT, Q→NT</td></tr>
+      <tr><td>SA → Q</td><td>G unsupported → <strong>delete G from SA</strong>. $D_{\text{SA}} = \{$B$\}$.</td><td>every arc into SA</td></tr>
+      <tr><td>NSW → Q</td><td>G unsupported → <strong>delete G from NSW</strong>. $D_{\text{NSW}} = \{$R,B$\}$.</td><td>every arc into NSW</td></tr>
+      <tr><td>WA → NT</td><td>$\{$R$\}$ against $\{$B$\}$: R is supported by B. No change.</td><td>—</td></tr>
+      <tr><td style="color:var(--rose);font-weight:750">SA → NT</td><td style="color:var(--rose)">$D_{\text{SA}} = \{$B$\}$, $D_{\text{NT}} = \{$B$\}$. Is B supported? The only $y \in D_{\text{NT}}$ is B, and B = B violates SA ≠ NT. <strong>Delete B from SA.</strong> $D_{\text{SA}} = \varnothing$ &nbsp;<strong>!!!</strong></td><td style="color:var(--rose)">AC-3 returns <strong>false</strong> — wipeout.</td></tr>
     </tbody>
   </table>
   </div>
+
+  <p>Note the mechanism, because it is the whole point: the deletion at NT in the first step put <code>SA→NT</code> onto the queue, and processing that re-queued arc is what found the contradiction. That cascade is what forward checking does not have.</p>
 
   <div class="box key"><span class="label">Conclusion of the trace</span>
     <p><strong>Backtrack on the assignment of Q.</strong> AC-3 has proved that no completion of $\{\text{WA}=\text{red},\ \text{Q}=\text{green}\}$ exists, so the search must undo $\text{Q}=\text{green}$ and try $\text{Q}=\text{blue}$ instead — without ever assigning NT, SA, NSW, V or T.</p>
@@ -1023,10 +905,7 @@ function REVISE(csp, Xi, Xj) returns true iff we removed something from Di
 
   <h3>Where AC-3 fits, and what it costs</h3>
 
-  <ul>
-    <li><strong>Arc consistency detects failure earlier than forward checking.</strong> Proved in <a href="#arc-consistency">§13</a> and exhibited above.</li>
-    <li><strong>It can be run as a preprocessor or after each assignment.</strong> As a preprocessor it is run once on the raw CSP, before any search; it is cheap and can shrink every domain permanently (and occasionally proves the whole problem infeasible before you begin). After each assignment it is run inside the recursion, seeded with the arcs into the just-assigned variable, and its effects must be undone on backtrack.</li>
-  </ul>
+  <p>AC-3 runs either as a <strong>preprocessor</strong> — once on the raw CSP before any search, cheaply shrinking every domain permanently, and occasionally proving the whole problem infeasible before you begin — or <strong>after each assignment</strong> inside the recursion, seeded with the arcs into the just-assigned variable, with its effects undone on backtrack.</p>
 
   <div class="box warn"><span class="label">Answer — what is the downside of enforcing arc consistency?</span>
     <p><strong>Cost.</strong> One call to AC-3 is $O(n^2 d^3)$ (derived in <a href="#complexity">§16</a>), and backtracking search calls it <em>at every node</em>. Forward checking, by contrast, costs $O(\text{deg}(X) \cdot d) $ — a handful of deletions. You are buying pruned subtrees with CPU time, and the exchange rate is not always favourable.</p>
@@ -1158,7 +1037,7 @@ function REVISE(csp, Xi, Xj) returns true iff we removed something from Di
 
   <h2 id="complexity">16. The cost of one run of AC-3</h2>
 
-  <p>The lecture derives the bound in four steps. Each step is one line, and each line is worth pausing on.</p>
+  <p>The lecture derives the bound in four steps, each one line.</p>
 
   <div class="box proof"><span class="label">Derivation</span>
     <p><strong>Step 1 — an arc is enqueued only after a value is removed.</strong> Look at the pseudocode: <code>add (Xk, Xi) to queue</code> sits inside <code>if REVISE(...) then</code>, and REVISE returns true only when it actually deleted something. (The one exception is the initial queue, handled in step 3.) So "how many arcs get processed?" reduces to "how many deletions can happen?".</p>
@@ -1180,7 +1059,7 @@ function REVISE(csp, Xi, Xj) returns true iff we removed something from Di
     <p style="margin-bottom:0">Textbooks often state AC-3 as $O(e\, d^3)$ where $e = |E|$ is the number of <em>edges</em> (constraints) rather than $O(n^2d^3)$. The two agree: a binary constraint graph on $n$ nodes has $e \le \binom{n}{2} = O(n^2)$ edges, and the derivation above used "$\le n$ neighbours" exactly where a finer count would use the degree. For sparse graphs — a road map, a schedule — $e$ is closer to $O(n)$ and AC-3 is much faster than the $n^2$ form suggests.</p>
   </div>
 
-  <p><strong>The tightened bound.</strong> <span class="pill">beyond syllabus</span> Zhang and Yap (2001) showed that with a smarter pass over the arcs the true worst-case complexity of AC-3 is $O(n^2 d^2)$, saving a factor of $d$: their analysis charges each constraint check to the value whose support pointer advanced, so the $d^2$ scan is not repeated from scratch on every visit to an arc. The lecture marks this "<em>not required</em>". Know that the bound exists and that the classroom answer is $O(n^2d^3)$.</p>
+  <p><strong>The tightened bound.</strong> <span class="pill">beyond syllabus</span> Zhang and Yap (2001) showed that the true worst case of AC-3 is $O(n^2 d^2)$, a factor of $d$ better, by not repeating the $d^2$ support scan from scratch on every visit to an arc. The lecture marks this "<em>not required</em>"; the classroom answer is $O(n^2d^3)$.</p>
 
   <div class="box warn"><span class="label">Remember what this cost multiplies</span>
     <p style="margin-bottom:0">This is the cost of <strong>one run</strong>. The whole backtracking algorithm with AC-3 calls AC-3 <em>many</em> times — once per node of the search tree, and the tree can have $O(d^n)$ nodes. The total is therefore $O(d^n \cdot n^2 d^3)$ in the worst case, which is <em>worse</em> than plain backtracking's worst case. AC-3 is a bet that the pruning saves more nodes than the filtering costs. On structured problems it wins enormously; on loose ones it loses. See the downside box in §14.</p>
@@ -1189,8 +1068,8 @@ function REVISE(csp, Xi, Xj) returns true iff we removed something from Di
   <h3>Where do you run AC-3? — the lecture's question, answered</h3>
 
   <div class="box key"><span class="label">Answer: in two places.</span>
-    <p><strong>1. Once as a preprocessor</strong>, before search starts, with the queue seeded with <em>all</em> directed arcs. This is pure profit: it costs one $O(n^2d^3)$ call and every value it deletes is deleted for the entire search, at every node, forever. If it returns <code>false</code>, the CSP is unsatisfiable and you never search at all.</p>
-    <p style="margin-bottom:0"><strong>2. After each assignment</strong>, inside the recursion, with the queue seeded only with the arcs $W \to X$ for the neighbours $W$ of the just-assigned variable $X$. Seeding with all arcs would be correct but wasteful: the only domain that just changed is $D_X$ (collapsed to a singleton), so the only arcs that can newly fail are the ones whose head is $X$ — and everything else follows by propagation from there.</p>
+    <p><strong>1. Once as a preprocessor</strong>, before search starts, with the queue seeded with <em>all</em> directed arcs. This is pure profit: one $O(n^2d^3)$ call, and every value it deletes stays deleted at every node, forever. If it returns <code>false</code>, the CSP is unsatisfiable and you never search at all.</p>
+    <p style="margin-bottom:0"><strong>2. After each assignment</strong>, inside the recursion, seeded only with the arcs $W \to X$ for the neighbours $W$ of the just-assigned $X$. Seeding all arcs would be correct but wasteful: the only domain that just changed is $D_X$, so the only arcs that can newly fail are those whose head is $X$ — everything else follows by propagation.</p>
   </div>
 
   <pre><code>function BACKTRACKING-WITH-AC3(csp) returns a solution, or failure
@@ -1221,7 +1100,7 @@ function RECURSE(assignment, csp) returns a solution, or failure
 
     return failure</code></pre>
 
-  <p>Two details in that code are easy to get wrong and both are fatal if you do:</p>
+  <p>Two details are easy to get wrong and both are fatal:</p>
 
   <ul>
     <li><code>saved &lt;- copy of all current domains</code> must happen <em>before</em> <code>D[var] &lt;- {value}</code>, and the restore must happen on <em>every</em> exit from the loop body that does not return a solution — including the path where AC-3 returns false.</li>
@@ -1230,14 +1109,7 @@ function RECURSE(assignment, csp) returns a solution, or failure
 
   <h2 id="ordering">17. Ordering: MRV and LCV</h2>
 
-  <p>Filtering answered "can we detect inevitable failure early?". Ordering answers the other two questions the lecture raises about improving backtracking:</p>
-
-  <ul>
-    <li><strong>Which variable should be assigned next?</strong> — the <code>SELECT-UNASSIGNED-VARIABLE</code> hook.</li>
-    <li><strong>In what order should its values be tried?</strong> — the <code>ORDER-DOMAIN-VALUES</code> hook.</li>
-  </ul>
-
-  <p>Both are free in the sense that correctness does not depend on them (the soundness proof in <a href="#backtracking">§11</a> allowed any choice). They are pure speed. And — this is the part students consistently get backwards — <strong>the two questions have opposite answers.</strong></p>
+  <p>Filtering answered "can we detect inevitable failure early?". Ordering answers the lecture's other two questions about improving backtracking: <strong>which variable should be assigned next</strong> (the <code>SELECT-UNASSIGNED-VARIABLE</code> hook) and <strong>in what order should its values be tried</strong> (the <code>ORDER-DOMAIN-VALUES</code> hook). Both are pure speed — correctness does not depend on them, since the soundness proof in <a href="#backtracking">§11</a> allowed any choice. And, the part students consistently get backwards, <strong>the two questions have opposite answers.</strong></p>
 
   <h3>Variable ordering: minimum remaining values</h3>
 
@@ -1248,22 +1120,14 @@ function RECURSE(assignment, csp) returns a solution, or failure
   <p>MRV needs filtering to be running — "values left in its domain" is only meaningful if someone is crossing values off. In practice MRV is always paired with forward checking or AC-3.</p>
 
   <div class="box key"><span class="label">Answer — why <em>min</em> rather than <em>max</em>?</span>
-    <p><strong>Because you must satisfy every variable, so the only question is <em>when</em> you find out you cannot.</strong> Ordering never changes whether a solution exists; it changes the depth at which failure becomes visible. So put the variable most likely to fail as close to the root as possible.</p>
-
-    <p><strong>Reason 1 — the pruned subtree is exponentially bigger near the top.</strong> If a variable is doomed and you discover it at depth $k$, you discard a subtree of about $d^{\,n-k}$ leaves. Discovering at depth 1 discards $d^{\,n-1}$; discovering at depth $n-1$ discards $d$. Concretely in Australia: suppose SA is unsatisfiable given the current filtering. Assign SA first and you fail <strong>once</strong>. Assign it last and you re-discover the same failure at the bottom of every branch above it — up to $3^5 = 243$ separate times, each after five wasted assignments.</p>
-
-    <p><strong>Reason 2 — the branching factor at this node is smallest.</strong> The node you are about to expand has exactly $|D_X|$ children. Choosing the smallest $|D_X|$ makes the tree <em>narrowest at the top</em>, and a tree that is narrow at the top and wide at the bottom has far fewer nodes than one shaped the other way round. (Compare $2 \times 9$ with $9 \times 2$ — same product, but the first shape reaches its 18 leaves through 2 internal nodes and the second through 9.)</p>
-
-    <p><strong>Reason 3 — the $|D_X| = 0$ case is free.</strong> If any variable has an empty domain, MRV selects it (0 is the minimum), and the <code>for</code> loop over its values runs zero times, so we return failure immediately. MRV therefore subsumes the wipeout check for free.</p>
-
-    <p style="margin-bottom:0"><strong>What <em>max</em> remaining values would do:</strong> it puts the easy, flexible variables at the top and the bottleneck at the bottom — the worst possible shape. You would branch widely on variables that were never going to cause trouble, then hit the same contradiction over and over at the leaves. It is the correct answer to the opposite question.</p>
+    <p><strong>Because you must satisfy every variable, so the only question is <em>when</em> you find out you cannot.</strong> Ordering never changes whether a solution exists; it changes the depth at which failure becomes visible. Put the variable most likely to fail as close to the root as possible.</p>
+    <p><strong>Reason 1 — the pruned subtree is exponentially bigger near the top.</strong> Discovering a doomed variable at depth $k$ discards about $d^{\,n-k}$ leaves: $d^{\,n-1}$ at depth 1, only $d$ at depth $n-1$. If SA is unsatisfiable under the current filtering, assigning it first fails <strong>once</strong>; assigning it last re-discovers the same failure at the bottom of every branch above it — up to $3^5 = 243$ separate times, each after five wasted assignments.</p>
+    <p><strong>Reason 2 — the branching factor at this node is smallest.</strong> The node has exactly $|D_X|$ children, so the smallest $|D_X|$ makes the tree <em>narrowest at the top</em>. Compare $2 \times 9$ with $9 \times 2$: the same 18 leaves, reached through 2 internal nodes instead of 9.</p>
+    <p><strong>Reason 3 — the $|D_X| = 0$ case is free.</strong> MRV selects an empty domain (0 is the minimum), the <code>for</code> loop over its values runs zero times, and we return failure immediately. MRV subsumes the wipeout check.</p>
+    <p style="margin-bottom:0"><strong>What <em>max</em> remaining values would do:</strong> put the easy, flexible variables at the top and the bottleneck at the bottom — the worst possible shape. You would branch widely on variables that were never going to cause trouble, then hit the same contradiction over and over at the leaves.</p>
   </div>
 
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p style="margin-bottom:0">MRV is the advice "do the hardest part of the exam first" — not because the hard part is more fun, but because if it turns out to be impossible you want to know at minute 5, not minute 85 after you have invested in everything that depended on it. In Sudoku it is the rule every solver already uses: scan for the square with only one candidate left and fill that one, rather than guessing in a square with six candidates.</p>
-  </div>
-
-  <p><strong>Tie-breaking.</strong> Several variables often tie on domain size — at the very start of Australia, all seven have three values. The standard tie-breaker is the <strong>degree heuristic</strong> from <a href="#constraint-graphs">§5</a>: among the tied variables, pick the one with the most constraints on <em>unassigned</em> variables. In Australia that is SA (degree 5), which is precisely the variable we want at the root.</p>
+  <p><strong>Tie-breaking.</strong> Several variables often tie on domain size — at the start of Australia all seven have three values. The standard tie-breaker is the <strong>degree heuristic</strong> of <a href="#constraint-graphs">§5</a>: among the tied variables, pick the one with the most constraints on <em>unassigned</em> variables. In Australia that is SA (degree 5), precisely the variable we want at the root.</p>
 
   <h3>Value ordering: least constraining value</h3>
 
@@ -1273,9 +1137,9 @@ function RECURSE(assignment, csp) returns a solution, or failure
   </div>
 
   <div class="box key"><span class="label">Answer — why <em>least</em> rather than <em>most</em>?</span>
-    <p><strong>Because you only need ONE value to work.</strong> A variable node in the search tree is a disjunction: the subtree succeeds if <em>any</em> child succeeds. Trying values is a search for one that works, so you should try the one most likely to work first — and the value that leaves its neighbours the most options is the one under which solutions are most likely to survive.</p>
-    <p><strong>What happens if you get it backwards.</strong> Choose the <em>most</em> constraining value and you maximise the chance that the first child fails. But failure of that child does not end anything — you still have to go back and try the other values. You have simply guaranteed that the first attempt is wasted. The effort spent on it buys nothing, because the alternatives remain.</p>
-    <p style="margin-bottom:0"><strong>Caveat, stated honestly.</strong> LCV only helps when you are looking for <em>one</em> solution and a solution exists. If the subproblem has no solution at all, you must try every value regardless, and the order is irrelevant (as is the case when you are enumerating <em>all</em> solutions). LCV is a bet on success; MRV is a bet on failure. Both bets pay off on realistic instances, which is why they are used together.</p>
+    <p><strong>Because you only need ONE value to work.</strong> A variable node in the search tree is a disjunction: the subtree succeeds if <em>any</em> child succeeds. So try the value most likely to work first — and the value that leaves its neighbours the most options is the one under which solutions are most likely to survive.</p>
+    <p><strong>What happens if you get it backwards.</strong> The <em>most</em> constraining value maximises the chance that the first child fails. But that failure ends nothing — you still have to go back and try the other values. You have simply guaranteed that the first attempt is wasted.</p>
+    <p style="margin-bottom:0"><strong>Caveat, stated honestly.</strong> LCV only helps when you are looking for <em>one</em> solution and a solution exists. If the subproblem has no solution at all, or you are enumerating <em>all</em> solutions, you must try every value regardless and the order is irrelevant. <strong>LCV is a bet on success; MRV is a bet on failure.</strong> Both bets pay off on realistic instances, which is why they are used together.</p>
   </div>
 
   <div class="box key"><span class="label">THE ASYMMETRY — read this twice</span>
@@ -1307,7 +1171,7 @@ function RECURSE(assignment, csp) returns a solution, or failure
     <p style="margin-bottom:0">LCV therefore orders red before blue, and red is indeed the only one that can possibly lead anywhere. Note the cost: producing this ranking required simulating the filtering twice, once per candidate value — that is the "some computation" the slides warn about.</p>
   </div>
 
-  <p><strong>The payoff.</strong> The lecture's headline: combining these ordering ideas makes <strong>1000-queens feasible</strong>. Compare with the $n \approx 25$ that plain backtracking managed in <a href="#backtracking">§11</a>. Same algorithm, same exponential worst case — but MRV, LCV and filtering between them keep realistic instances out of the exponential region entirely.</p>
+  <p><strong>The payoff.</strong> The lecture's headline: these ordering ideas make <strong>1000-queens feasible</strong>, against the $n \approx 25$ plain backtracking managed in <a href="#backtracking">§11</a>. Same algorithm, same exponential worst case — but filtering and ordering together keep realistic instances out of the exponential region entirely.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 7 — interactive: four solvers on the same map</div>
@@ -1423,25 +1287,11 @@ function RECURSE(assignment, csp) returns a solution, or failure
   </table>
   </div>
 
-  <h3>Structure — listed, and deferred</h3>
+  <h3>Structure, and what is left for later</h3>
 
-  <p>The lecture lists <em>structure</em> as the third family of speed-ups and puts it in parentheses: mentioned, not covered. For completeness, here is what is behind the parenthesis. <span class="pill">beyond syllabus</span></p>
+  <p>The lecture lists <em>structure</em> as the third family of speed-ups and puts it in parentheses: mentioned, not covered. <span class="pill">beyond syllabus</span> <strong>Independent subproblems</strong> — solve each connected component separately. <strong>Tree-structured CSPs</strong> — $\mathbf{O(n d^2)}$ with <em>no backtracking</em>: root the tree, REVISE each parent→child arc from the leaves up, then assign forwards, every value guaranteed to extend (Guided problem 2 was an instance, which is why arc consistency alone solved it). <strong>Cutset conditioning</strong> — enumerate all $d^{|S|}$ assignments to a cycle cutset $S$ whose removal leaves a tree and solve that tree in $O(nd^2)$ each time, total $O(d^{|S|} \cdot n d^2)$; for Australia removing SA alone leaves a path plus isolated T, so $|S| = 1$ — the formal reason SA kept showing up as the bottleneck. <strong>Tree decomposition</strong> — $O(n d^{\,w+1})$ for treewidth $w$.</p>
 
-  <ul>
-    <li><strong>Independent subproblems.</strong> Already used in <a href="#constraint-graphs">§5</a>: solve each connected component of the constraint graph separately. Tasmania is the toy case.</li>
-    <li><strong>Tree-structured CSPs.</strong> If the constraint graph is a tree (no cycles), the CSP is solvable in $\mathbf{O(n d^2)}$ with <em>no backtracking whatsoever</em>. The method: pick a root, order the variables so parents precede children, run REVISE on each arc (parent → child) backwards from the leaves to the root, then assign forwards from the root — every value you meet is guaranteed to extend. Guided problem 2 was a small instance of exactly this, which is why arc consistency alone solved it.</li>
-    <li><strong>Cutset conditioning.</strong> If the graph is <em>nearly</em> a tree, find a small set $S$ of variables (the cycle cutset) whose removal leaves a tree, enumerate all $d^{|S|}$ assignments to $S$, and solve the resulting tree in $O(nd^2)$ each time. Total $O(d^{|S|} \cdot n d^2)$ — exponential only in the cutset size, not in $n$. For Australia, removing the single variable SA leaves the path WA–NT–Q–NSW–V plus the isolated T, so $|S| = 1$ and the whole instance is solvable in $O(3 \cdot 7 \cdot 9)$ steps. That is the formal reason SA kept showing up as the bottleneck.</li>
-    <li><strong>Tree decomposition.</strong> The general version, parameterised by <em>treewidth</em>: a CSP with treewidth $w$ is solvable in $O(n d^{\,w+1})$.</li>
-  </ul>
-
-  <h3>What this chapter leaves for later</h3>
-
-  <ul>
-    <li><strong>Local search for CSPs</strong> (min-conflicts hill climbing) — start from a complete, broken assignment and repair it. It is the method that really solves million-queens, and it is not in this lecture.</li>
-    <li><strong>Continuous and infinite-domain CSPs</strong> — flagged in <a href="#varieties">§8</a> and handed to 07-380.</li>
-    <li><strong>Constrained optimisation</strong> — soft constraints from <a href="#varieties-of-constraints">§9</a> turn satisfaction into optimisation, which needs branch-and-bound rather than "stop at the first solution".</li>
-    <li><strong>Specialised propagators</strong> — the <code>alldiff</code> algorithm that <a href="#sudoku">§7</a>'s pigeonhole example calls for.</li>
-  </ul>
+  <p>Also deferred: <strong>local search for CSPs</strong> (min-conflicts hill climbing — start from a complete, broken assignment and repair it; this is what really solves million-queens), <strong>continuous and infinite-domain CSPs</strong> (<a href="#varieties">§8</a>, handed to 07-380), <strong>constrained optimisation</strong> for the soft constraints of <a href="#varieties-of-constraints">§9</a>, which needs branch-and-bound rather than "stop at the first solution", and <strong>specialised propagators</strong> such as the <code>alldiff</code> algorithm <a href="#sudoku">§7</a>'s pigeonhole example calls for.</p>
 
   <p>Next, in <a href="adversarial-search.html">Chapter 5</a>, the problem changes shape again: another agent gets to choose some of the values, and it is not on your side.</p>
 

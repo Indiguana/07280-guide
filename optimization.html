@@ -16,49 +16,59 @@
 
   <div data-toc></div>
 
+  <div class="box key"><span class="label">Essentials</span>
+    <p>ERM is a minimisation problem; this chapter is the algorithm that solves it when no closed form exists.</p>
+    <ul>
+      <li><strong>The update</strong> — $\theta^{(t)} = \theta^{(t-1)} - \alpha\,\nabla_\theta J(\theta)\big|_{\theta^{(t-1)}}$. Derived from two facts: step <em>opposite</em> the sign of the derivative, and <em>proportionally</em> to its magnitude.</li>
+      <li><strong>Three variants</strong> — batch GD uses all $N$ gradients per update; <strong>SGD</strong> uses one index $j$ drawn uniformly at random; <strong>mini-batch</strong> averages $K$ of them, $1 &lt; K &lt; N$.</li>
+      <li><strong>Four stopping criteria</strong> — the objective stops improving; the derivative stops changing (or is small); the iterate stops moving; the compute budget runs out.</li>
+      <li><strong>Learning rate on $J(w)=w^2$</strong> — $w^{(t)} = (1-2\alpha)^t w^{(0)}$, so convergence iff $|1-2\alpha| &lt; 1 \iff 0 &lt; \alpha &lt; 1$. $\alpha=0.25$ converges, $\alpha=0.5$ is exact in one step, $\alpha=1$ oscillates $1,-1,1,\dots$, $\alpha=2$ diverges $1,-3,9,-27$.</li>
+      <li><strong>In general</strong> — for $J(w)=cw^2$, $0 &lt; \alpha &lt; 1/c$ with $\alpha = 1/(2c)$ exact; equivalently $\alpha &lt; 2/L$ where $L = J''$ is the largest curvature (in $d$ dimensions, the largest eigenvalue of the Hessian).</li>
+      <li><strong>Gradient</strong> — $\nabla_\theta J \in \R^d$ stacks the $d$ partial derivatives; it points along steepest <em>ascent</em> and is perpendicular to the level sets, so $-\nabla J$ is the descent direction. This course uses <strong>denominator layout</strong> (shaped like $\theta$).</li>
+      <li><strong>Two identities</strong> — $\nabla_\theta(\theta^\top v) = v$ and $\nabla_\theta(\theta^\top A\theta) = (A + A^\top)\theta$, which is $2A\theta$ when $A$ is symmetric (and $X^\top X$ always is).</li>
+      <li><strong>Linear regression</strong> — $\nabla_\theta\|y - X\theta\|_2^2 = -2X^\top y + 2X^\top X\theta$, zero at $X^\top X\theta = X^\top y$.</li>
+      <li><strong>Local vs global</strong> — a <em>local</em> minimum is lowest in a neighbourhood; a <em>global</em> minimum satisfies $J(\theta)\le J(\theta')$ for all $\theta' \in \R^d$. The gradient cannot tell them apart, so the starting point decides which you reach.</li>
+      <li><strong>Why SGD works</strong> — the single-sample gradient is <em>unbiased</em>: $\E_j[\nabla_\theta\ell_j] = \nabla_\theta J(\theta)$. Averaging $K$ of them keeps it unbiased and cuts the variance to $\sigma^2/K$ at $K$ times the cost.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="erm-is-optimization">ERM is an optimization problem</h2>
 
-  <p>Every chapter of this course so far has ended at the same door. <a href="ml-formulation.html">Problem formulation</a> ended there, <a href="decision-trees.html">decision trees</a> ended there, and <a href="linear-regression.html">linear regression</a> ended there. The door is empirical risk minimization:</p>
+  <p>Every chapter so far has ended at the same door — <a href="ml-formulation.html">problem formulation</a>, <a href="decision-trees.html">decision trees</a>, <a href="linear-regression.html">linear regression</a>. The door is empirical risk minimization:</p>
 
   $$\argmin_{h\in\H}\ \sum_{i=1}^{N} \ell\!\left(h(x^{(i)}),\, y^{(i)}\right).$$
 
-  <p><strong>Every symbol, in words.</strong> $\H$ is the hypothesis class — the set of functions we are willing to consider (all lines, all depth-3 trees, all networks of a fixed architecture). $h$ is one candidate function from that set. $x^{(i)}$ is the $i$-th training input — the parenthesised superscript is an <em>index, not a power</em> — and $y^{(i)}$ is its label. $\ell$ is the loss, a number saying how bad the prediction $h(x^{(i)})$ was against the truth $y^{(i)}$. The sum runs over all $N$ training examples. And $\argmin$ returns the <em>argument</em> achieving the smallest value, not the value itself.</p>
+  <p>$\H$ is the hypothesis class, $h$ one candidate from it, $(x^{(i)},y^{(i)})$ the $i$-th training pair (the parenthesised superscript is an <em>index, not a power</em>), $\ell$ the loss, and $\argmin$ returns the <em>argument</em> achieving the smallest value, not the value.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Read that expression again with fresh eyes and notice what kind of object it is. It is not a statement about learning. It is a <strong>optimization problem</strong>: find a min, a max, an $\argmin$ or an $\argmax$ of a function. Machine learning has, at this point in the course, been entirely reduced to "minimise this function of the parameters."</p>
-    <p>So the remaining question is purely computational: <em>how do we actually find that minimum, in a computationally efficient manner?</em></p>
+    <p>Notice what kind of object that is. It is not a statement about learning; it is an <strong>optimization problem</strong>. Machine learning has, at this point in the course, been entirely reduced to "minimise this function of the parameters", so the remaining question is purely computational: <em>how do we find that minimum efficiently?</em></p>
   </div>
 
-  <p>"Efficient" is the load-bearing word. The previous chapter ended with a closed-form answer, $\theta^\star=(X^\top X)^{-1}X^\top y$, that costs $O(Nd^2+d^3)$ — and pointed out that the $d^3$ is a problem. With $d=10^6$ parameters (a small neural network) that cubic term is $10^{18}$ operations, which is not "slow", it is "never". Worse, for almost any $\H$ other than linear models, the closed form does not exist at all.</p>
-
-  <p>The professor's strategy in these notes is the right one, and it is worth naming so you can follow the thread: <strong>start with the simplest possible instance of the problem, solve it completely, and then generalise the algorithm you found.</strong> The algorithm that comes out the other end — gradient descent — is the single most widely used numerical procedure in machine learning. Every neural network you have heard of was trained by a direct descendant of the four lines we are about to write down.</p>
+  <p>"Efficient" is load-bearing. The previous chapter's closed form $\theta^\star=(X^\top X)^{-1}X^\top y$ costs $O(Nd^2+d^3)$; at $d=10^6$ that cubic term is $10^{18}$ operations, which is not "slow" but "never". Worse, for almost any $\H$ other than a linear model the closed form does not exist at all. So: take the simplest instance of the problem, solve it completely, and generalise the algorithm that falls out.</p>
 
   <h2 id="simplest-possible-case">The simplest possible case: one sample, one parameter</h2>
 
-  <p>Strip linear regression down as far as it will go. Take $\X=\R$, so each input is a single real number. Set the intercept $b=0$, so the model is $h(x)=xw$ — a line through the origin with one knob $w$. And suppose $N=1$: exactly one training point $(x^{(1)},y^{(1)})$.</p>
-
-  <p>ERM becomes</p>
+  <p>Strip linear regression as far as it goes: $\X=\R$, intercept $b=0$ so $h(x)=xw$ with one knob, and $N=1$ — a single training point $(x^{(1)},y^{(1)})$. ERM becomes</p>
 
   $$\argmin_{w}\ \underbrace{\left(y^{(1)} - x^{(1)}\!\cdot w\right)^2}_{J(w),\ \ J:\R\to\R}.$$
 
-  <p>We give the objective a name, $J$. It eats a real number (a candidate weight $w$) and returns a real number (the squared error that weight incurs). The data $x^{(1)},y^{(1)}$ are <em>fixed constants</em> here — this is the parameters-are-the-variables view from the <a href="linear-regression.html">previous chapter</a>. The lecture notes write the weight as $\omega$; this guide writes $w$. Same object.</p>
+  <p>$J$ eats a candidate weight and returns the squared error it incurs; the data are <em>fixed constants</em>, the parameters-are-the-variables view from the <a href="linear-regression.html">previous chapter</a>. (The lecture notes write the weight as $\omega$; same object.) Expanding,</p>
 
-  <p><strong>What shape is $J$?</strong> Expand it:</p>
+  $$J(w) = \left(y^{(1)}\right)^2 - 2x^{(1)}y^{(1)}w + \left(x^{(1)}\right)^2 w^2,$$
 
-  $$J(w) = \left(y^{(1)}\right)^2 - 2x^{(1)}y^{(1)}w + \left(x^{(1)}\right)^2 w^2.$$
-
-  <p>A constant, plus a linear term in $w$, plus a positive multiple of $w^2$. That is a <strong>parabola</strong> opening upward. It has exactly one bottom, no flat regions, no second dip, no surprises. And — this matters enormously — it stays a parabola for general $N$, because a sum of upward parabolas in $w$ is another upward parabola in $w$. We will come back to that.</p>
+  <p>a constant plus a linear term plus a positive multiple of $w^2$: a <strong>parabola</strong> opening upward, with exactly one bottom and no surprises. It stays a parabola for general $N$, because a sum of upward parabolas in $w$ is another upward parabola in $w$.</p>
 
   <h2 id="derivative-sign">The one observation the whole algorithm is built on</h2>
 
-  <p>Here is the observation. Stand at any point $w$ on the parabola and compute the slope $\frac{dJ(w)}{dw}$.</p>
+  <p>Stand at any point $w$ on the parabola and compute the slope $\frac{dJ(w)}{dw}$.</p>
 
   <ul>
-    <li>At every point <strong>to the right</strong> of the minimiser, the derivative is <strong>positive</strong> — the curve is climbing as you walk right.</li>
-    <li>At every point <strong>to the left</strong> of the minimiser, the derivative is <strong>negative</strong> — the curve is falling as you walk right.</li>
+    <li>Everywhere <strong>to the right</strong> of the minimiser the derivative is <strong>positive</strong> — the curve climbs as you walk right.</li>
+    <li>Everywhere <strong>to the left</strong> of it the derivative is <strong>negative</strong>.</li>
   </ul>
 
-  <p>That is not a coincidence about this particular parabola; it is what "the minimum" means, plus the fact that a parabola has only one of them. And it is <em>actionable</em>, because a derivative is something you can compute at a single point without knowing where the minimum is.</p>
+  <p>That is not a coincidence about this parabola; it is what "the minimum" means, plus the fact that a parabola has only one. And it is <em>actionable</em>, because you can compute a derivative at a single point without knowing where the minimum is.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 · The sign of the derivative always points away from the minimum</div>
@@ -67,39 +77,27 @@
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>You are standing on a hillside in dense fog. You cannot see the valley floor, and you have no map. But you can feel the slope under your feet. The rule "walk downhill" requires no global knowledge at all — just the ground you are standing on. Gradient descent is exactly that rule, and its famous weakness is exactly the fog: in the fog you find <em>a</em> valley, not necessarily <em>the</em> valley. Hold on to that; we return to it in the <a href="#local-vs-global">local minimum</a> section.</p>
+    <p>You are on a hillside in dense fog: no map, no view of the valley floor, but you can feel the slope under your feet. "Walk downhill" needs no global knowledge at all. Gradient descent is that rule, and its famous weakness is the fog — you find <em>a</em> valley, not necessarily <em>the</em> valley (see <a href="#local-vs-global">local minima</a>).</p>
   </div>
 
   <h3>From the observation to an algorithm</h3>
 
-  <p>The notes turn the observation into a procedure in three lines. Start at any point $w$, then:</p>
+  <p>The notes turn it into a procedure: start anywhere; if the derivative is positive move left, if negative move right; repeat until a stopping criterion fires. That answers "which way" and leaves open <strong>how far</strong> — which is where all the interesting behaviour lives.</p>
 
-  <ul>
-    <li>If the derivative of $J$ is <strong>positive</strong> at that point, move <strong>left</strong>.</li>
-    <li>If the derivative of $J$ is <strong>negative</strong> at that point, move <strong>right</strong>.</li>
-    <li>Repeat until some stopping criterion is met.</li>
-  </ul>
-
-  <p>This is already a correct algorithm sketch, and it answers "which way". It leaves one question wide open, and the answer to that question is where all the interesting behaviour lives:</p>
-
-  <p><strong>How far should we move?</strong></p>
-
-  <p>A fixed step of, say, $0.1$ each time would be terrible. Start a mile away and you need a great many steps; get within a hair of the bottom and a fixed step of $0.1$ steps straight past it, forever. We want big strides when we are far away and tiny adjustments when we are close — but "how far away am I" is precisely what we do not know.</p>
-
-  <p>So look at the picture again. Out at the edges of the parabola the tangent is nearly vertical; near the bottom it is nearly flat. The derivative is not only telling us the <em>direction</em> of the minimum, its <em>magnitude</em> is telling us something about the <em>distance</em> to it:</p>
+  <p>A fixed step of $0.1$ would be terrible: start a mile away and you need forever, get within a hair of the bottom and you step straight past it, forever. We want big strides when far away and tiny ones when close — but "how far away am I" is exactly what we do not know. The picture supplies the missing information: out at the edges the tangent is nearly vertical, near the bottom nearly flat.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>The magnitude of the derivative is large whenever the point is farther from the $\argmin$, and small when we are near it. So: <strong>move by an amount proportional to the magnitude of the derivative.</strong></p>
   </div>
 
-  <p>Now combine the two facts into one expression. "Move opposite to the sign" and "move proportionally to the magnitude" are both accomplished by a single subtraction — subtract a multiple of the derivative itself:</p>
+  <p>"Move opposite to the sign" and "move proportionally to the magnitude" are both accomplished by a single subtraction:</p>
 
   $$w \ \longleftarrow\ w - \alpha\,\frac{dJ(w)}{dw}.$$
 
-  <p>If the derivative is $+8$ we move $8\alpha$ to the left. If it is $-0.2$ we move $0.02\alpha$ to the right. The sign handles the direction for free; the magnitude handles the step length for free. Nothing else in the update was designed — it fell out of two observations about a parabola.</p>
+  <p>A derivative of $+8$ moves us $8\alpha$ left; $-0.2$ moves us $0.02\alpha$ right. The sign handles direction, the magnitude handles step length, and nothing else in the update was designed.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>"The derivative is small, so I must be close to the minimum" is the <em>motivation</em> for the rule, not a theorem. On a very flat function you can be small-derivative and miles away; on a saddle or a plateau the derivative is near zero and you are nowhere useful. The proportional-step idea is a heuristic that happens to be exactly right for quadratics and approximately right near the optimum of anything smooth. It is not a distance estimate.</p>
+    <p>"The derivative is small, so I must be close to the minimum" is the <em>motivation</em> for the rule, not a theorem. On a very flat function you can be small-derivative and miles away; on a saddle or plateau the derivative is near zero and you are nowhere useful. The proportional step is exactly right for quadratics and approximately right near the optimum of anything smooth. It is not a distance estimate.</p>
   </div>
 
   <h2 id="gradient-descent">The gradient descent algorithm</h2>
@@ -114,7 +112,7 @@
     </ul>
   </div>
 
-  <p><strong>Every symbol.</strong> The superscript $(t)$ is the <em>iteration index</em>, not a power — $w^{(3)}$ is the weight after three updates. $w^{(0)}$ is wherever you chose to start, and "any point" genuinely means any point for a parabola. The vertical bar with $w=w^{(t-1)}$ underneath means "evaluate that derivative function at the current iterate" — the derivative is a function of $w$, and we plug in where we are standing now. And $\alpha$ is a positive number we choose.</p>
+  <p><strong>Every symbol.</strong> The superscript $(t)$ is the <em>iteration index</em>, not a power. $w^{(0)}$ is wherever you start, and for a parabola "any point" genuinely means any point. The vertical bar means "evaluate that derivative function at the current iterate". And $\alpha$ is a positive number we choose.</p>
 
   <pre><code>GradientDescent(J, alpha, w0):
     w &lt;- w0
@@ -126,8 +124,7 @@
 
   <h3>Stopping criteria</h3>
 
-  <p>Notice the algorithm says "for $t=1,2,\dots$" with no upper limit. Something has to stop it. The notes list four, and they are genuinely different tests, not four phrasings of one:</p>
-
+  <p>The loop says "for $t=1,2,\dots$" with no upper limit, so something has to stop it. The notes list four, and they are genuinely different tests:</p>
   <div class="grid2">
     <div class="card">
       <div class="kicker">1 · Performance</div>
@@ -155,29 +152,23 @@
 
   <h3>$\alpha$: the learning rate</h3>
 
-  <p>$\alpha$ is called the <strong>learning rate</strong> or <strong>step size</strong>. Three families of choices, exactly as the notes give them:</p>
+  <p>$\alpha$ is the <strong>learning rate</strong> or <strong>step size</strong>, and the notes give three families of choice:</p>
 
   <ul>
-    <li><strong>Constant.</strong> Just pick a number and keep it, e.g. $\alpha=0.01$. Simple, and the default starting point.</li>
-    <li><strong>Decaying with the iteration number.</strong> Let $\alpha$ depend on $t$, for example $\alpha_t = \frac{1}{\sqrt{t}}$. Big confident strides early, cautious nudges later. This is the standard choice when the gradients are noisy (see <a href="#sgd">SGD</a>), because a shrinking step averages the noise out instead of bouncing around forever.</li>
-    <li><strong>Adaptive methods</strong> that tune the rate automatically, per parameter, from the history of gradients. <span class="pill">beyond syllabus</span> These exist, they are what people actually run (AdaGrad, RMSProp, Adam), and this course does not go into them.</li>
+    <li><strong>Constant.</strong> Pick a number and keep it, e.g. $\alpha=0.01$. The default starting point.</li>
+    <li><strong>Decaying with the iteration number</strong>, for example $\alpha_t = \frac{1}{\sqrt{t}}$: confident strides early, cautious nudges later. The standard choice when gradients are noisy (see <a href="#sgd">SGD</a>), because a shrinking step averages the noise out instead of bouncing forever.</li>
+    <li><strong>Adaptive methods</strong> that tune the rate per parameter from the gradient history. <span class="pill">beyond syllabus</span> AdaGrad, RMSProp, Adam — what people actually run, and out of scope here.</li>
   </ul>
-
-  <p>Everything now hinges on $\alpha$, so the notes immediately pose an exercise — and then leave it for the poll. Let us do it properly, because it is the single most illuminating computation in this chapter.</p>
 
   <h2 id="alpha-worked-example">The four learning rates, computed in full</h2>
 
-  <p>The exercise: let $J(w)=w^2$. Initialise $w^{(0)}=1$. Run three iterations. What is $w^{(3)}$ when (i) $\alpha=0.25$, (ii) $\alpha=0.5$, (iii) $\alpha=1$, (iv) $\alpha=2$?</p>
+  <p>The notes' exercise, left for the poll: let $J(w)=w^2$ and $w^{(0)}=1$. Run three iterations. What is $w^{(3)}$ for (i) $\alpha=0.25$, (ii) $\alpha=0.5$, (iii) $\alpha=1$, (iv) $\alpha=2$?</p>
 
-  <p>First, set up once and reuse. The derivative of $J(w)=w^2$ is</p>
-
-  $$\frac{dJ}{dw} = 2w,$$
-
-  <p>so the update $w^{(t)} = w^{(t-1)} - \alpha\cdot 2w^{(t-1)}$ factors beautifully:</p>
+  <p>Set up once. Since $\frac{dJ}{dw} = 2w$, the update $w^{(t)} = w^{(t-1)} - \alpha\cdot 2w^{(t-1)}$ factors:</p>
 
   $$\boxed{\ w^{(t)} = w^{(t-1)}\,(1-2\alpha).\ }$$
 
-  <p>Each iteration multiplies the iterate by the same constant $(1-2\alpha)$. So after $t$ steps, $w^{(t)} = (1-2\alpha)^t\, w^{(0)}$, and with $w^{(0)}=1$ the answer is simply $w^{(3)}=(1-2\alpha)^3$. Everything about the behaviour is controlled by that one number, the <strong>contraction factor</strong>. Let us nonetheless grind through every arithmetic step, because the shape of the numbers is the lesson.</p>
+  <p>Each iteration multiplies the iterate by the same <strong>contraction factor</strong> $1-2\alpha$, so $w^{(t)} = (1-2\alpha)^t w^{(0)}$ and $w^{(3)} = (1-2\alpha)^3$. Everything about the behaviour is in that one number — but grind through the arithmetic anyway, because the shape of the numbers is the lesson.</p>
 
   <div class="scroll-x">
   <table class="center">
@@ -217,22 +208,20 @@
   </table>
   </div>
 
-  <p>Read the "step" columns as $w^{(t-1)} - \alpha\cdot 2w^{(t-1)}$ with the derivative $2w^{(t-1)}$ shown in the parentheses. For instance in row four, step 2: the iterate is $-3$, the derivative there is $2(-3)=-6$, so we compute $-3 - 2(-6) = -3+12 = 9$.</p>
+  <p>Read the "step" columns as $w^{(t-1)} - \alpha\cdot 2w^{(t-1)}$, with the derivative $2w^{(t-1)}$ shown in the parentheses. Row four, step 2: the iterate is $-3$, the derivative there is $2(-3)=-6$, so $-3 - 2(-6) = 9$.</p>
 
   <h3>What each case is telling you</h3>
 
-  <p><strong>(i) $\alpha=0.25$ — healthy convergence.</strong> The factor is $0.5$, so every step halves the distance to the minimum: $1, \tfrac12, \tfrac14, \tfrac18, \dots$. It never exactly arrives — it converges geometrically. In infinitely many steps it reaches $0$; in practice a stopping criterion fires long before. This is what a well-tuned run looks like.</p>
+  <p><strong>(i) $\alpha=0.25$ — healthy convergence.</strong> Factor $0.5$, so every step halves the distance: $1, \tfrac12, \tfrac14, \tfrac18, \dots$. It never exactly arrives — convergence is geometric — but a stopping criterion fires long before that matters.</p>
 
-  <p><strong>(ii) $\alpha=0.5$ — the bullseye.</strong> The factor is exactly $0$ and we land on the exact minimiser in a single step, then stay there (the gradient at $0$ is $0$, so all later steps do nothing). Why is this possible? Because for a quadratic, the "proportional to the derivative" heuristic is not a heuristic at all: it is exact. For $J(w)=cw^2$ the minimum is at $0$ and the derivative at $w$ is $2cw$, so the distance to the minimum is <em>exactly</em> $\frac{1}{2c}$ times the derivative. Choosing $\alpha=\frac{1}{2c}$ (here $c=1$, so $\alpha=0.5$) makes the step precisely the distance.</p>
+  <p><strong>(ii) $\alpha=0.5$ — the bullseye.</strong> Factor exactly $0$: we land on the minimiser in one step and stay (the gradient at $0$ is $0$, so later steps do nothing). This is possible because for a quadratic the "proportional to the derivative" heuristic is exact: for $J(w)=cw^2$ the derivative at $w$ is $2cw$, so the distance to the minimum is <em>exactly</em> $\frac{1}{2c}$ times the derivative, and $\alpha=\frac{1}{2c}$ makes the step precisely that distance. (Dividing the gradient by the second derivative instead of guessing $\alpha$ is <strong>Newton's method</strong> <span class="pill">beyond syllabus</span>; it hits the same $d^3$ wall as the closed form, because the second derivative is a $d\times d$ matrix.)</p>
 
-  <p>That choice has a name: it is <strong>Newton's method</strong> <span class="pill">beyond syllabus</span>, which divides the gradient by the second derivative $J''=2c$ instead of guessing $\alpha$. It is exact on any quadratic in one step. It is not used at scale because on a $d$-parameter model, the second derivative is a $d\times d$ matrix that you would have to invert — the same $d^3$ wall the closed form hit.</p>
+  <p><strong>(iii) $\alpha=1$ — perpetual oscillation.</strong> Factor $-1$: every step flips the sign and preserves the magnitude, $1 \to -1 \to 1 \to -1$ forever. The direction is right every time, but we overshoot by exactly twice the distance to the minimum, landing at the mirror point with the mirror gradient. $J$ never decreases, and neither the improvement criterion nor the $|w^{(t)}-w^{(t-1)}|$ criterion will ever fire.</p>
 
-  <p><strong>(iii) $\alpha=1$ — perpetual oscillation.</strong> The factor is $-1$: every step flips the sign and preserves the magnitude. $1 \to -1 \to 1 \to -1$, forever. The direction is right every single time (at $w=1$ the derivative is positive and we do move left), but we overshoot by exactly twice the distance to the minimum, landing at the mirror-image point with the mirror-image gradient. $J$ never decreases. Every stopping criterion that watches improvement will report no progress; one that watches $|w^{(t)}-w^{(t-1)}|$ never fires either, since that distance is stuck at $2$.</p>
-
-  <p><strong>(iv) $\alpha=2$ — divergence.</strong> Factor $-3$: each step flips the sign <em>and triples</em> the magnitude. $1\to-3\to9\to-27\to81\dots$, and the objective goes $1\to 9\to 81\to 729$. We are climbing the parabola at an accelerating rate. In floating point this becomes <code>inf</code> and then <code>NaN</code> within a few dozen iterations. If you have ever seen a training loss print <code>nan</code>, this — in a thousand dimensions — is almost always what happened.</p>
+  <p><strong>(iv) $\alpha=2$ — divergence.</strong> Factor $-3$: each step flips the sign <em>and triples</em> the magnitude, $1\to-3\to9\to-27\to81$, with $J$ going $1\to 9\to 81\to 729$. In floating point this becomes <code>inf</code> and then <code>NaN</code> within a few dozen iterations; a training loss printing <code>nan</code> is almost always this, in a thousand dimensions.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>Reading case (iv) as "$\alpha$ was too big so we took too big a step and overshot a little". The failure is not that one step was sloppy; it is that the process is <em>unstable</em>. Each overshoot lands somewhere with a <em>larger</em> gradient, which produces a larger next step, which lands even further out. The error is multiplied by $3$ every iteration. Halving $\alpha$ from $2$ to $1$ does not fix it either (you get case iii). Stability needs $\alpha$ below a hard threshold, which we now derive.</p>
+    <p>Reading case (iv) as "$\alpha$ was too big, so we overshot a little". The failure is not one sloppy step; the process is <em>unstable</em>. Each overshoot lands somewhere with a <em>larger</em> gradient, which produces a larger next step: the error is multiplied by $3$ every iteration. Halving $\alpha$ from $2$ to $1$ does not fix it either (that is case iii). Stability needs $\alpha$ below a hard threshold, derived next.</p>
   </div>
 
   <h3>The convergence condition, derived</h3>
@@ -248,15 +237,15 @@
 
   <p><strong>Generalise to $J(w)=cw^2$ with $c&gt;0$.</strong> Now $\frac{dJ}{dw}=2cw$, the update is $w^{(t)}=w^{(t-1)}(1-2\alpha c)$, and the same argument gives $|1-2\alpha c| &lt; 1$, i.e.</p>
 
-  $$0 &lt; \alpha &lt; \frac{1}{c}.$$
+  $$0 &lt; \alpha &lt; \frac{1}{c},$$
 
-  <p>The fastest choice is $\alpha=\frac{1}{2c}$, the midpoint, which converges in one step. Sharper curvature (bigger $c$) forces smaller steps — a narrow steep valley must be walked carefully.</p>
+  <p>with the midpoint $\alpha=\frac{1}{2c}$ converging in one step. Sharper curvature forces smaller steps — a narrow steep valley must be walked carefully.</p>
 
-  <p><strong>The general quadratic statement.</strong> Write the curvature as the second derivative, $L = J''= 2c$. Then the condition $\alpha &lt; 1/c$ reads</p>
+  <p>Writing the curvature as the second derivative $L = J'' = 2c$, the condition $\alpha &lt; 1/c$ reads</p>
 
   $$\alpha &lt; \frac{2}{L},$$
 
-  <p>and this is the form that generalises. For any function whose gradient does not change faster than rate $L$ (formally: $L$-smooth, meaning $\|\nabla J(u)-\nabla J(v)\|\le L\|u-v\|$), gradient descent with $\alpha &lt; 2/L$ is stable, and $\alpha = 1/L$ is the standard safe choice. <strong>$L$ is the largest curvature anywhere in the landscape</strong>, and it is the thing your step size must respect. In $d$ dimensions, $L$ is the largest eigenvalue of the Hessian — which for linear regression is the largest eigenvalue of $\frac{2}{N}X^\top X$.</p>
+  <p>and this is the form that generalises: for any $L$-smooth function (one whose gradient satisfies $\|\nabla J(u)-\nabla J(v)\|\le L\|u-v\|$), gradient descent with $\alpha &lt; 2/L$ is stable and $\alpha = 1/L$ is the standard safe choice. <strong>$L$ is the largest curvature anywhere in the landscape</strong> — in $d$ dimensions the largest eigenvalue of the Hessian, which for linear regression is the largest eigenvalue of $\frac{2}{N}X^\top X$.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 2 · Gradient descent, step by step — drive it yourself</div>
@@ -328,9 +317,7 @@
 
   <h2 id="general-n">Why this already works for all $N$</h2>
 
-  <p>Everything so far was derived on a single sample, $N=1$. Do we have to redo it? No — and the reason is the one we noticed at the start.</p>
-
-  <p>With $N$ samples (still $\X=\R$, still $b=0$) the objective is the mean squared error</p>
+  <p>Everything so far was derived on a single sample. With $N$ samples (still $\X=\R$, still $b=0$) the objective is the mean squared error</p>
 
   $$J(w) \;=\; \frac{1}{N}\sum_{i=1}^{N}\left(y^{(i)} - x^{(i)}w\right)^2.$$
 
@@ -338,12 +325,12 @@
 
   $$J(w) \;=\; \underbrace{\frac{1}{N}\sum_i \left(x^{(i)}\right)^2}_{\textstyle c}\; w^2 \;-\; 2\underbrace{\frac{1}{N}\sum_i x^{(i)}y^{(i)}}_{\textstyle m}\; w \;+\; \underbrace{\frac{1}{N}\sum_i \left(y^{(i)}\right)^2}_{\textstyle k}.$$
 
-  <p>That is $J(w) = cw^2 - 2mw + k$: <strong>a parabola again</strong>, opening upward because $c=\frac1N\sum (x^{(i)})^2 \ge 0$ is a sum of squares. Averaging $N$ upward parabolas gives an upward parabola. So the single-sample analysis transfers verbatim: same update rule, same sign argument, same stability threshold $\alpha &lt; 1/c$ — only now $c$ is the mean squared input rather than one $(x^{(1)})^2$.</p>
+  <p>That is $J(w) = cw^2 - 2mw + k$: <strong>a parabola again</strong>, opening upward because $c$ is a sum of squares. So the single-sample analysis transfers verbatim — same update, same sign argument, same threshold $\alpha &lt; 1/c$ — only now $c$ is the mean squared input.</p>
 
-  <p>Two things deserve a flag. First, $c$ depends on the <em>scale</em> of your features: multiply every $x^{(i)}$ by $1000$ (say, miles → metres) and $c$ grows by $10^6$, so the largest safe $\alpha$ shrinks by $10^6$. This is precisely why people standardise features before running gradient descent, and it is a topic the <a href="feature-engineering.html">feature engineering</a> chapter picks up. Second, the corner case from the previous chapter reappears wearing a new hat: if $\sum_i (x^{(i)})^2 = 0$ then $c=0$, $J$ is a flat line, the gradient is $0$ everywhere, and gradient descent stops at whatever $w^{(0)}$ you happened to type. The closed form reported this by dividing by zero; gradient descent reports it by returning your initialisation. Both are saying "the data does not determine $w$".</p>
+  <p>Two flags. $c$ depends on the <em>scale</em> of your features: multiply every $x^{(i)}$ by $1000$ and $c$ grows by $10^6$, so the largest safe $\alpha$ shrinks by $10^6$ — which is why people standardise features before running gradient descent (see <a href="feature-engineering.html">feature engineering</a>). And the previous chapter's corner case reappears: if $\sum_i (x^{(i)})^2 = 0$ then $c=0$, $J$ is flat, the gradient is $0$ everywhere, and gradient descent returns whatever $w^{(0)}$ you typed. The closed form reported that by dividing by zero; both are saying "the data does not determine $w$".</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>We developed gradient descent on a parabola because a parabola is where it is easiest to see <em>why</em> it works. But nothing in the algorithm ever used the parabola. It used a derivative. The rule "evaluate the slope where you stand, step against it" is meaningful for any differentiable $J$ — and that is exactly why this algorithm and its variants are used in settings far more general than parabolas, up to and including networks with billions of parameters whose loss surfaces have, as the notes put it, crazy shapes.</p>
+    <p>We developed gradient descent on a parabola because that is where it is easiest to see <em>why</em> it works. But nothing in the algorithm ever used the parabola — it used a derivative. "Evaluate the slope where you stand, step against it" is meaningful for any differentiable $J$, which is why this algorithm scales to networks with billions of parameters whose loss surfaces have, as the notes put it, crazy shapes.</p>
   </div>
 
   <div class="guided">
@@ -382,19 +369,19 @@
 
   <h2 id="multivariate-calculus">Multivariate calculus: what a gradient is</h2>
 
-  <p>Real problems have many parameters. Extend to $\X=\R^d$, $\Y=\R$, and a general objective $J:\R^d\to\R$ — it consumes a whole parameter vector $\theta$ and returns one number. We want $\argmin_{\theta\in\R^d} J(\theta)$. Before we can run the algorithm we need to know what replaces $dJ/dw$. Some background, exactly as the notes set it out.</p>
+  <p>Real problems have many parameters. Extend to $\X=\R^d$ and a general objective $J:\R^d\to\R$ consuming a parameter vector $\theta$ and returning one number. Before running the algorithm we need to know what replaces $dJ/dw$.</p>
 
-  <p>In the scalar case $J:\R\to\R$ and $\frac{\partial J(\theta)}{\partial\theta} \in \R$: one input, one derivative, a single number. When $J:\R^d\to\R$ there are $d$ separate inputs, so there are $d$ separate partial derivatives, and we stack them into a column:</p>
+  <p>In the scalar case $\frac{\partial J(\theta)}{\partial\theta} \in \R$: one input, one derivative. When $J:\R^d\to\R$ there are $d$ inputs, so $d$ partial derivatives, stacked into a column:</p>
 
   $$\frac{\partial J(\theta)}{\partial \theta} \;=\; \begin{bmatrix} \dfrac{\partial J(\theta)}{\partial \theta_1} \\[6pt] \dfrac{\partial J(\theta)}{\partial \theta_2} \\[2pt] \vdots \\[2pt] \dfrac{\partial J(\theta)}{\partial \theta_d} \end{bmatrix} \;\in\; \R^d.$$
 
   <div class="box defn"><span class="label">Definition</span>
-    <p>This vector is the <strong>gradient</strong> of $J$, written $\nabla_\theta J(\theta)$ or just $\nabla J$. Its $j$-th entry $\frac{\partial J}{\partial\theta_j}$ answers one narrow question: <em>if I nudge parameter $j$ alone and freeze all the others, how fast does $J$ change?</em> The gradient is nothing more than all $d$ of those answers collected in one place — but collecting them turns out to be enormously more useful than holding them separately.</p>
+    <p>This vector is the <strong>gradient</strong> of $J$, written $\nabla_\theta J(\theta)$ or $\nabla J$. Its $j$-th entry answers one narrow question: <em>if I nudge parameter $j$ alone and freeze the others, how fast does $J$ change?</em> The gradient is all $d$ of those answers collected in one place.</p>
   </div>
 
   <h3>What the gradient means geometrically</h3>
 
-  <p>Here is the fact that makes the gradient the right object, stated for $d=2$ where you can see it. Picture $J$ as a landscape: $\theta=(\theta_1,\theta_2)$ is a map coordinate and $J(\theta)$ is the altitude. Draw the <strong>level sets</strong> (contour lines) — curves along which the altitude is constant, exactly as on a topographic map.</p>
+  <p>Picture $J$ as a landscape, with $\theta=(\theta_1,\theta_2)$ a map coordinate and $J(\theta)$ the altitude, and draw its <strong>level sets</strong> (contours of constant altitude) as on a topographic map.</p>
 
   <ul>
     <li>$\nabla J(\theta)$ points in the direction of <strong>steepest ascent</strong>: of all directions you could step, that one increases $J$ fastest, and its length $\|\nabla J\|$ is how fast.</li>
@@ -409,12 +396,12 @@
   </div>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p>A ball dropped on the landscape rolls along $-\nabla J$. That analogy is good for direction and honest about one thing — steepest descent is a purely <em>local</em> choice, and a ball has no idea what is over the ridge. It breaks in two places. A real ball has <em>momentum</em>: it keeps going and can roll up out of a shallow dip. Plain gradient descent has no memory and cannot. (Adding momentum to gradient descent is a real and very standard modification, precisely to recover that. <span class="pill">beyond syllabus</span>) And a ball moves continuously, while gradient descent teleports in discrete jumps of length $\alpha\|\nabla J\|$ — which is why too large an $\alpha$ can jump clean across the valley, something no rolling ball does.</p>
+    <p>A ball dropped on the landscape rolls along $-\nabla J$ — honest about steepest descent being a purely <em>local</em> choice. It breaks in two places: a real ball has <em>momentum</em> and can roll up out of a shallow dip, while plain gradient descent has no memory (adding momentum is a standard fix <span class="pill">beyond syllabus</span>); and a ball moves continuously, while gradient descent teleports in jumps of length $\alpha\|\nabla J\|$, which is how too large an $\alpha$ can jump clean across a valley.</p>
   </div>
 
   <h3>The two identities you need — both proved</h3>
 
-  <p>The notes state two gradient formulas and use them immediately. They are the only two you need for linear regression, and both are proved the same way: <strong>write out a single coordinate of the gradient as an ordinary scalar partial derivative, differentiate it with high-school rules, then recognise the resulting vector.</strong> That technique works for every matrix-calculus identity you will meet; learn it once here.</p>
+  <p>These two are the only gradient formulas linear regression needs, and both are proved the same way: <strong>write out a single coordinate as an ordinary scalar partial derivative, differentiate with high-school rules, then recognise the resulting vector.</strong> That technique works for every matrix-calculus identity you will meet.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>(i) If $J(\theta) = \theta^\top v$ for some fixed $v\in\R^d$, then $\nabla_\theta J(\theta) = v$.</strong></p>
@@ -451,20 +438,20 @@
 
   <h3>Shapes, and which layout a formula is written in</h3>
 
-  <p>More generally — and you will hit this again when you meet backpropagation — you may need $\frac{\partial J(\theta)}{\partial\theta}$ where $\theta$ is a scalar, a vector <em>or a matrix</em>, and where the output of $J$ is also a scalar, vector or matrix. Do not memorise a table of cases. Remember instead what the notes say:</p>
+  <p>More generally you may need $\frac{\partial J(\theta)}{\partial\theta}$ where $\theta$ and the output of $J$ are each a scalar, a vector or a matrix. Do not memorise a table of cases; remember what the notes say:</p>
 
   <div class="box defn"><span class="label">Definition</span>
-    <p>$\frac{\partial J(\theta)}{\partial \theta}$ is <strong>simply a collection of scalar-by-scalar partial derivatives</strong>: the partial derivative of each coordinate of the output $J(\theta)$ with respect to each coordinate of the input $\theta$. Those scalar partials are then <em>arranged in some shape</em> — as a vector in the case of $\nabla_\theta J(\theta)$, as a matrix when both sides are vectors, and so on.</p>
+    <p>$\frac{\partial J(\theta)}{\partial \theta}$ is <strong>simply a collection of scalar-by-scalar partial derivatives</strong>: the partial derivative of each coordinate of the output with respect to each coordinate of the input, then <em>arranged in some shape</em> — a vector for $\nabla_\theta J(\theta)$, a matrix when both sides are vectors, and so on.</p>
   </div>
 
-  <p>The content is never in doubt; only the arrangement is. And there are two conventions for arranging it:</p>
+  <p>The content is never in doubt, only the arrangement, and there are two conventions:</p>
 
   <ul>
-    <li><strong>Denominator layout</strong> (what this course uses, and the more popular convention in ML): the result is shaped like the <em>denominator</em>, i.e. like $\theta$. So for $J:\R^d\to\R$, the gradient is a $d\times 1$ column, matching $\theta$.</li>
-    <li><strong>Numerator layout</strong>: the result is shaped like the <em>numerator</em>, i.e. like $J$. The same object comes out as a $1\times d$ row.</li>
+    <li><strong>Denominator layout</strong> (this course, and the more popular convention in ML): the result is shaped like the <em>denominator</em>, i.e. like $\theta$ — a $d\times1$ column for $J:\R^d\to\R$.</li>
+    <li><strong>Numerator layout</strong>: shaped like the <em>numerator</em>, i.e. like $J$ — the same object as a $1\times d$ row.</li>
   </ul>
 
-  <p><strong>One small example so you can recognise which you are reading.</strong> Let $d=3$, $J(\theta)=\theta^\top v$ with $v=(4,5,6)^\top$. The three scalar partials are $\frac{\partial J}{\partial\theta_1}=4$, $\frac{\partial J}{\partial\theta_2}=5$, $\frac{\partial J}{\partial\theta_3}=6$ — identical in both conventions. The layouts differ only in how they are stacked:</p>
+  <p>With $d=3$, $J(\theta)=\theta^\top v$ and $v=(4,5,6)^\top$, the three scalar partials are $4,5,6$ in both conventions; only the stacking differs:</p>
 
   <div class="grid2">
     <div class="card">
@@ -481,7 +468,7 @@
     </div>
   </div>
 
-  <p><strong>How to tell at a glance:</strong> look at whether the author's update rule has a stray transpose in it, or check a known identity — if a source tells you $\nabla_\theta(\theta^\top A\theta) = \theta^\top(A+A^\top)$ (a row), it is in numerator layout; our $(A+A^\top)\theta$ (a column) is denominator layout. The two differ by a transpose and nothing else, so nobody is wrong — but mixing them mid-derivation produces shape errors that are maddening to debug.</p>
+  <p><strong>How to tell at a glance:</strong> check a known identity — a source writing $\nabla_\theta(\theta^\top A\theta) = \theta^\top(A+A^\top)$ (a row) is in numerator layout; our $(A+A^\top)\theta$ (a column) is denominator layout. They differ by a transpose and nothing else, so nobody is wrong — but mixing them mid-derivation produces maddening shape errors.</p>
 
   <div class="quiz" data-answer="1">
     <div class="q">$J(\theta)=\theta^\top A\theta$ with $A = \begin{bmatrix}1&amp;3\\0&amp;1\end{bmatrix}$ and $\theta=(1,1)^\top$. What is $\nabla_\theta J$?</div>
@@ -493,37 +480,35 @@
 
   <h2 id="back-to-optimization">Back to optimization: linear regression in matrix form</h2>
 
-  <p>Now take $\X=\R^d$, $\Y=\R$, and recall ERM for linear regression as the <a href="linear-regression.html">previous chapter</a> left it. Stack the samples as rows of the design matrix $X\in\R^{N\times d}$ and the labels into $y\in\R^N$. Then:</p>
+  <p>Take $\X=\R^d$, $\Y=\R$, and ERM for linear regression as the <a href="linear-regression.html">previous chapter</a> left it, with samples as rows of $X\in\R^{N\times d}$ and labels in $y\in\R^N$:</p>
 
   $$\argmin_\theta \|y - X\theta\|_2^2 \;=\; \argmin_\theta\, (y-X\theta)^\top(y-X\theta) \;=\; \argmin_\theta\, \underbrace{y^\top y - 2\theta^\top X^\top y + \theta^\top X^\top X\theta}_{J(\theta)}.$$
 
-  <p>The middle step is just the definition of the squared Euclidean norm, $\|v\|_2^2 = v^\top v$. The last step multiplies out; the two cross terms $-y^\top X\theta$ and $-\theta^\top X^\top y$ are each $1\times1$ — scalars — and a scalar equals its own transpose, so they are the same number and combine into $-2\theta^\top X^\top y$.</p>
+  <p>The middle step is the definition $\|v\|_2^2 = v^\top v$; the last multiplies out, with the two cross terms $-y^\top X\theta$ and $-\theta^\top X^\top y$ each $1\times1$ — scalars equal to their own transposes, hence the same number — combining into $-2\theta^\top X^\top y$.</p>
 
-  <p>$J$ is a parabola (in $d$ dimensions: a bowl), and we want the $\theta$ where $\nabla_\theta J(\theta)=0$. Differentiate term by term:</p>
+  <p>$J$ is a bowl, and we want $\nabla_\theta J(\theta)=0$. Differentiate term by term:</p>
 
   <ul>
     <li>$y^\top y$ contains no $\theta$. Gradient: $\mathbf{0}$.</li>
-    <li>$-2\theta^\top X^\top y$ has the form $\theta^\top v$ with the fixed vector $v = -2X^\top y \in\R^d$. By identity (i), gradient: $-2X^\top y$.</li>
-    <li>$\theta^\top X^\top X\theta$ has the form $\theta^\top A\theta$ with $A = X^\top X$, which is symmetric. By identity (ii), gradient: $2X^\top X\theta$.</li>
+    <li>$-2\theta^\top X^\top y$ has the form $\theta^\top v$ with $v = -2X^\top y$. By identity (i), gradient: $-2X^\top y$.</li>
+    <li>$\theta^\top X^\top X\theta$ has the form $\theta^\top A\theta$ with $A = X^\top X$, symmetric. By identity (ii), gradient: $2X^\top X\theta$.</li>
   </ul>
 
   $$\boxed{\ \nabla_\theta J(\theta) = -2X^\top y + 2X^\top X\theta.\ }$$
 
-  <p>Every piece of that came from the two identities we proved above — nothing was asserted. Now set it to zero:</p>
+  <p>Setting it to zero:</p>
 
   $$-2X^\top y + 2X^\top X\theta = 0 \;\Longrightarrow\; X^\top X\theta = X^\top y \;\Longrightarrow\; \theta^\star = (X^\top X)^{-1}X^\top y,$$
 
-  <p>assuming $X^\top X$ is invertible — which, as the previous chapter details, requires $X$ to have full column rank.</p>
+  <p>assuming $X^\top X$ is invertible, which requires $X$ to have full column rank.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Two routes, one answer.</strong> The <a href="linear-regression.html#normal-equations">previous chapter</a> derived this same $\theta^\star$ by <em>completing the square</em> in matrix form — no calculus at all — and that route proves the point is a <em>global</em> minimum, because completing the square exhibits $J$ as a constant plus a manifestly non-negative term. The calculus route here is shorter but proves less on its own: setting a gradient to zero finds a <em>stationary</em> point, which could in principle be a maximum or a saddle. The two agree because $X^\top X$ is positive semi-definite, so the only stationary points of this bowl are minima. Use whichever route you prefer, and take comfort that they meet.</p>
+    <p><strong>Two routes, one answer.</strong> The <a href="linear-regression.html#normal-equations">previous chapter</a> got this same $\theta^\star$ by <em>completing the square</em>, with no calculus, and that route proves the point is a <em>global</em> minimum. The calculus route is shorter but proves less: setting a gradient to zero finds a <em>stationary</em> point, which could be a maximum or a saddle. They agree because $X^\top X$ is positive semi-definite, so the only stationary points of this bowl are minima.</p>
   </div>
 
   <h3>Why this is a lucky accident, not the general situation</h3>
 
-  <p>Linear regression is a <strong>special</strong> setting where something nice happens: setting the gradient to zero produced an equation we could solve for $\theta$ in closed form, by hand, exactly. That happened because the gradient was <em>linear</em> in $\theta$ — and the gradient is linear in $\theta$ precisely because $J$ was quadratic.</p>
-
-  <p>In real life, most problems do not admit a closed-form solution. Try setting the gradient of a neural network's loss to zero: you get a system of millions of coupled nonlinear equations with no solution formula anywhere. This is the norm, not the exception. Gradient descent is a highly effective tool in exactly that situation, because it never needs to <em>solve</em> $\nabla J = 0$ — it only needs to <em>evaluate</em> $\nabla J$ at the point where it happens to be standing, and evaluation is always possible.</p>
+  <p>Setting the gradient to zero produced an equation we could solve exactly because the gradient was <em>linear</em> in $\theta$ — and it was linear because $J$ was quadratic. Most problems are not like this: set the gradient of a neural network's loss to zero and you get millions of coupled nonlinear equations with no solution formula. Gradient descent works there because it never needs to <em>solve</em> $\nabla J = 0$; it only needs to <em>evaluate</em> $\nabla J$ where it stands, and evaluation is always possible.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Gradient descent for a general $J:\R^d\to\R$.</strong></p>
@@ -559,22 +544,18 @@
     <p><strong>Global minimum.</strong> A value of $\theta$ that minimises the function: $J(\theta) \le J(\theta')$ for every $\theta'\in\R^d$.</p>
   </div>
 
-  <p>Note the asymmetry in the two definitions. "Local" quantifies over a neighbourhood — some small ball around $\theta$ — while "global" quantifies over <em>all of $\R^d$</em>. Every global minimum is also a local minimum; the converse is what fails. And the gradient cannot tell the difference: at a local minimum $\nabla J = 0$ and the surface curves upward in every direction, which is exactly what a global minimum looks like from up close. In the fog, a small dip and the deepest valley feel identical.</p>
+  <p>Note the asymmetry: "local" quantifies over a neighbourhood, "global" over <em>all of $\R^d$</em>. Every global minimum is local; the converse fails. And the gradient cannot tell the difference — at a local minimum $\nabla J = 0$ and the surface curves upward in every direction, exactly what a global minimum looks like from up close. In the fog, a small dip and the deepest valley feel identical.</p>
 
-  <p>Consequently <strong>where you start determines where you end.</strong> Run gradient descent from $\theta^{(0)}_A$ and you slide into the basin containing $\theta^{(0)}_A$; run it from $\theta^{(0)}_B$ on the other side of a ridge and you slide into a different basin, with a different final loss. This is not randomness in the algorithm — plain gradient descent is entirely deterministic — it is sensitivity to the initialisation.</p>
-
-  <p><span class="pill">Try it</span> Go back to <a href="#alpha-worked-example">Figure 2</a>, press <em>Function</em> to switch to the multi-minimum landscape, and move the start slider. From $w^{(0)}=-2.5$ you end in the deep left valley; from $w^{(0)}=2.0$ you end in the shallower right one; start almost exactly on the little ridge between them and a tiny nudge decides your fate. That figure is the picture the notes describe in words.</p>
+  <p>So <strong>where you start determines where you end.</strong> Two starting points on opposite sides of a ridge slide into different basins with different final losses. That is not randomness — plain gradient descent is deterministic — it is sensitivity to the initialisation. <span class="pill">Try it</span> In <a href="#alpha-worked-example">Figure 2</a>, press <em>Function</em> for the multi-minimum landscape and move the start slider: $w^{(0)}=-2.5$ ends in the deep left valley, $w^{(0)}=2.0$ in the shallower right one.</p>
 
   <h3>Saddle points and convexity, briefly</h3>
 
-  <p>Two more things live at $\nabla J = 0$, worth naming so the vocabulary is not new later.</p>
+  <p><strong>Saddle points.</strong> <span class="pill">beyond syllabus</span> The gradient vanishes, but the point is a minimum along some directions and a maximum along others. Gradient descent crawls near one without being trapped, and eventually escapes downhill. In high dimensions saddles vastly outnumber local minima — a local minimum needs <em>all</em> $d$ curvature directions pointing up, a demanding coincidence when $d$ is a million — so the practical enemy in deep learning is saddles and flat plateaus, not bad local minima.</p>
 
-  <p><strong>Saddle points.</strong> <span class="pill">beyond syllabus</span> A point where the gradient vanishes but which is a minimum along some directions and a maximum along others — the middle of a horse's saddle, or a mountain pass. Gradient descent slows to a crawl near one (small gradient means small steps) without being truly trapped; it eventually escapes along the downhill direction. In high dimensions, saddles vastly outnumber local minima, because for a point to be a local minimum <em>all</em> $d$ curvature directions must point up, and that is a demanding coincidence when $d$ is a million. Modern thinking is that the practical enemy in deep learning is saddles and flat plateaus, not bad local minima.</p>
-
-  <p><strong>Convex problems.</strong> <span class="pill">beyond syllabus</span> A function is convex if the chord between any two points on its graph lies on or above the graph — bowls, parabolas, and $\|y-X\theta\|_2^2$ all qualify. For a convex function there are <em>no bad local minima</em>: every local minimum is a global minimum. That is why linear regression does not have this problem at all, and why gradient descent on it converges to the same answer from every starting point. Logistic regression, coming up in a <a href="logistic-regression.html">later chapter</a>, is also convex. Neural networks emphatically are not.</p>
+  <p><strong>Convex problems.</strong> <span class="pill">beyond syllabus</span> A function is convex if the chord between any two points on its graph lies on or above the graph; bowls, parabolas and $\|y-X\theta\|_2^2$ all qualify. A convex function has <em>no bad local minima</em>: every local minimum is global. That is why gradient descent on linear regression converges to the same answer from every start. <a href="logistic-regression.html">Logistic regression</a> is also convex; neural networks emphatically are not.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Despite the fact that gradient descent may not always reach a global minimum, and may get stuck at a local minimum that is not global, in practice gradient descent and its variants are still <strong>very popular</strong> — because they find a <em>good</em> solution in a computationally efficient manner. This is the pragmatic bargain at the heart of modern ML: an approximate answer you can actually compute beats an exact answer you cannot. Nobody training a large model believes they found the global optimum. The model works anyway.</p>
+    <p>Gradient descent may get stuck at a local minimum that is not global, and is still <strong>very popular</strong>, because it finds a <em>good</em> solution efficiently. That is the pragmatic bargain at the heart of modern ML: an approximate answer you can compute beats an exact one you cannot. Nobody training a large model believes they found the global optimum; the model works anyway.</p>
   </div>
 
   <div class="quiz" data-answer="0">
@@ -622,34 +603,24 @@
 
   <h2 id="batch-gd">Batch gradient descent, and the problem with it</h2>
 
-  <p>Come back to ERM one more time, now written with the average and with a general hypothesis:</p>
+  <p>ERM once more, with the average and a general hypothesis:</p>
 
   $$\argmin_\theta\ \frac{1}{N}\sum_{i=1}^{N} \ell\!\left(h_\theta(x^{(i)}),\, y^{(i)}\right)$$
 
-  <p>where $h_\theta(x) = \theta^\top x$ under linear regression, but $h_\theta$ could alternatively capture other types of hypothesis — a neural network, for instance. Nothing below depends on which; all we need is that $\ell$ is differentiable in $\theta$.</p>
-
-  <p>Because the objective is a sum, and differentiation is linear, the gradient is also a sum:</p>
+  <p>where $h_\theta(x) = \theta^\top x$ for linear regression, but $h_\theta$ could be a neural network — all we need is that $\ell$ is differentiable in $\theta$. Because the objective is a sum and differentiation is linear, the gradient is a sum too:</p>
 
   $$\nabla_\theta J(\theta) = \frac{1}{N}\sum_{i=1}^{N} \nabla_\theta\,\ell\!\left(h_\theta(x^{(i)}), y^{(i)}\right).$$
 
-  <p>Look hard at that. To take <em>one</em> step — to change $\theta^{(t-1)}$ into $\theta^{(t)}$ — the algorithm must compute a gradient for <strong>every single training example</strong> and average them. In the context of ERM, gradient descent is therefore also called <strong>batch gradient descent</strong>: it processes all $N$ samples together, as one batch, per update. This causes a problem.</p>
+  <p>So to take <em>one</em> step the algorithm must compute a gradient for <strong>every single training example</strong> and average them. Gradient descent applied to ERM is therefore also called <strong>batch gradient descent</strong>: all $N$ samples per update.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
     <p><strong>Problem.</strong> Suppose $N$ is large. Then gradient descent has to compute $\nabla_\theta \ell(h_\theta(x^{(i)}),y^{(i)})$ for every $i\in\{1,\dots,N\}$ in order to make <em>any</em> update to the iterate $\theta^{(t-1)}$. This makes it slow.</p>
   </div>
 
-  <h3>Put numbers on it</h3>
-
-  <p>Take ImageNet-scale training: $N = 1{,}280{,}000$ images. Suppose one forward-and-backward pass through the network costs about $0.5$ ms on your hardware. Then one <em>full</em> gradient costs</p>
-
-  $$1{,}280{,}000 \times 0.5\,\text{ms} \approx 640\ \text{seconds} \approx 10.7\ \text{minutes}.$$
-
-  <p>That buys you <strong>one</strong> update to $\theta$ — one step of the four-line loop. Training needs tens of thousands of steps. At $10.7$ minutes each, $10{,}000$ steps is <strong>74 days</strong>.</p>
-
-  <p>And notice how wasteful it is. The first thousand images already told you, very clearly, roughly which way is downhill. Images $1{,}001$ through $1{,}280{,}000$ refine that estimate into the <em>exact</em> average gradient — and then you multiply it by $\alpha=0.001$ and take a tiny step, which immediately makes the exact computation obsolete because you are now standing somewhere else. <strong>We are computing a very precise number and then barely using it.</strong></p>
+  <p>Put numbers on it: at ImageNet scale, $N = 1{,}280{,}000$ images at about $0.5$ ms per forward-and-backward pass, one full gradient costs $1{,}280{,}000 \times 0.5\,\text{ms} \approx 640$ s $\approx 10.7$ minutes — and that buys <strong>one</strong> update. Ten thousand steps would take 74 days. It is also wasteful: the first thousand images already said roughly which way is downhill, and the remaining 1.279 million only refine that into the <em>exact</em> average, which you then multiply by $\alpha=0.001$ and immediately invalidate by moving. <strong>We compute a very precise number and barely use it.</strong></p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Idea:</strong> take gradients of just one sample at a time for each update. You get a much worse estimate of the descent direction — but you get it $N$ times faster, and you can take $N$ steps in the time the batch version takes one. Trading accuracy per step for number of steps is, it turns out, an overwhelmingly good trade.</p>
+    <p><strong>Idea:</strong> take gradients of just one sample at a time for each update. You get a much worse estimate of the descent direction — but you get it $N$ times faster, so you can take $N$ steps in the time the batch version takes one. Trading accuracy per step for number of steps turns out to be an overwhelmingly good trade.</p>
   </div>
 
   <h2 id="sgd">Stochastic gradient descent</h2>
@@ -669,23 +640,20 @@
     <p>"Stochastic" is the whole difference: the index $j$ is drawn at random, fresh, every iteration. The update uses the gradient of the loss on that <em>one</em> sample, as if it were the entire training set.</p>
   </div>
 
-  <p>The cost per update drops by a factor of $N$. On the ImageNet numbers above, an SGD update costs $0.5$ ms instead of $10.7$ minutes, so in the time batch GD makes one step, SGD makes $1{,}280{,}000$ of them. As the notes put it: a very noisy version of the full gradient, but fast to compute.</p>
+  <p>The cost per update drops by a factor of $N$. On the ImageNet numbers, an SGD update costs $0.5$ ms instead of $10.7$ minutes, so in the time batch GD makes one step SGD makes $1{,}280{,}000$. As the notes put it: a very noisy version of the full gradient, but fast to compute.</p>
 
   <h3>Why does this work at all?</h3>
 
-  <p>It is worth being suspicious. A single random training point is a terrible summary of a dataset. Why doesn't following it just wander?</p>
-
-  <p>Because the single-sample gradient is an <strong>unbiased estimate</strong> of the full gradient: wrong on any given step, but right <em>on average</em>, with no systematic lean in any direction. Two lines:</p>
+  <p>A single random training point is a terrible summary of a dataset, so why doesn't following it just wander? Because the single-sample gradient is an <strong>unbiased estimate</strong> of the full gradient: wrong on any given step, but right <em>on average</em>, with no systematic lean.</p>
 
   <div class="box proof"><span class="label">Proof</span>
-    <p>Write $g_j = \nabla_\theta\,\ell(h_\theta(x^{(j)}), y^{(j)})$ for the gradient contributed by sample $j$, and let $j$ be drawn uniformly from $\{1,\dots,N\}$, so $\Pr[j=i] = \frac1N$ for each $i$. Then by the definition of expectation,</p>
+    <p>Write $g_j = \nabla_\theta\,\ell(h_\theta(x^{(j)}), y^{(j)})$ and let $j$ be drawn uniformly from $\{1,\dots,N\}$, so $\Pr[j=i] = \frac1N$. Then by the definition of expectation,</p>
     $$\E_j\!\left[g_j\right] \;=\; \sum_{i=1}^{N}\Pr[j=i]\; g_i \;=\; \sum_{i=1}^{N}\frac{1}{N}\,g_i \;=\; \frac{1}{N}\sum_{i=1}^{N}\nabla_\theta\,\ell\!\left(h_\theta(x^{(i)}),y^{(i)}\right) \;=\; \nabla_\theta J(\theta). \qquad\blacksquare$$
-    <p>The uniform-random draw is exactly what makes the middle equality hold: each sample's gradient is weighted by $\frac1N$, which is precisely how the ERM average weights it. Sampling non-uniformly (say, always preferring the hard examples) would break unbiasedness — and is a real technique, but then you must reweight to compensate.</p>
+    <p>The uniform draw is exactly what makes the middle equality hold: each sample's gradient gets weight $\frac1N$, precisely how the ERM average weights it. Sampling non-uniformly (always preferring hard examples, say) breaks unbiasedness unless you reweight to compensate.</p>
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Write the stochastic gradient as truth plus noise: $g_j = \nabla J(\theta) + \varepsilon_j$ where, by the proof above, $\E[\varepsilon_j]=0$. An SGD step is then $\theta \leftarrow \theta - \alpha\nabla J(\theta) - \alpha\varepsilon_j$: a true gradient step, plus a random kick. Over many steps the kicks partially cancel while the true-gradient parts accumulate — so the <em>drift</em> is downhill even though any individual step may go uphill.</p>
-    <p>Analogy: a drunk walking home downhill. Each footstep is unreliable, some go the wrong way entirely, and the path looks nothing like a straight line. But gravity biases every step slightly, and he arrives — usually before the sober man who insists on surveying the whole hillside before each step. Where the analogy breaks: he never stops staggering. The kicks do not vanish near the minimum (a single sample's gradient is generally nonzero even at $\theta^\star$), so SGD with a constant $\alpha$ does not converge to a point, it ends up bouncing around within a ball of radius roughly proportional to $\alpha$. That is exactly why $\alpha_t = 1/\sqrt{t}$ decay schedules exist: shrink the kicks over time and the ball shrinks to a point.</p>
+    <p>Write the stochastic gradient as truth plus noise, $g_j = \nabla J(\theta) + \varepsilon_j$ with $\E[\varepsilon_j]=0$. An SGD step is then a true gradient step plus a random kick. Over many steps the kicks partially cancel while the true-gradient parts accumulate, so the <em>drift</em> is downhill even though individual steps may go uphill. But the kicks do not vanish near the minimum — a single sample's gradient is generally nonzero even at $\theta^\star$ — so SGD with constant $\alpha$ does not converge to a point; it bounces inside a ball of radius roughly proportional to $\alpha$. That is exactly why $\alpha_t = 1/\sqrt{t}$ schedules exist: shrink the kicks and the ball shrinks to a point.</p>
   </div>
 
   <h3>The training-error curves</h3>
@@ -735,19 +703,15 @@
     <li><strong>Cost rises like $K$.</strong> Each iteration does $K$ times the work.</li>
   </ul>
 
-  <p>Multiply those together and you get the uncomfortable fact: <em>noise reduction per unit of compute is roughly constant</em>. Going from $K=1$ to $K=100$ makes each step $100\times$ more expensive to make the noise $10\times$ smaller. Purely in flop-counting terms, small $K$ wins.</p>
-
-  <p>So why does everyone use $K=32$ or $K=256$ rather than $K=1$? Because the flop count is not the wall clock:</p>
+  <p>Multiply those together: <em>noise reduction per unit of compute is roughly constant</em>. Going from $K=1$ to $K=100$ makes each step $100\times$ more expensive to make the noise $10\times$ smaller, so in pure flop-counting terms small $K$ wins. Everyone still uses $K=32$ or $K=256$, because the flop count is not the wall clock:</p>
 
   <ul>
-    <li><strong>Hardware parallelism.</strong> A GPU computing $256$ sample gradients simultaneously takes barely longer than computing one — the arithmetic units are idle otherwise. Up to the point of saturation, mini-batching is nearly free in real time.</li>
-    <li><strong>Fixed per-step overhead.</strong> Kernel launches, memory transfers, the optimizer update itself: costs paid per <em>iteration</em>, not per sample. With $K=1$ they dominate.</li>
-    <li><strong>Stability.</strong> A less noisy gradient tolerates a larger $\alpha$, which recovers some of the lost steps.</li>
+    <li><strong>Hardware parallelism.</strong> A GPU computing $256$ sample gradients at once takes barely longer than computing one — the arithmetic units are idle otherwise, so mini-batching is nearly free in real time up to saturation.</li>
+    <li><strong>Fixed per-step overhead.</strong> Kernel launches, memory transfers and the optimizer update are paid per <em>iteration</em>, not per sample, and dominate at $K=1$.</li>
+    <li><strong>Stability.</strong> A less noisy gradient tolerates a larger $\alpha$, recovering some of the lost steps.</li>
   </ul>
 
-  <p><span class="pill">beyond syllabus</span> <strong>Why $K$ is usually a power of two.</strong> $32, 64, 128, 256$ — this is convention with a hardware reason, not mathematics. GPU threads execute in fixed-size groups (32 on NVIDIA hardware, a "warp"), memory coalesces on power-of-two boundaries, and tensor cores want dimensions that are multiples of 8 or 16. A batch of $100$ pads out to $128$ internally and you pay for $128$ anyway, so you may as well use $128$. There is nothing about the <em>statistics</em> that prefers a power of two — $K=100$ is a perfectly good estimator.</p>
-
-  <p class="muted tiny">One vocabulary note you will need immediately in practice: implementations usually do not draw $K$ indices uniformly at random with replacement, as the definition literally says. They shuffle the dataset once and cut it into consecutive blocks of $K$, so every sample is used exactly once per pass. One such pass is an <strong>epoch</strong>. This is sampling <em>without</em> replacement, which is slightly biased within an epoch but has lower variance overall and is easier on memory bandwidth — a small, deliberate, universal deviation from the theory.</p>
+  <p class="muted tiny"><span class="pill">beyond syllabus</span> $K$ is conventionally a power of two for hardware reasons (warp size, memory coalescing, tensor-core dimensions), not statistical ones. Also, implementations rarely sample with replacement as the definition says: they shuffle once and cut the data into consecutive blocks of $K$, so every sample is used once per pass — one such pass is an <strong>epoch</strong>.</p>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>Budget three optimizers</div>
@@ -788,30 +752,15 @@
     <div class="why"><strong>Why:</strong> SGD steps exactly downhill on $\ell_j$, not on $J$ — and $\nabla\ell_j = \nabla J + \varepsilon_j$ with a nonzero kick $\varepsilon_j$. Jaggedness is the noise term, not a bug, and it is the price of the $N\times$ speedup. Diagnosing the difference: healthy SGD is jagged with a <em>downward trend</em> and a stable noise floor, while too-large $\alpha$ makes the trend flat or upward and the amplitude grow. A smooth curve is not the goal; a decreasing one is.</div>
   </div>
 
-  <h2 id="recap">Recap</h2>
+    <h2 id="recap">Recap</h2>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="kicker">The rule</div>
-      <h3>Where it came from</h3>
-      <p>Derivative positive $\Rightarrow$ step left; negative $\Rightarrow$ step right; magnitude is large when far away $\Rightarrow$ step proportionally. All three at once: $\theta \leftarrow \theta - \alpha\nabla_\theta J$. Nothing else was designed.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">The dial</div>
-      <h3>Learning rate</h3>
-      <p>On $J(w)=cw^2$: converges iff $0&lt;\alpha&lt;1/c$; exact in one step at $\alpha = 1/(2c)$; oscillates at the boundary; diverges beyond. In general $\alpha &lt; 2/L$ with $L$ the largest curvature.</p>
-    </div>
-  </div>
+  <p>Where the rule came from: derivative positive $\Rightarrow$ step left, negative $\Rightarrow$ step right, magnitude large when far away $\Rightarrow$ step proportionally — all three at once in $\theta \leftarrow \theta - \alpha\nabla_\theta J$. And the dial: on $J(w)=cw^2$ it converges iff $0&lt;\alpha&lt;1/c$, is exact in one step at $\alpha = 1/(2c)$, oscillates on the boundary and diverges beyond; in general $\alpha &lt; 2/L$ with $L$ the largest curvature.</p>
 
-  <ul>
-    <li><strong>ERM is an optimization problem.</strong> Once the hypothesis class and loss are fixed, learning <em>is</em> minimising a function of the parameters, and the only remaining question is how to do it efficiently.</li>
+<ul>
     <li><strong>Everything was derived on a parabola,</strong> because a one-sample squared loss is a parabola and so is the $N$-sample average — but the algorithm only ever uses a derivative, which is why it transfers to landscapes of any shape.</li>
-    <li><strong>Four stopping criteria:</strong> the objective stops improving, the derivative stops changing, the iterate stops moving, or you run out of compute.</li>
-    <li><strong>The gradient</strong> is the stack of all $d$ partial derivatives; it points along steepest ascent, perpendicular to the level sets, so $-\nabla J$ is the descent direction. This course arranges derivatives in <em>denominator layout</em>.</li>
     <li><strong>Two identities do all the work:</strong> $\nabla_\theta(\theta^\top v) = v$ and $\nabla_\theta(\theta^\top A\theta) = (A+A^\top)\theta$, which is $2A\theta$ for symmetric $A$ — and $X^\top X$ is always symmetric. Together they give $\nabla_\theta\|y-X\theta\|_2^2 = -2X^\top y + 2X^\top X\theta$ and hence the normal equations, agreeing with the completing-the-square derivation in the <a href="linear-regression.html">previous chapter</a>.</li>
-    <li><strong>Linear regression is the lucky case.</strong> Almost nothing else has a closed form; gradient descent is what you use when $\nabla J = 0$ cannot be solved, including for the crazy shapes of neural networks.</li>
-    <li><strong>Local minima are real</strong> — lowest in their neighbourhood, not necessarily lowest anywhere — and gradient descent can get stuck in one depending on where it starts. It remains overwhelmingly popular anyway, because a good solution found efficiently beats a perfect one found never.</li>
-    <li><strong>Batch GD needs all $N$ gradients per update.</strong> SGD needs one, chosen uniformly at random, and works because that single gradient is an <em>unbiased estimate</em> of the full one: $\E_j[\nabla\ell_j] = \nabla J$. Mini-batch takes $K$ of them, cutting variance by $1/K$ at $K$ times the cost — a wash on paper, a clear win on real hardware.</li>
+    <li><strong>Linear regression is the lucky case.</strong> Almost nothing else has a closed form; gradient descent is what you use when $\nabla J = 0$ cannot be solved.</li>
+    <li><strong>Local minima are real,</strong> and gradient descent can get stuck in one depending on where it starts. It remains overwhelmingly popular anyway, because a good solution found efficiently beats a perfect one found never.</li>
     <li>Judge optimizers by error versus <em>compute</em>, never versus iterations.</li>
   </ul>
 

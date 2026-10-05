@@ -16,30 +16,44 @@
 
   <div data-toc></div>
 
-  <h2 id="why-simple-models-fail">1. The premise: simple models, complex data</h2>
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>How a model that is only ever linear in its parameters fits curves — and the exact price of overdoing it.</p>
+    <ul>
+      <li><strong>The whole idea</strong> — $h(x)=b+w_1x+w_2x^2$ is non-linear in $x$ but <strong>linear in the parameters</strong>. Linear regression requires only the second, so you change the <em>data</em>, not the model.</li>
+      <li><strong>Polynomial feature transform</strong> — to fit a degree-$M$ polynomial, add the columns $1, x, x^2, \dots, x^M$: $M+1$ parameters. $x^{(i)}$ is sample $i$; $x^i$ is a power.</li>
+      <li><strong>General transform</strong> — $\phi : \R^{K} \to \R^{M}$, applied to every sample and stacked row-wise, gives $\Phi \in \R^{N\times M}$ with row $i$ equal to $\phi(x^{(i)})^\top$ (often just renamed $X$).</li>
+      <li><strong>Normal equations, unchanged</strong> — $\theta^* = (\Phi^\top\Phi)^{-1}\Phi^\top y$, because the derivation only ever used that the prediction is $\theta^\top\phi(x)$.</li>
+      <li><strong>Same $\phi$ at prediction time</strong> — the shipped model is the pair $(\phi, \theta)$. Omit the transform and nothing crashes; the numbers are simply wrong.</li>
+      <li><strong>Geometry</strong> — with features $(x, x^2)$ the model is a <strong>plane</strong>; the curve you see is that plane's height read along the constraint $x_2 = x^2$, which is where all real data lies.</li>
+      <li><strong>$M \ge N$</strong> — $\operatorname{rank}(\Phi^\top\Phi) \le \min(N, M)$, so for $M &gt; N$ it is <strong>singular</strong>: infinitely many $\theta$ with zero training error. At $M+1 = N$ the fit interpolates every point exactly.</li>
+      <li><strong>Overfitting</strong> — past a point the empirical risk $\hat R$ keeps falling while the true risk $R$ rises. Training error is <strong>monotone</strong> in capacity, so it can never tell you to stop.</li>
+      <li><strong>Diagnosis</strong> — high train and high test = underfitting; near-zero train and high test = overfitting. Judge by the <em>gap</em>, never by the feature count.</li>
+      <li><strong>Cures</strong> — fewer features, more data, held-out validation or $k$-fold CV, and regularization: <a href="model-selection.html">chapter 12</a>.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
 
-  <p>Here is the sentence the course notes open with, unpacked:</p>
+  <h2 id="why-simple-models-fail">1. The premise: simple models, complex data</h2>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>If your dataset is complex — meaning the input values have complicated relationships with the output values — then simple models may be unable to fit it. <strong>Feature engineering is the tool that lets simple models fit complex distributions of data.</strong></p>
   </div>
 
-  <p>Read that twice, because the phrasing is doing something sneaky. It does <em>not</em> say "use a more complex model." It says: keep the simple model, change the <em>data</em>. That is the whole chapter.</p>
+  <p>Note what it does <em>not</em> say: "use a more complex model." It says keep the simple model and change the <em>data</em>. That is the whole chapter.</p>
 
-  <p>You already have a simple model. From <a href="linear-regression.html">chapter 8</a>, for a one-dimensional input $x \in \R$:</p>
+  <p>The simple model, from <a href="linear-regression.html">chapter 8</a>, for a one-dimensional input $x \in \R$:</p>
 
   $$ h(x) = wx + b $$
 
-  <p>where $w$ is the slope (how much the prediction rises per unit of $x$) and $b$ is the intercept or <em>bias</em> (the prediction when $x = 0$). You fit it by minimising squared error, and you learned that there is a closed-form solution — the normal equations. It is interpretable (one number per feature, and you can read its sign), it is easy to optimise (convex, closed form), and it is simple (two parameters).</p>
-
-  <p>Now watch it fail.</p>
+  <p>$w$ is the slope, $b$ the intercept or <em>bias</em>; you fit it by minimising squared error, in closed form via the normal equations. Interpretable, easy to optimise, two parameters. Now watch it fail.</p>
 
   <h3>1.1 When linear regression works</h3>
 
-  <p>Given a dataset $\D = \{(x^{(i)}, y^{(i)})\}_{i=1}^{N}$ that follows a linear trend, a linear model fits it beautifully. Here is the source's Figure 1, reconstructed.</p>
+  <p>On a dataset $\D = \{(x^{(i)}, y^{(i)})\}_{i=1}^{N}$ that follows a linear trend, a linear model fits beautifully.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>Notation, immediately.</strong> $x^{(i)}$ means <em>the $i$-th sample</em>. The parenthesised superscript is an index, <strong>not</strong> an exponent. $x^{(3)}$ is the third data point; $x^3$ is $x$ cubed. This chapter is the single worst place in the course for this confusion, because we are about to build a table that contains <em>both</em> at once. Whenever you see a superscript, check for parentheses before you do anything else.</p>
+    <p><strong>Notation, immediately.</strong> $x^{(i)}$ means <em>the $i$-th sample</em>: the parenthesised superscript is an index, <strong>not</strong> an exponent. $x^{(3)}$ is the third data point; $x^3$ is $x$ cubed. Check for parentheses before you do anything else — this chapter builds a table containing both at once.</p>
   </div>
 
   <div class="viz">
@@ -50,20 +64,7 @@
 
   <h3>1.2 When linear regression fails</h3>
 
-  <p>Now suppose the data is non-linear. We will use the exact dataset the notes use later, because it lets every number on this page line up:</p>
-
-  <table class="tight center">
-    <thead><tr><th>$y$</th><th>$x$</th></tr></thead>
-    <tbody>
-      <tr><td>5</td><td>6</td></tr>
-      <tr><td>12</td><td>7</td></tr>
-      <tr><td>1</td><td>3</td></tr>
-      <tr><td>5</td><td>2</td></tr>
-      <tr><td>15</td><td>0</td></tr>
-      <tr><td>⋮</td><td>⋮</td></tr>
-    </tbody>
-  </table>
-  <p class="tiny muted">Table 1 (left half) — the original dataset $\D$. The rows are not sorted by $x$; sort them in your head: $x = 0, 2, 3, 6, 7$ gives $y = 15, 5, 1, 5, 12$. It falls, bottoms out, and rises. That is a parabola.</p>
+  <p>Now take non-linear data: the five samples of Table 1 (§3), which the notes use too, so every number on this page lines up. Sorted, $x = 0, 2, 3, 6, 7$ with $y = 15, 5, 1, 5, 12$ — falls, bottoms out, rises. A parabola.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 2 (reconstructed) — a linear model fitted to non-linear data</div>
@@ -71,61 +72,54 @@
     <div class="caption">The least-squares line is $h(x) = 8.66 - 0.295x$ — almost flat, slightly <em>downward</em>, and wrong everywhere. Mean squared error $= 25.66$. Notice the residuals now have a pattern: positive at both ends, negative in the middle. <strong>Patterned residuals are the diagnostic signature of a model that is too simple.</strong></div>
   </div>
 
-  <p>This is embarrassing. The line does not "kind of" fit; it captures essentially nothing. Worse, its slope is <em>negative</em>, so if you read the coefficient the way chapter 8 taught you to — "$y$ decreases as $x$ increases" — you would draw exactly the wrong conclusion about half the data.</p>
+  <p>The line captures essentially nothing, and its slope is <em>negative</em>, so reading the coefficient as chapter 8 taught you — "$y$ decreases as $x$ increases" — gives the wrong conclusion about half the data.</p>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Here is the tension the notes name explicitly. The linearity constraint is what <em>makes</em> linear regression good: it is easily interpretable, easy to optimise, and simple. But that same constraint is what makes it a poor model for complex, non-linear distributions. Ordinarily you would expect to trade one for the other — give up interpretability to get flexibility.</p>
-    <p><strong>Feature engineering is the move that refuses the trade.</strong> You keep interpretability, keep the closed-form optimisation, keep the simplicity — and still fit the curve.</p>
+    <p>The linearity constraint is both what makes linear regression good and what makes it a poor model for non-linear data, so you would expect to trade one for the other. <strong>Feature engineering refuses the trade:</strong> keep the interpretability, the closed form and the simplicity, and still fit the curve.</p>
   </div>
 
   <h2 id="the-trick">2. The trick: linear in the parameters, not in the input</h2>
 
-  <p>Look at the data again. It "strongly resembles a quadratic curve," as the notes put it. So suppose we had a model that learned optimal parameters $[b, w_1, w_2]^\top$ for</p>
+  <p>The data "strongly resembles a quadratic curve," as the notes put it. Suppose we could learn optimal parameters $[b, w_1, w_2]^\top$ for</p>
 
   $$ h(x) = b + w_1 x + w_2 x^2 $$
 
-  <p>Then we could represent a quadratic distribution and fit the data well. Fine. <em>But how?</em> We only know how to fit lines.</p>
-
-  <p>Here is the answer, and it is the most important sentence on this page:</p>
+  <p><em>But how?</em> We only know how to fit lines. The answer is the most important sentence on this page:</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>$h(x) = b + w_1x + w_2x^2$ is <strong>non-linear with respect to the input $x$</strong>, but it is still a <strong>linear function with respect to the parameters $(b, w_1, w_2)$</strong>.</p>
-    <p>Linear regression does not care what the inputs are. It only cares that the prediction is a weighted sum of the parameters. So we <em>can apply linear regression</em> — we just have to hand it an extra column.</p>
+    <p>Linear regression cares only that the prediction is a weighted sum of the parameters, not what the inputs are. So we <em>can</em> apply it — we just hand it an extra column.</p>
   </div>
 
   <h3>2.1 Why "linear in the parameters" is the property that matters</h3>
 
-  <p>Let me belabour this, because it is the thing students memorise without understanding, and then they get stuck the first time they meet a model that <em>isn't</em> linear in its parameters.</p>
-
-  <p>Go back to what linear regression actually is. It is an optimisation problem:</p>
+  <p>Take that apart, because linear regression <em>is</em> an optimisation problem:</p>
 
   $$ \theta^* = \argmin_{\theta} \; \sum_{i=1}^{N}\big(y^{(i)} - \theta^\top z^{(i)}\big)^2 $$
 
-  <p>where $\theta \in \R^M$ is the parameter vector and $z^{(i)} \in \R^M$ is whatever numbers we choose to put in row $i$. Name every symbol: $N$ is the number of samples, $M$ is the number of numbers per row, $y^{(i)}$ is the $i$-th target, $\theta^\top z^{(i)}$ is the dot product $\sum_{j} \theta_j z^{(i)}_j$ — the prediction.</p>
+  <p>$\theta \in \R^M$ is the parameter vector, $z^{(i)} \in \R^M$ whatever numbers we put in row $i$, $N$ the number of samples, $M$ the entries per row, and $\theta^\top z^{(i)} = \sum_{j} \theta_j z^{(i)}_j$ the prediction.</p>
 
-  <p>Now ask: <em>what makes this problem solvable in closed form?</em> Two facts, and only two:</p>
+  <p>What makes this solvable in closed form? Two facts, and only two:</p>
 
   <ol>
     <li>The prediction $\theta^\top z^{(i)}$ is a <strong>linear</strong> function of $\theta$.</li>
     <li>The loss is the square of (target − prediction), so the objective is a <strong>quadratic</strong> in $\theta$, hence convex, hence its gradient is linear in $\theta$, hence setting the gradient to zero gives a <em>linear system</em> you can solve.</li>
   </ol>
 
-  <p>Notice what is absent from that list: any requirement whatsoever on $z^{(i)}$. The numbers in $z^{(i)}$ are constants as far as the optimisation is concerned. They are given. They were computed before the optimiser ever ran. It makes no difference to the algebra whether $z^{(i)} = [1, x^{(i)}]^\top$ or $z^{(i)} = [1, x^{(i)}, (x^{(i)})^2]^\top$ or $z^{(i)} = [1, \sin(x^{(i)}), e^{x^{(i)}}, \log(1 + (x^{(i)})^2)]^\top$.</p>
+  <p>Note what is <em>absent</em>: any requirement on $z^{(i)}$. Its entries are constants to the optimiser, computed before it ran. The algebra is identical whether $z^{(i)} = [1, x^{(i)}]^\top$, $[1, x^{(i)}, (x^{(i)})^2]^\top$, or $[1, \sin(x^{(i)}), e^{x^{(i)}}, \log(1 + (x^{(i)})^2)]^\top$.</p>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p>A vending machine takes coins and returns a total. It is "linear in the coins": two quarters is twice one quarter. It does not care <em>where the quarters came from</em> — your pocket, a bank, a fountain. The machine's linearity is a property of how it combines its inputs, not of how the inputs were produced.</p>
-    <p>Linear regression is the machine. The parameters $\theta$ are the quantities being combined linearly. The features $z$ are the coin denominations — fixed constants, chosen in advance by you. You may mint whatever denominations you like, including a coin worth $x^2$ dollars, and the machine still adds them up linearly.</p>
-    <p><strong>Where the analogy breaks:</strong> in the vending machine the coins are given to you; in ML, choosing the denominations <em>is the job</em>, and choosing badly is how you overfit. Part 6 of this page is about exactly that.</p>
+    <p>A vending machine is linear in the coins and does not care where they came from. Linear regression is the machine, $\theta$ the quantities combined linearly, the features $z$ denominations you mint in advance — one worth $x^2$ dollars is still a coin. <strong>Where it breaks:</strong> choosing the denominations <em>is</em> the job here, and choosing badly is how you overfit.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>"Linear regression can only fit straight lines." <strong>False.</strong> Linear regression can fit any function that is a linear combination of features you supply. The word "linear" in "linear regression" refers to linearity <em>in the parameters</em>, not linearity of the resulting curve in $x$.</p>
-    <p>A model that is genuinely <em>not</em> linear in its parameters would be something like $h(x) = b + w_1 e^{w_2 x}$ — here $w_2$ sits inside an exponential, the objective stops being quadratic in the parameters, and no normal-equation trick saves you. <em>That</em> is the boundary of what this chapter buys you.</p>
+    <p>"Linear regression can only fit straight lines." <strong>False.</strong> It fits any linear combination of features you supply; "linear" refers to linearity <em>in the parameters</em>, not to the shape of the curve in $x$.</p>
+    <p>Genuinely not linear in its parameters: $h(x) = b + w_1 e^{w_2 x}$. With $w_2$ inside the exponential the objective stops being quadratic in the parameters and no normal-equation trick saves you. That is the boundary of what this chapter buys you.</p>
   </div>
 
   <h2 id="engineered-dataset">3. Building $\D'$ by hand</h2>
 
-  <p>So: given the non-linear dataset $\D$, we <strong>construct</strong> (or <em>engineer</em>) new features to create a dataset $\D'$ that lets us model the more complex distribution. Concretely, we add one column: $x^2$.</p>
+  <p>Given the non-linear dataset $\D$, we <strong>construct</strong> (or <em>engineer</em>) new features to create a dataset $\D'$ that can express the more complex distribution. Concretely: add one column, $x^2$.</p>
 
   <div class="grid2">
     <div>
@@ -157,13 +151,13 @@
       </table>
     </div>
   </div>
-  <p class="tiny muted center">Table 1 — Original dataset $\D$ (left) and feature-engineered dataset $\D'$ (right). The new column is just $6^2=36$, $7^2=49$, $3^2=9$, $2^2=4$, $0^2=0$. No model was touched. No optimiser was touched. We typed a column of numbers.</p>
+  <p class="tiny muted center">Table 1 — Original dataset $\D$ (left) and feature-engineered dataset $\D'$ (right). The new column is just $6^2=36$, $7^2=49$, $3^2=9$, $2^2=4$, $0^2=0$. No model and no optimiser was touched; we typed a column of numbers.</p>
 
-  <p>Now train a linear regression model on $\D'$. It has two features — call them $z_1 = x$ and $z_2 = x^2$ — plus a bias. It returns three parameters, and the hypothesis it represents is exactly the quadratic we wanted:</p>
+  <p>Train a linear regression model on $\D'$: two features ($z_1 = x$, $z_2 = x^2$) plus a bias, three parameters, and the hypothesis is exactly the quadratic we wanted:</p>
 
   $$ h(x) = b + w_1 x + w_2 x^2 $$
 
-  <p>Running the normal equations on these five rows gives</p>
+  <p>The normal equations on these five rows give</p>
 
   $$ b = 15.354, \qquad w_1 = -7.712, \qquad w_2 = 1.021 $$
 
@@ -174,23 +168,19 @@
   </div>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Without changing the model, we allowed it to generalise to a whole new family of hypothesis functions, <strong>simply by changing the dataset</strong> from $\D$ to $\D'$. That is the primary strength feature engineering brings to machine learning, and it is prevalent throughout the entire field.</p>
+    <p>We reached a whole new family of hypothesis functions <strong>by changing the dataset</strong> from $\D$ to $\D'$, with the model untouched. That is what feature engineering brings, and it is everywhere in the field.</p>
   </div>
 
   <h3 id="same-transform" class="">3.1 The warning: the same transformation at prediction time</h3>
 
-  <p>The notes say this twice, and here is the third time: <strong>the transformation is part of the model now.</strong></p>
-
-  <p>The curve you just drew still represents the predictions of a linear regression model that takes in samples from $\D$ — the <em>original</em> dataset — as input. But when you predict on a new sample $x \in \R$, you must <em>first engineer the feature $x^2$</em>, and only then feed $[1, x, x^2]$ to the model.</p>
+  <p><strong>The transformation is part of the model now.</strong> The model's inputs are samples of the <em>original</em> $\D$, so to predict on a new $x \in \R$ you must <em>first engineer $x^2$</em>, and only then feed $[1, x, x^2]$ in.</p>
 
   <div class="box example"><span class="label">Example</span>
-    <p><strong>A concrete failure story.</strong> You train the quadratic model above and ship it. Training code lives in <code>train.py</code>; serving code lives in <code>predict.py</code>, written three weeks later by someone else who has the fitted vector $\theta = [15.354,\; -7.712,\; 1.021]$ and the note "it takes $x$."</p>
-    <p>A request arrives: $x = 4$. The correct answer is</p>
+    <p>Serving code gets $\theta = [15.354,\; -7.712,\; 1.021]$ and the note "it takes $x$." A request arrives, $x = 4$; the correct answer is</p>
     $$ h(4) = 15.354 - 7.712(4) + 1.021(16) = 15.354 - 30.849 + 16.334 = \mathbf{0.840} $$
-    <p><strong>Failure mode 1 — the column is missing.</strong> <code>predict.py</code> builds $[1, 4]$, the framework pads with a zero, and you compute $15.354 - 30.849 + 0 = \mathbf{-15.50}$. The true target near $x=4$ is about $1$. You are off by 16 on a scale where the whole dataset spans 1 to 15. And the prediction is <em>negative</em>, which for a count, a price or a duration is not merely wrong but impossible.</p>
-    <p><strong>Failure mode 2 — the column is there but wrong.</strong> Someone writes <code>[1, x, x]</code> instead of <code>[1, x, x*x]</code>. Now you compute $15.354 - 30.849 + 4.084 = \mathbf{-11.41}$. Still catastrophic — <em>and it will not crash</em>. The shapes match. The code runs. The dashboard shows numbers. This class of bug is silent, which is why it survives to production.</p>
-    <p><strong>Failure mode 3 — the transform differs in a subtler way.</strong> Training standardised $x$ before squaring (so the feature is $((x-\mu)/s)^2$) and serving squares the raw $x$. Every prediction is wrong by a smooth, plausible-looking amount. You will find this one with a data drift alarm, six weeks later, if you are lucky.</p>
-    <p><strong>The fix:</strong> make $\phi$ a single function that both code paths call. Never re-implement it. In practice this is why libraries wrap the transform and the model together in one "pipeline" object that is fitted and saved as a unit.</p>
+    <p><strong>Column missing.</strong> Build $[1, 4]$, the framework pads a zero, and you get $15.354 - 30.849 + 0 = \mathbf{-15.50}$ where the truth near $x=4$ is about $1$ — and negative, which for a count or a price is impossible.</p>
+    <p><strong>Column wrong.</strong> <code>[1, x, x]</code> instead of <code>[1, x, x*x]</code> gives $15.354 - 30.849 + 4.084 = \mathbf{-11.41}$. <em>And it does not crash:</em> the shapes match, the code runs, the dashboard shows numbers. Subtler versions (training standardises $x$ before squaring, serving does not) are wrong by a plausible-looking amount.</p>
+    <p><strong>The fix:</strong> one $\phi$, called by both code paths, never re-implemented — which is why libraries save the transform and the model as a single "pipeline" object.</p>
   </div>
 
   <div class="guided">
@@ -229,16 +219,10 @@
 
   <h2 id="plane-not-curve">4. Another perspective: you are fitting a plane, not a curve</h2>
 
-  <p>This is the section (the notes call it an "Aside") that turns memorisation into understanding, so slow down here.</p>
-
-  <p>Our original dataset $\D$ had <strong>one</strong> feature. The linear regression model we trained was trained on the <strong>two</strong> features of $\D'$. Because we are still working with 2-D inputs plus a 1-D output, we can still draw the whole thing — in three dimensions.</p>
-
-  <p>And here is the punchline: because the model has two features, <strong>it is not fitting a line to the dataset. It is fitting a plane.</strong></p>
+  <p>$\D$ had <strong>one</strong> feature; the model was trained on the <strong>two</strong> of $\D'$. Two inputs plus one output still fits in a drawing, in three dimensions — and with two features the model <strong>is not fitting a line. It is fitting a plane.</strong></p>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Take the five points, which in 1-D live on a curve. Give each one a second coordinate equal to $x^2$. That coordinate <em>lifts</em> each point out of the $x$–$y$ page and into a third dimension. Where do the lifted points land? Along the surface $x_2 = x^2$ — a parabolic sheet standing perpendicular to the floor.</p>
-    <p>Now look at the lifted points. They are no longer U-shaped in any plane that matters: <strong>they lie on a flat sheet.</strong> A plane can pass through all of them. The curvature did not disappear — it got absorbed into the <em>position</em> of the points in the new coordinate, leaving the <em>relationship</em> linear.</p>
-    <p><strong>The curve in 1-D <em>is</em> a plane in 2-D feature space.</strong> Same object, two drawings.</p>
+    <p>A second coordinate equal to $x^2$ <em>lifts</em> each point off the $x$–$y$ page onto the sheet $x_2 = x^2$. The lifted points are no longer U-shaped: <strong>they lie flat</strong>, and a plane passes through all of them. The curvature was absorbed into the <em>position</em> of the points in the new coordinate, leaving the <em>relationship</em> linear. The curve in 1-D <em>is</em> a plane in 2-D feature space.</p>
   </div>
 
   <div class="viz">
@@ -295,8 +279,7 @@
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>"So the model can also predict at $(x, x_2) = (3, 100)$?" Algebraically yes; meaningfully no. Your engineered features are <strong>not free coordinates</strong>. A real sample always satisfies $x_2 = x^2$, so all genuine data lies on the purple parabola, a one-dimensional curve inside a two-dimensional space. The plane is defined everywhere, but it is only ever <em>evaluated</em> on that curve, and it was only ever <em>fitted</em> near it. Off the curve, the model's output is an extrapolation with no support whatsoever.</p>
-    <p>This is worth remembering because it is the reason high-degree polynomial features are so dangerous: the data occupies a thin, curved sliver of a very high-dimensional space, and almost all of that space is unconstrained.</p>
+    <p>"So the model can also predict at $(x, x_2) = (3, 100)$?" Algebraically yes; meaningfully no. Engineered features are <strong>not free coordinates</strong>: a real sample always satisfies $x_2 = x^2$, so all genuine data lies on the purple parabola, a one-dimensional curve inside a two-dimensional space. The plane is defined everywhere, evaluated only on that curve, and fitted only near it. Hence the danger of high-degree features: the data occupies a thin, curved sliver of a huge space, and almost all of that space is unconstrained.</p>
   </div>
 
   <div class="quiz" data-answer="1">
@@ -309,15 +292,11 @@
 
   <h2 id="polynomial-features">5. Generalising: polynomial feature transforms</h2>
 
-  <p>To model a quadratic, we engineered $x^2$. Suppose we now want a cubic,</p>
+  <p>To model a quadratic we engineered $x^2$. For a cubic,</p>
 
   $$ h(x) = b + w_1x + w_2x^2 + w_3x^3 $$
 
-  <p>or a quartic (degree-4 polynomial),</p>
-
-  $$ h(x) = b + w_1x + w_2x^2 + w_3x^3 + w_4x^4 $$
-
-  <p>Then all we have to do is engineer the features for the higher-powered terms, and $h$ can model those polynomials. In general, to model a degree-$M$ polynomial on a one-feature dataset $\D$, add columns as below. <em>While we're at it, we insert a column of ones to account for the bias term $b$</em> — from now on the bias is not a special case, it is just the weight on a feature that is always 1.</p>
+  <p>engineer $x^3$ as well; for a quartic, $x^4$ too. In general, for a degree-$M$ polynomial on a one-feature $\D$, add the columns below, <em>plus a column of ones for the bias $b$</em> — from here on the bias is just the weight on a feature that is always 1.</p>
 
   <div class="scroll-x">
   <table class="center">
@@ -335,39 +314,38 @@
   <p class="tiny muted center">Table 2 — Original dataset $\D$ (the $y, x$ columns) and feature-engineered dataset $\D'$ (all of it).</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>Notation alert (the notes flag this, and here is why it matters so much right here):</strong> $x^{(i)}$ is the $i$-th sample, <strong>not</strong> an exponent.</p>
-    <p>Look at the cell $\big(x^{(3)}\big)^2$. It contains <em>both kinds of superscript at once</em>: the parenthesised $(3)$ says "third sample", the bare $2$ says "squared". Read it as "the third sample, squared." The outer parentheses in the table are there precisely to keep the two apart — without them, $x^{(3)2}$ is unreadable.</p>
-    <p>A quick test you can always run: <strong>is the superscript in parentheses?</strong> Parentheses ⇒ index. No parentheses ⇒ power. So $x^{(2)}$ is sample two, $x^2$ is $x$ squared, and $\big(x^{(2)}\big)^2$ is sample two squared. Rows are indexed by $(i)$; columns are indexed by powers.</p>
+    <p>The cell $\big(x^{(3)}\big)^2$ holds <em>both kinds of superscript at once</em>: the parenthesised $(3)$ says "third sample", the bare $2$ says "squared". The outer parentheses keep them apart — without them $x^{(3)2}$ is unreadable.</p>
+    <p>The test: <strong>is the superscript in parentheses?</strong> Parentheses ⇒ index, no parentheses ⇒ power. So $x^{(2)}$ is sample two, $x^2$ is $x$ squared, $\big(x^{(2)}\big)^2$ is sample two squared. Rows are indexed by $(i)$, columns by powers.</p>
   </div>
 
   <div class="box defn"><span class="label">Definition</span>
-    <p><strong>Polynomial feature transform.</strong> The generalisation of feature engineering to $M$-th degree polynomials, in which the dataset is augmented to include polynomial terms $1, x, x^2, \dots, x^M$. Each sample of $\D$ contributes one row of $M+1$ numbers.</p>
+    <p><strong>Polynomial feature transform.</strong> Feature engineering generalised to degree $M$: the dataset is augmented with the polynomial terms $1, x, x^2, \dots, x^M$, so each sample of $\D$ contributes one row of $M+1$ numbers.</p>
   </div>
 
-  <p>Two things to notice before we move on. First, the number of columns grows by one per degree, so a degree-$M$ transform on a one-dimensional input costs $M+1$ parameters. Second — and this bites later — if your original input has $K$ features rather than one, and you take <em>all</em> monomials up to degree $M$, the column count is $\binom{K+M}{M}$, which explodes. Degree 3 on 100 input features is 176,851 columns. Keep that number in mind for §6.</p>
+  <p>Two counts to remember. A degree-$M$ transform on a one-dimensional input costs $M+1$ parameters; on $K$ features, taking <em>all</em> monomials up to degree $M$ costs $\binom{K+M}{M}$, which explodes — degree 3 on 100 features is 176,851 columns.</p>
 
   <h2 id="abstract-transforms">6. Abstract feature transforms: $\phi$ and $\Phi$</h2>
 
-  <p>So far every transformation has been "raise something to a power." That is just a special case. Instead of applying an exponent, <strong>we could have chosen any function we desired</strong>:</p>
+  <p>Raising to a power is only a special case: <strong>any function you desire</strong> will do.</p>
 
   <ul>
-    <li><strong>Periodic:</strong> apply $\sin$ to get a new feature $\sin(x)$. Essential when the signal has a cycle — hour of day, day of year, phase of a rotating machine. Pair it with $\cos(x)$ so that a phase shift is representable as a linear combination.</li>
-    <li><strong>Radial:</strong> include the distance from the origin $\lVert x\rVert_2 = \sqrt{x_1^2 + \dots + x_K^2}$ as a feature. This alone lets a <em>linear</em> model carve out a circle in the original space — because "$\lVert x\rVert_2 \le r$" is a linear constraint in the new coordinate.</li>
-    <li><strong>Logs:</strong> $\log(1+x)$ compresses heavy-tailed quantities (income, population, view counts) so a handful of giants stop dominating the squared loss.</li>
-    <li><strong>Interactions:</strong> $x_1x_2$. Without it, a linear model insists the effect of $x_1$ is the same regardless of $x_2$. With it, the model can say "more fertiliser helps, <em>but only if</em> there is water."</li>
-    <li><strong>Indicators / one-hot:</strong> for a categorical input such as colour ∈ {red, green, blue}, create three binary columns $\1[\text{red}], \1[\text{green}], \1[\text{blue}]$. This is feature engineering too — and it is how a model that only does arithmetic handles a variable with no arithmetic.</li>
-    <li><strong>Buckets:</strong> $\1[x &lt; 0],\ \1[0 \le x &lt; 5],\ \1[x \ge 5]$ turns a continuous feature into a step function the linear model can fit at whatever heights it likes.</li>
+    <li><strong>Periodic:</strong> $\sin(x)$, paired with $\cos(x)$ so a phase shift is a linear combination. For cycles — hour of day, day of year.</li>
+    <li><strong>Radial:</strong> the distance $\lVert x\rVert_2 = \sqrt{x_1^2 + \dots + x_K^2}$. This alone lets a <em>linear</em> model carve out a circle in the original space, since "$\lVert x\rVert_2 \le r$" is linear in the new coordinate.</li>
+    <li><strong>Logs:</strong> $\log(1+x)$ compresses heavy tails (income, view counts) so a handful of giants stop dominating the squared loss.</li>
+    <li><strong>Interactions:</strong> $x_1x_2$. Without it the effect of $x_1$ must be the same whatever $x_2$ is; with it the model can say "fertiliser helps, <em>but only if</em> there is water."</li>
+    <li><strong>Indicators / one-hot:</strong> for colour ∈ {red, green, blue}, three binary columns $\1[\text{red}], \1[\text{green}], \1[\text{blue}]$ — how a model that only does arithmetic handles a variable with none.</li>
+    <li><strong>Buckets:</strong> $\1[x &lt; 0],\ \1[0 \le x &lt; 5],\ \1[x \ge 5]$ turns a continuous feature into a step function fitted at whatever heights the model likes.</li>
   </ul>
 
-  <p>The only rule: <strong>you may choose any transformation you like, as long as you apply the same transformation to each sample at training time and at prediction time.</strong> (Yes — §3.1 again. Third mention in the notes, fourth here.)</p>
+  <p>The only rule: <strong>apply the same transformation to every sample, at training time and at prediction time</strong> (§3.1).</p>
 
   <h3>6.1 The notation</h3>
 
-  <p>Let us write this down properly. Suppose we are given a dataset $X \in \R^{N\times K}$, where $N$ is the number of samples and $K$ is the number of features per sample. Define a <strong>feature transformation function</strong></p>
+  <p>Given a dataset $X \in \R^{N\times K}$ — $N$ samples, $K$ features each — define a <strong>feature transformation function</strong></p>
 
   $$ \phi : \R^{K} \to \R^{M} $$
 
-  <p>where $M$ is the number of features produced by the transformation $\phi$. Then the transformed dataset is written $\Phi$, stacked row by row:</p>
+  <p>where $M$ is the number of features $\phi$ produces. The transformed dataset $\Phi$ is stacked row by row:</p>
 
   $$
   X = \begin{bmatrix}
@@ -389,21 +367,19 @@
 
   <p class="center muted tiny">(often just renamed $X$)</p>
 
-  <p>Symbol by symbol: each $x^{(i)} \in \R^K$ is a column vector, so ${x^{(i)}}^\top$ is a <em>row</em>, which is why it becomes row $i$ of the matrix. The long dashes are the notes' way of saying "this row is that whole vector laid flat." Applying $\phi$ turns a $K$-vector into an $M$-vector, so row $i$ of $\Phi$ has $M$ entries.</p>
-
-  <p>Therefore $\Phi \in \R^{N \times M}$, because we applied the feature transform $\phi$ to each sample $x^{(i)}$ in the dataset. We now have a fully general notion of feature transformation as a function $\phi$ that machine-learning engineers — that's you — can define to be anything at all.</p>
+  <p>Each $x^{(i)} \in \R^K$ is a column vector, so ${x^{(i)}}^\top$ is a <em>row</em> — row $i$ of the matrix (the long dashes mean "this row is that whole vector laid flat"). Applying $\phi$ turns a $K$-vector into an $M$-vector, so row $i$ of $\Phi$ has $M$ entries and <strong>$\Phi \in \R^{N \times M}$</strong>. $\phi$ itself you may define to be anything at all.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>The parenthetical "<em>often just renamed $X$</em>" is not a typo, and it trips people up in papers and code. Once you have transformed the data, most texts stop distinguishing the two and write $X$ for the transformed matrix, $\theta^* = (X^\top X)^{-1}X^\top y$, and so on. So when you read "$X$", ask <strong>which $X$</strong> — raw or transformed? In code it is the difference between <code>X_raw</code> and <code>X_poly</code>, and in exams it is the difference between $K$ and $M$ columns.</p>
+    <p>"<em>Often just renamed $X$</em>" is not a typo. Most texts stop distinguishing the two after the transform and write $X$ for the transformed matrix, $\theta^* = (X^\top X)^{-1}X^\top y$. So always ask <strong>which $X$</strong> — raw or transformed? In code that is <code>X_raw</code> versus <code>X_poly</code>; in exams it is $K$ versus $M$ columns.</p>
   </div>
 
   <div class="box example"><span class="label">Example</span>
-    <p><strong>Example 1 from the notes.</strong> Relating back to our original example, when performing a polynomial feature transformation of degree 3, we were using the feature transform</p>
+    <p><strong>Example 1 from the notes.</strong> A polynomial feature transform of degree 3 is</p>
     $$ \phi(x) = [\,1,\ x,\ x^2,\ x^3\,]^\top $$
-    <p>Here $K = 1$ (one raw feature) and $M = 4$ (four engineered features, including the constant). So $\phi: \R^1 \to \R^4$, and for $N$ samples, $\Phi \in \R^{N\times 4}$.</p>
+    <p>$K = 1$ raw feature, $M = 4$ engineered ones including the constant, so $\phi: \R^1 \to \R^4$ and $\Phi \in \R^{N\times 4}$.</p>
     <p>Numerically, on our dataset with $x^{(1)}=0,\ x^{(2)}=2,\ x^{(3)}=3,\ x^{(4)}=6,\ x^{(5)}=7$:</p>
     $$ \Phi = \begin{bmatrix} 1 & 0 & 0 & 0\\ 1 & 2 & 4 & 8\\ 1 & 3 & 9 & 27\\ 1 & 6 & 36 & 216\\ 1 & 7 & 49 & 343\end{bmatrix} \in \R^{5\times 4} $$
-    <p>Look at the last column: 0, 8, 27, 216, 343. The columns are on wildly different scales. That is a practical warning about polynomial features — numerically they are nasty, and standardising $x$ before you raise it to powers is close to mandatory in real code.</p>
+    <p>The last column is 0, 8, 27, 216, 343: wildly different scales. Polynomial features are numerically nasty, so standardising $x$ before raising it to powers is close to mandatory.</p>
   </div>
 
   <div class="guided">
@@ -440,7 +416,7 @@
 
   <h2 id="normal-equations-again">7. The normal equations carry over — and where they break</h2>
 
-  <p>Because nothing about the optimisation changed, everything you derived in <a href="linear-regression.html">chapter 8</a> transfers with $X$ replaced by $\Phi$. The objective is</p>
+  <p>Nothing about the optimisation changed, so everything from <a href="linear-regression.html">chapter 8</a> transfers with $X$ replaced by $\Phi$:</p>
 
   $$ J(\theta) \;=\; \lVert y - \Phi\theta\rVert_2^2 \;=\; \sum_{i=1}^{N}\Big(y^{(i)} - \theta^\top \phi\big(x^{(i)}\big)\Big)^2 $$
 
@@ -460,34 +436,28 @@
 
   <h3>7.1 What happens when $M &gt; N$</h3>
 
-  <p>Chapter 8 raised the corner case "what if $X^\top X$ isn't invertible?" Feature engineering is the place where that corner case becomes the <em>common</em> case, so let us be precise.</p>
-
-  <p>$\Phi^\top\Phi$ is $M \times M$. Its rank is $\operatorname{rank}(\Phi) \le \min(N, M)$. So:</p>
+  <p>Chapter 8's corner case — "what if $X^\top X$ isn't invertible?" — is the <em>common</em> case here. $\Phi^\top\Phi$ is $M \times M$ with rank $\operatorname{rank}(\Phi) \le \min(N, M)$:</p>
 
   <ul>
     <li><strong>If $M &gt; N$</strong>, then $\operatorname{rank}(\Phi^\top\Phi) \le N &lt; M$, and an $M\times M$ matrix of rank less than $M$ is <strong>singular</strong>. The inverse does not exist and the boxed formula is meaningless as written.</li>
     <li>Geometrically: you have $M$ unknowns and only $N$ independent equations. The solution set is an affine subspace of dimension at least $M - N$ — <strong>infinitely many parameter vectors that all achieve exactly zero training error.</strong></li>
-    <li>Every one of them interpolates your training data perfectly. They disagree wildly everywhere else. Nothing in the least-squares objective prefers one over another; the criterion you trained on cannot see the difference.</li>
+    <li>Each one interpolates the training data perfectly and they disagree wildly everywhere else. Nothing in the least-squares objective prefers one over another.</li>
   </ul>
 
-  <p>Even at $M = N$ you are already in trouble: with $N$ distinct $x$ values and a degree-$(N-1)$ polynomial, the Vandermonde matrix is square and invertible, so there is a <em>unique</em> fit and it passes through every point exactly. Training error zero. That sounds like success. Section 8 explains why it is a disaster.</p>
-
-  <p>And just below that threshold, $\Phi^\top\Phi$ is technically invertible but <strong>ill-conditioned</strong> — nearly singular — so the computed $\theta$ has enormous entries of alternating sign that nearly cancel. That is precisely what produces the violent wiggles you are about to see.</p>
+  <p>$M = N$ is already trouble: with $N$ distinct $x$ values and a degree-$(N-1)$ polynomial the Vandermonde matrix is square and invertible, so the <em>unique</em> fit passes through every point and training error is zero — a disaster, as §8 shows. Just below that threshold $\Phi^\top\Phi$ is invertible but <strong>ill-conditioned</strong>, so $\theta$ comes out with enormous entries of alternating sign that nearly cancel: the violent wiggles you are about to see.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>Three fixes exist for $M \ge N$, and you will meet all of them:</p>
     <ol>
       <li><strong>Use fewer features</strong> — the subject of the rest of this page.</li>
       <li><strong>Use the pseudo-inverse</strong> $\theta^* = \Phi^{+}y$, which among all the perfect fits returns the one with smallest $\lVert\theta\rVert$. <span class="pill">beyond syllabus</span></li>
-      <li><strong>Regularise</strong>: solve $(\Phi^\top\Phi + \lambda I)\theta = \Phi^\top y$ instead. Adding $\lambda I$ with $\lambda &gt; 0$ makes the matrix strictly positive definite, hence invertible, <em>always</em>. See §10. <span class="pill">beyond syllabus</span></li>
+      <li><strong>Regularise</strong>: solve $(\Phi^\top\Phi + \lambda I)\theta = \Phi^\top y$ instead. Adding $\lambda I$ with $\lambda &gt; 0$ makes the matrix strictly positive definite, hence invertible, <em>always</em>. Full treatment in <a href="model-selection.html">chapter 12</a>.</li>
     </ol>
   </div>
 
   <h2 id="overfitting">8. "Why not just have more and more features?"</h2>
 
-  <p>The notes pose the question and then answer it with a picture, so let us do the same. If adding features lets our model generalise to a larger family of functions, why not add as many as we can? What downside is there?</p>
-
-  <p>To find out, take a dataset that is genuinely <strong>linear</strong> — where degree 1 is the honest answer — and fit polynomial feature transforms of degree $k$ for increasing $k$.</p>
+  <p>If more features reach a larger family of functions, why not add as many as possible? Take genuinely <strong>linear</strong> data — degree 1 is the honest answer — and fit transforms of increasing degree $k$.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 4 (reconstructed) — linear data, polynomial transforms of degree $k = 1, 5, 11, 30$</div>
@@ -501,19 +471,17 @@
   </div>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>As we increase the number of features to be very large, <strong>the model starts to prioritise matching the exact distribution of the training data as opposed to capturing its general trend.</strong> This is a prime example of <strong>model overfitting</strong>, and it commonly occurs when the dimensionality of the data is too high — which is exactly what complex feature transforms produce.</p>
-    <p>So it may not be best to always have very large feature transformations. We must make <em>reasonable</em> transformations that improve the model's ability to fit the data distribution without allowing it to overfit.</p>
+    <p>With very many features, <strong>the model starts to prioritise matching the exact distribution of the training data rather than capturing its general trend.</strong> That is <strong>overfitting</strong>, and it comes from the data's dimensionality being too high — exactly what complex feature transforms produce. So the transform must be <em>reasonable</em>: enough to fit the distribution, not enough to overfit it.</p>
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Think of it as the difference between a student who <em>learns the material</em> and a student who <em>memorises last year's exam</em>. Both score 100% on last year's exam. Exactly one of them can answer a question they have not seen.</p>
-    <p>Training error is last year's exam. It is the only thing the optimiser can see, and the optimiser will happily memorise if you give it enough capacity to do so. Degree 11 on 12 points is a model with enough memory to store the answer key.</p>
-    <p><strong>Where the analogy breaks:</strong> memorisation sounds like a deliberate strategy, but nothing is being decided here. Least squares is just minimising what you told it to minimise. The failure is <em>yours</em>, in choosing a hypothesis class rich enough that "memorise" and "learn" score identically on the objective.</p>
+    <p>A student who <em>learns the material</em> and one who <em>memorises last year's exam</em> both score 100% on last year's exam; exactly one can answer a new question. Training error is last year's exam, and degree 11 on 12 points has enough memory to store the answer key.</p>
+    <p><strong>Where it breaks:</strong> nothing is being decided. Least squares minimises what you told it to. The failure is <em>yours</em>, in choosing a hypothesis class rich enough that "memorise" and "learn" score identically on the objective.</p>
   </div>
 
   <h2 id="playground">9. Interactive: watch overfitting happen</h2>
 
-  <p>This is the most useful thing on the page. Ten training points (orange) were drawn from a smooth true function plus noise; forty held-out test points (grey) come from the same process and the model never sees them. Move the slider to change the degree $M$ of the polynomial feature transform. The fit is recomputed from the normal equations on every move.</p>
+  <p>Ten training points (orange) from a smooth true function plus noise; forty held-out test points (grey) the model never sees. The slider sets the degree $M$, and the fit is recomputed from the normal equations on every move.</p>
 
   <div class="viz">
     <div class="viz-title">Polynomial degree ⟶ fit, training error, test error</div>
@@ -542,13 +510,13 @@
 
   <h2 id="train-vs-test">10. Overfitting, properly</h2>
 
-  <p>The notes stop at "this is overfitting; more to come later in the course." Let us do the later part now, because you need it to make sense of everything from here to neural networks. <span class="pill">extends the reading</span></p>
+  <p>The notes stop at "this is overfitting; more to come later." Here is the later part. <span class="pill">extends the reading</span></p>
 
   <h3>10.1 The two error curves</h3>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Training error</strong> is the average loss on the data you fitted on. <strong>Test error</strong> (or generalisation error) is the average loss on data drawn from the same distribution that the model never saw during fitting.</p>
-    <p>As model capacity grows: training error decreases <strong>monotonically</strong> (a richer hypothesis class contains the poorer one, so its best member is at least as good), while test error typically falls, reaches a minimum, and then <strong>rises</strong>. The resulting shape is the classic U.</p>
+    <p>As capacity grows, training error decreases <strong>monotonically</strong> (a richer hypothesis class contains the poorer one, so its best member is at least as good), while test error falls, reaches a minimum, then <strong>rises</strong>: the classic U.</p>
   </div>
 
   <div class="viz">
@@ -585,28 +553,26 @@
 
   <h3>10.2 Saying it with risk and empirical risk</h3>
 
-  <p>In <a href="ml-formulation.html">chapter 5</a> you met two quantities. Here is what overfitting is in that language, which is the precise version.</p>
-
-  <p>The <strong>true risk</strong> (expected loss) of a hypothesis $h$ is an expectation over the <em>data-generating distribution</em> $p(x, y)$:</p>
+  <p>The precise version is overfitting in the language of <a href="ml-formulation.html">chapter 5</a>. The <strong>true risk</strong> (expected loss) of a hypothesis $h$ is an expectation over the <em>data-generating distribution</em> $p(x, y)$:</p>
 
   $$ R(h) \;=\; \E_{(x,y)\sim p}\big[\ell\big(y, h(x)\big)\big] $$
 
-  <p>This is what you actually care about: the average loss on every sample you will ever meet. You cannot compute it, because you do not have $p$. So you compute the <strong>empirical risk</strong> on your $N$ samples instead:</p>
+  <p>That is what you care about, and you cannot compute it: you do not have $p$. So you compute the <strong>empirical risk</strong> on your $N$ samples instead:</p>
 
   $$ \hat R(h) \;=\; \frac{1}{N}\sum_{i=1}^{N}\ell\big(y^{(i)}, h(x^{(i)})\big) $$
 
-  <p>and minimise <em>that</em> — empirical risk minimisation. The entire enterprise rests on $\hat R$ being a good stand-in for $R$.</p>
+  <p>and minimise <em>that</em>: empirical risk minimisation. The whole enterprise rests on $\hat R$ being a good stand-in for $R$.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Overfitting is the failure of that stand-in.</strong> As capacity grows, $\hat R(h^*)$ keeps falling — all the way to zero — while $R(h^*)$ turns around and rises. The optimiser is doing its job perfectly. The job is just the wrong one.</p>
-    <p>Precisely: $\hat R$ is an unbiased estimate of $R$ for a hypothesis chosen <em>independently</em> of the sample. But $h^*$ was chosen <em>by minimising $\hat R$ on that very sample</em>, so it is selected partly for fitting the sample's noise. That selection is what makes $\hat R(h^*)$ an optimistically biased estimate of $R(h^*)$, and the bias grows with the number of hypotheses you effectively searched over — i.e. with capacity.</p>
+    <p><strong>Overfitting is the failure of that stand-in.</strong> As capacity grows $\hat R(h^*)$ keeps falling, all the way to zero, while $R(h^*)$ turns around and rises. The optimiser does its job perfectly; the job is the wrong one.</p>
+    <p>Precisely: $\hat R$ is an unbiased estimate of $R$ for a hypothesis chosen <em>independently</em> of the sample. But $h^*$ was chosen <em>by minimising $\hat R$ on that very sample</em>, so it is selected partly for fitting the sample's noise. That makes $\hat R(h^*)$ an optimistically biased estimate of $R(h^*)$, and the bias grows with capacity.</p>
   </div>
 
-  <p>This also tells you why a held-out test set works: those points were not used to choose $h$, so on them $\hat R$ is unbiased again.</p>
+  <p>Which is why a held-out test set works: those points did not choose $h$, so on them $\hat R$ is unbiased again.</p>
 
   <h3>10.3 Underfitting, the mirror failure</h3>
 
-  <p>Overfitting gets all the attention, but Figure 2 at the top of this page was <strong>underfitting</strong> — a model too rigid to express the truth, with high error on training <em>and</em> test data. The diagnosis is easy and the two are never confused once you look at both numbers:</p>
+  <p>Figure 2 was <strong>underfitting</strong>: a model too rigid to express the truth, with high error on training <em>and</em> test data. Look at both numbers and the two failures are never confused.</p>
 
   <table>
     <thead><tr><th>Training error</th><th>Test error</th><th>Diagnosis</th><th>What to do</th></tr></thead>
@@ -621,43 +587,20 @@
   <h3>10.4 Bias and variance, in words</h3>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Imagine re-collecting your training set from scratch many times and re-fitting each time. You get a cloud of fitted functions.</p>
-    <p><strong>Bias</strong> is how far the <em>average</em> of that cloud sits from the truth. A degree-1 model on curved data is biased: every resample gives roughly the same wrong line. Rigid, consistent, consistently wrong.</p>
-    <p><strong>Variance</strong> is how much the members of the cloud differ from <em>each other</em>. A degree-15 model on 10 points has huge variance: shift one point by a hair and the curve rewrites itself between the points. Flexible, unstable, unreliable.</p>
-    <p>Complexity trades one for the other. Low complexity ⇒ high bias, low variance ⇒ underfitting. High complexity ⇒ low bias, high variance ⇒ overfitting. The test-error curve is the sum of the two plus the irreducible noise, which is why it is U-shaped: one term falls and the other rises.</p>
-    <p><strong>Dartboard version:</strong> bias is the whole group of darts being off-centre; variance is the group being scattered. You can be tight and wrong (high bias, low variance), loose and centred (low bias, high variance), or — the goal — tight and centred.</p>
+    <p>Re-collect the training set many times and re-fit: you get a cloud of fitted functions. <strong>Bias</strong> is how far the cloud's <em>average</em> sits from the truth (degree 1 on curved data: the same wrong line every time); <strong>variance</strong> is how much its members differ from <em>each other</em> (degree 15 on 10 points: shift one point and the curve rewrites itself). On a dartboard, bias is the group being off-centre, variance its being scattered.</p>
+    <p>High bias, low variance ⇒ underfitting; low bias, high variance ⇒ overfitting. Test error is their sum plus irreducible noise — one term falls, the other rises, hence the U.</p>
   </div>
 
   <h3>10.5 The fixes the notes promise are coming</h3>
 
-  <p>The notes end §1.6 with "there's certainly more to come in this course on how to combat overfitting." Here is the map of what is coming, so you know what each thing is for.</p>
+  <p>The notes promise "more to come on how to combat overfitting." Four fixes, all of them <a href="model-selection.html">chapter 12</a>:</p>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="kicker">Fix 1</div>
-      <h3>Held-out validation set</h3>
-      <p>Split the data three ways: train / validation / test. Fit on train, pick the degree by validation error, report on test. This is literally the right-hand panel of the widget above, used as a decision procedure. Cost: you spend data on measurement instead of fitting.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">Fix 2</div>
-      <h3>$k$-fold cross-validation</h3>
-      <p>Split into $k$ folds; train on $k-1$ and validate on the remaining one, $k$ times; average. Every point is used for both fitting and validation, just never at the same time. Costs $k\times$ the compute and buys you a far less noisy estimate — which matters enormously when $N$ is small.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">Fix 3</div>
-      <h3>Regularisation</h3>
-      <p>Keep the features, but penalise large weights. Ridge / L2 regression minimises
-      $\lVert y - \Phi\theta\rVert^2 + \lambda\lVert\theta\rVert^2$
-      <span class="pill">beyond syllabus</span>, with solution $\theta^* = (\Phi^\top\Phi + \lambda I)^{-1}\Phi^\top y$.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">Fix 4</div>
-      <h3>More data</h3>
-      <p>Overfitting is a ratio of capacity to data. Doubling $N$ moves the interpolation threshold ($M+1 = N$) to the right and shifts the whole U-curve's minimum to a higher complexity. Often the cheapest fix, when it is available at all.</p>
-    </div>
-  </div>
-
-  <p><strong>Why $\lambda$ removes the wiggles.</strong> The violent oscillations of the $k = 30$ fit are produced by enormous coefficients of alternating sign that very nearly cancel on the training points and fail to cancel between them. The penalty $\lambda\lVert\theta\rVert^2$ charges you for exactly that: a coefficient of $10^{7}$ costs $10^{14}\lambda$. So the optimiser will not buy a perfect training fit at that price. Raise $\lambda$ and the wiggles shrink continuously; at $\lambda \to \infty$ all weights go to zero and you underfit completely. So $\lambda$ is a <em>continuous</em> complexity dial, whereas degree is a chunky integer one — which is why in practice people use a high degree <em>and</em> a tuned $\lambda$ rather than hunting for the perfect degree. It also fixes the invertibility problem of §7.1 for free.</p>
+  <ul>
+    <li><strong>Held-out validation set</strong> — split train / validation / test; pick the degree by validation error, report on test. Costs data.</li>
+    <li><strong>$k$-fold cross-validation</strong> — $k$ fits, each validating on a different fold, averaged. Costs $k\times$ the compute, buys a much less noisy estimate.</li>
+    <li><strong>Regularisation</strong> — keep the features, charge for large weights: minimise $\lVert y - \Phi\theta\rVert^2 + \lambda\lVert\theta\rVert^2$, giving $\theta^* = (\Phi^\top\Phi + \lambda I)^{-1}\Phi^\top y$, which also fixes the invertibility problem of §7.1.</li>
+    <li><strong>More data</strong> — overfitting is a ratio of capacity to data, so doubling $N$ moves the interpolation threshold $M+1 = N$ right and the U-curve's minimum to a higher complexity.</li>
+  </ul>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>Diagnose four models from their error numbers</div>
@@ -700,11 +643,7 @@
 
   <h2 id="trees-overfit">11. The same story, in a different chapter</h2>
 
-  <p>Overfitting is not a quirk of polynomial features. It is what happens to <em>any</em> model with enough capacity to memorise, and you have already seen one.</p>
-
-  <p>In <a href="decision-trees.html">chapter 6</a>, what happens to a decision tree grown with no depth limit? It keeps splitting until every leaf is pure. With distinct feature vectors it can always get there — in the limit, one leaf per training sample. Training error: <strong>zero</strong>. Test error: bad, because a leaf built from one sample predicts that sample's label and knows nothing else.</p>
-
-  <p>Line the two up:</p>
+  <p>Overfitting happens to <em>any</em> model with enough capacity to memorise. A <a href="decision-trees.html">decision tree</a> with no depth limit splits until every leaf is pure, and with distinct feature vectors it always can — in the limit, one leaf per sample. Training error <strong>zero</strong>; test error bad, because a leaf built from one sample knows only that sample's label. Line the two up:</p>
 
   <table>
     <thead><tr><th></th><th>Polynomial features</th><th>Decision trees</th></tr></thead>
@@ -717,7 +656,7 @@
   </table>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>A tree's <strong>stopping criteria are its version of limiting capacity</strong> — exactly what choosing a smaller $M$ does for polynomial features, and what $\lambda$ does for ridge. Different algorithms, same dial, same U-curve, same rule: <em>measure on data you did not fit on.</em></p>
+    <p>A tree's <strong>stopping criteria are its way of limiting capacity</strong> — what a smaller $M$ does for polynomial features and what $\lambda$ does for ridge. Different algorithms, same dial, same U-curve, same rule: <em>measure on data you did not fit on.</em></p>
   </div>
 
   <div class="quiz" data-answer="2">
@@ -753,17 +692,13 @@
 
   <h2 id="recap">13. Recap</h2>
 
+  <p>Every statement is in the Essentials box at the top. Four things are worth repeating:</p>
+
   <ul>
-    <li>Complex data defeats simple models — but the fix can be applied to the <strong>data</strong> rather than the model.</li>
-    <li>$h(x) = b + w_1x + w_2x^2$ is non-linear in $x$ and <strong>linear in the parameters</strong>, so ordinary linear regression fits it. Add a column, change nothing else.</li>
-    <li>The transform is part of the model. Apply the <strong>same</strong> $\phi$ at training and at prediction, or fail silently.</li>
-    <li>With two features you are fitting a <strong>plane</strong>; the curve you see in 1-D is that plane's height read along the constraint curve $x_2 = x^2$.</li>
-    <li>Polynomial feature transforms generalise this to degree $M$, with a column of ones for the bias. $x^{(i)}$ is an index, $x^i$ is a power.</li>
-    <li>Any function works: $\phi : \R^K \to \R^M$, stacked row-wise into $\Phi \in \R^{N\times M}$ (often just renamed $X$). For degree 3, $\phi(x) = [1, x, x^2, x^3]^\top$.</li>
-    <li>The normal equations are unchanged: $\theta^* = (\Phi^\top\Phi)^{-1}\Phi^\top y$ — unless $M \ge N$, where $\Phi^\top\Phi$ is singular and infinitely many perfect fits exist.</li>
-    <li><strong>Overfitting:</strong> past a point, empirical risk keeps falling while true risk rises. Training error is monotone and cannot warn you. Measure on held-out data.</li>
-    <li>Underfitting is the mirror failure: high error everywhere, rigid model, patterned residuals.</li>
-    <li>Cures: validation sets, cross-validation, regularisation, more data. Trees do the same thing with stopping criteria.</li>
+    <li>The fix for complex data is applied to the <strong>data</strong>, not the model — and "linear" means linear <em>in the parameters</em>.</li>
+    <li>The shipped model is the pair $(\phi, \theta)$. Lose $\phi$ and $\theta$ is meaningless numbers.</li>
+    <li>The curve you plot is a flat plane's height read along the constraint curve the features obey. Off that curve there is no support at all.</li>
+    <li>Training error is monotone in capacity, so it can only ever tell you to add more. Measure on data you did not fit on.</li>
   </ul>
 
 </main>

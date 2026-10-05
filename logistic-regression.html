@@ -16,51 +16,59 @@
 
   <div data-toc></div>
 
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>A linear score, squashed into a probability, trained by a loss built so the squashing cancels.</p>
+    <ul>
+      <li><strong>Why not a hard label</strong> — a label carries no <em>strength of belief</em>, so you cannot triage, defer, re-tune the threshold, or combine models. We want $P(Y=k\mid x)$.</li>
+      <li><strong>Why thresholding fails</strong> — (1) it is absurdly certain, reporting $0$ or $1$ where the data overlaps; (2) decisively, $g_{\text{threshold}}'(z) = 0$ almost everywhere, so $\nabla_\theta J = \mathbf 0$ and gradient descent never moves.</li>
+      <li><strong>Logistic function</strong> — $\sigma(z) = \dfrac{1}{1+e^{-z}}$, with $\sigma(z) \in (0,1)$ (open), $\sigma(0) = \tfrac12$, asymptotes $0$ and $1$, and $\sigma(-z) = 1 - \sigma(z)$.</li>
+      <li><strong>The identity</strong> — $\sigma'(z) = \sigma(z)\bigl(1-\sigma(z)\bigr) &gt; 0$, maximal $0.25$ at $z=0$. Everything trainable about the model rests on this.</li>
+      <li><strong>The model</strong> — $h(x) = \sigma(\theta^\top x) = P(Y=1\mid x)$, so $P(Y=0\mid x) = 1 - h(x)$. Bias folded in as a constant feature.</li>
+      <li><strong>Still a linear classifier</strong> — $h(x) \ge 0.5 \iff \theta^\top x \ge 0$, because $\sigma$ is strictly increasing and $\sigma(0)=0.5$. The boundary $\{x : \theta^\top x = 0\}$ is a hyperplane.</li>
+      <li><strong>Log-odds</strong> — $\log\dfrac{h(x)}{1-h(x)} = \theta^\top x$, so a unit rise in $x_j$ multiplies the odds by $e^{\theta_j}$.</li>
+      <li><strong>Cross-entropy</strong> — $\ell = -\bigl[y\log\hat y + (1-y)\log(1-\hat y)\bigr]$: the surprisal $\log\frac{1}{\hat p}$ of the true label. Monotone in $\hat p$, unbounded for confident errors; equals negative log-likelihood.</li>
+      <li><strong>Gradient</strong> — $\nabla_\theta J = \dfrac1N\sum_i\bigl(\sigma(\theta^\top x^{(i)}) - y^{(i)}\bigr)x^{(i)}$: prediction minus truth, times the input. Same form as linear regression; no closed form, so use GD/SGD.</li>
+      <li><strong>Convexity</strong> — chord never below the graph, equivalently $f'' \ge 0$ (Hessian PSD). Here $\ell''(z) = \sigma(1-\sigma) &gt; 0$, so <strong>every local minimum is global</strong> — which is what licenses gradient descent.</li>
+      <li><strong>$K$ classes</strong> — softmax $\hat y_k = \dfrac{e^{\theta_k^\top x}}{\sum_j e^{\theta_j^\top x}}$, loss $-\log\hat y_{\,y}$, gradient $\frac1N\sum_i(\hat y^{(i)}_k - \1\{y^{(i)}=k\})x^{(i)}$. At $K=2$ it <em>is</em> the sigmoid with $\theta = \theta_1-\theta_0$.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="why-probabilities">1. Why a hard decision is not enough</h2>
 
-  <p>Every classifier you have met so far in this course answers a question of the form: <em>which class does this sample belong to?</em> <a href="decision-trees.html">Decision trees</a> walk you down to a leaf and hand you a label. The course notes put it exactly this way:</p>
+  <p>Every classifier so far hands you a label — <a href="decision-trees.html">decision trees</a> walk you to a leaf and give you one. The notes put it this way:</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>Previously, we viewed classification as making an <strong>explicit decision</strong> on whether a given sample $x^{(i)}$ belongs to one of $K$ classes. But making a discrete decision on the class of $x^{(i)}$ doesn't tell us <strong>how strongly</strong> we believe $x^{(i)}$ belongs to that class.</p>
-    <p>That observation is what pushes us toward producing a <strong>probability distribution over classes</strong> at prediction time.</p>
   </div>
 
-  <p>Notation first, as always: $x^{(i)}$ means <em>the $i$-th sample in the dataset</em>. The parenthesised superscript is an index, not an exponent. $x^{(3)}$ is the third data point; $x^3$ is $x$ cubed. The course notes flag this too, and this chapter will put both kinds of superscript on the same page, so keep checking for the parentheses.</p>
+  <p>Notation: $x^{(i)}$ is <em>the $i$-th sample</em> — a parenthesised superscript is an index, not an exponent. Both kinds appear below.</p>
 
   <h3>1.1 The concrete thing that goes wrong</h3>
 
-  <p>Suppose a model screens chest X-rays and outputs "tumour" or "no tumour". Two patients come back "tumour". One of them sat squarely in the middle of a cloud of obviously-cancerous scans. The other sat one pixel over the line, in a region where half the training scans went each way.</p>
-
-  <p>The model gave you the same word for both. You cannot:</p>
+  <p>A model screens chest X-rays and outputs "tumour" or "no tumour". Two patients come back "tumour": one from the middle of a cloud of obviously-cancerous scans, the other one pixel over the line, where half the training scans went each way. Same word for both, so you cannot:</p>
 
   <ul>
-    <li><strong>Triage.</strong> If you have capacity to biopsy 20 patients today and 100 came back positive, which 20?</li>
-    <li><strong>Defer.</strong> You would like the model to say "I genuinely don't know, send this to a human." A label has no vocabulary for that.</li>
-    <li><strong>Re-tune the threshold.</strong> A false negative here costs a life; a false positive costs a biopsy. Those are not equally bad (this is the asymmetric-loss idea from <a href="ml-formulation.html">chapter 5</a>). To trade one against the other you need a dial, and a bare label has no dial.</li>
+    <li><strong>Triage.</strong> If you can biopsy 20 patients today and 100 came back positive, which 20?</li>
+    <li><strong>Defer.</strong> You want the model to say "I genuinely don't know, send this to a human." A label has no vocabulary for that.</li>
+    <li><strong>Re-tune the threshold.</strong> A false negative costs a life, a false positive a biopsy — the asymmetric loss of <a href="ml-formulation.html">chapter 5</a>. Trading one against the other needs a dial.</li>
     <li><strong>Combine models.</strong> Two labels cannot be averaged sensibly. Two probabilities can.</li>
   </ul>
 
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>A weather forecaster who only ever says "rain" or "no rain" is much less useful than one who says "70% chance of rain" — even though on any single day they say the same thing. The percentage lets you decide whether to carry an umbrella, cancel the picnic, or close the airport, all from one forecast. The bare word forces the forecaster to make <em>your</em> decision for you, using <em>their</em> idea of what rain costs you.</p>
-    <p><strong>Where the analogy breaks:</strong> a forecaster's 70% is <em>calibrated</em> — over many such days it really does rain about 70% of the time. A model's output number is only a probability if you check that it behaves like one. We come back to this in the <a href="#mistakes">common mistakes</a>.</p>
-  </div>
-
   <h3>1.2 Why <em>linear</em>, specifically</h3>
 
-  <p>The notes make a second observation right after the first, and it is the reason this chapter sits where it does in the course:</p>
+  <p>The notes' second observation: some classifiers, decision trees among them, <strong>are not linear functions of their input</strong> at all. A tree asking "is $x_1 &gt; 3$?" then "is $x_2 &gt; 7$?" carves feature space into axis-aligned boxes, one label each — a staircase, piecewise constant, with no coefficients $w_j$ to read.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Some classification models, such as decision trees, <strong>aren't linear functions of their input</strong> $x^{(i)}$ at all. They perform some non-linear function in order to decide their classes.</p>
     <p>Logistic regression models are an <strong>intuitive extension of linear regression</strong> that let us perform classification <em>while still building on a linear model</em>.</p>
   </div>
 
-  <p>Unpack "a decision tree isn't a linear function of its input". A tree that asks "is $x_1 &gt; 3$?" then "is $x_2 &gt; 7$?" carves feature space into axis-aligned boxes and assigns a label to each box. Its output as a function of $x$ is a staircase: piecewise constant, jumping at split points. There are no coefficients $w_j$ to read. You cannot say "increasing $x_1$ by one unit increases the score by $w_1$", because the tree's score doesn't move at all until you cross a split, and then it jumps.</p>
-
-  <p>Linear models give up that flexibility and get three things in return: <strong>interpretable coefficients</strong> (one number per feature, with a sign and a magnitude), <strong>easy optimisation</strong> (we will get a convex objective), and <strong>simplicity</strong> (a handful of parameters, so less to overfit — the lesson of <a href="feature-engineering.html">chapter 10</a>). Logistic regression is the model that keeps all three <em>and</em> outputs probabilities.</p>
+  <p>Linear models give up that flexibility for three things: <strong>interpretable coefficients</strong>, <strong>easy optimisation</strong> (a convex objective), and <strong>simplicity</strong> (few parameters, so less to overfit). Logistic regression keeps all three <em>and</em> outputs probabilities.</p>
 
   <h2 id="four-stages">2. Four stages from a line to a classifier</h2>
 
-  <p>The notes build the model by failing three times in a row, on purpose. Each failure tells you exactly which property the next attempt must have. Here is the whole arc on one screen; the rest of this section walks through each panel slowly.</p>
+  <p>The notes build the model by failing three times on purpose: each failure names the property the next attempt must have.</p>
 
   <div class="viz">
     <div class="viz-title">Figure A — the four stages, aligned on the same data</div>
@@ -79,9 +87,9 @@
 
   $$ \D = \{(x^{(i)}, y^{(i)})\}_{i=1}^{N}, \qquad x^{(i)} \in \R, \qquad y^{(i)} \in \{0, 1\} $$
 
-  <p>where $N$ is the number of samples, each input $x^{(i)}$ is a single real number, and each label $y^{(i)}$ is either $0$ or $1$ (binary classification). We want a <strong>linear classifier</strong> — one whose decision boundary is linear. In one dimension a "linear decision boundary" is just a single point on the $x$-axis: everything left of it is one class, everything right is the other.</p>
+  <p>$N$ samples, each input one real number, each label $0$ or $1$. We want a <strong>linear classifier</strong>: one whose decision boundary is linear — in 1-D, a single point on the $x$-axis.</p>
 
-  <p>Here is the dataset this page uses throughout. Twelve points, six per class:</p>
+  <p>The dataset this page uses throughout — twelve points, six per class:</p>
 
   <div class="scroll-x">
   <table class="tight center">
@@ -93,7 +101,7 @@
   </table>
   </div>
 
-  <p>Read the overlap off the table: the largest class-0 input is $x = 1.2$ and the smallest class-1 input is $x = 1.0$. They cross. In the strip $1.0 \le x \le 1.2$ the two classes are interleaved, so <strong>no</strong> threshold can classify all twelve points correctly. That is not a defect of the data — it is the whole point. Real data overlaps, and a model that is forced to be certain in the overlap is a model that is lying.</p>
+  <p>Read the overlap off the table: the largest class-0 input is $x = 1.2$, the smallest class-1 input $x = 1.0$. They cross, so in the strip $1.0 \le x \le 1.2$ the classes are interleaved and <strong>no</strong> threshold classifies all twelve correctly. That is the point, not a defect: real data overlaps, and a model forced to be certain there is lying.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 5 (reconstructed) — the dataset to train a classifier on</div>
@@ -107,7 +115,7 @@
 
   $$ \hat{y} = wx + b $$
 
-  <p>by least squares and see what happens. Here $w$ is the slope and $b$ the intercept, exactly as in chapter 8. Running the normal equations on the twelve points above gives</p>
+  <p>by least squares. The normal equations on the twelve points give</p>
 
   $$ \hat{y} = 0.2184 + 0.2913\,x $$
 
@@ -117,15 +125,11 @@
     <div class="caption">The line crosses $\hat y = 0.5$ at $x = 0.967$ — right in the overlap, which is encouraging. But look at the ends: at $x = -1.4$ the model predicts $\hat y = -0.189$, and at $x = 3.3$ it predicts $\hat y = 1.180$. Both are outside $\{0,1\}$ and outside $[0,1]$.</div>
   </div>
 
-  <p>What did we learn, and what went wrong? Quoting the notes: the model <em>"learns some relationship between the input $x$ and the class $y$, where the class will increase if the input increases."</em> The slope is positive, which is correct — larger $x$ really does mean more likely class 1. So the fit is not useless.</p>
-
-  <p>But: <em>"this doesn't necessarily constrain the output of a model to the appropriate class that we would like, either a 0 or a 1."</em> A linear function is unbounded. Push $x$ far enough left and you get $-0.4$; far enough right and you get $1.7$. On our data the extremes are $-0.189$ and $1.180$, and with a point at $x = 10$ the fit predicts $1.433$. <strong>"$\hat y = 1.433$" is not a class.</strong> It is not a probability either. It is a number with no interpretation at all.</p>
+  <p>The notes: the model <em>"learns some relationship between the input $x$ and the class $y$, where the class will increase if the input increases"</em> — the positive slope is right — but <em>"this doesn't necessarily constrain the output of a model to the appropriate class that we would like, either a 0 or a 1."</em> A linear function is unbounded: at $x = 10$ this fit predicts $1.433$, and <strong>"$\hat y = 1.433$" is not a class</strong>, nor a probability. It has no interpretation at all.</p>
 
   <h4>The failure mode the notes skip, and you should see</h4>
 
-  <p>There is a second, sneakier problem with using squared loss for classification, and it is worth a figure of its own because it explains a phenomenon you will otherwise find baffling.</p>
-
-  <p>Squared loss punishes the model for being <em>far from the target number</em>. A point sitting at $x = 10$ with label $1$ is, from a classification point of view, the easiest point in the world: it is miles inside class-1 territory and any sane boundary gets it right. But least squares looks at it and sees $\hat y = 0.2184 + 0.2913(10) = 3.13$, which is $2.13$ away from the target $1$, for a squared penalty of $4.5$ — larger than the penalty from <em>all twelve real points combined</em>. So the fit contorts itself to bring that one far-away point down toward $1$, and the only way to do that is to flatten the slope.</p>
+  <p>Squared loss punishes being <em>far from the target number</em>. A point at $x = 10$ with label $1$ is the easiest point in the world to classify, but least squares sees $\hat y = 0.2184 + 0.2913(10) = 3.13$, which is $2.13$ from the target, for a squared penalty of $4.5$ — more than <em>all twelve real points combined</em>. So the fit contorts to pull it down, and the only way is to flatten the slope.</p>
 
   <div class="viz">
     <div class="viz-title">Figure B — one far-away, correctly-labelled point moves the boundary</div>
@@ -138,17 +142,16 @@
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Squared loss has <strong>unbounded appetite</strong>. There is no such thing as "right enough" — a prediction of $3.13$ when the target is $1$ is scored as a catastrophe, even though as a classification it is perfect. So a handful of easy, extreme points can outvote all your hard, informative points near the boundary.</p>
-    <p>The loss we build later in this chapter does not have this problem. Its per-point pressure <em>saturates</em>: once a point is confidently correct, its gradient contribution goes to zero and it stops voting. When I refit the logistic model of §7 with and without that same point at $x = 10$, the fitted parameters agree to four decimal places: $w = 5.5119$, $b = -5.8044$ both times. <strong>Identical.</strong> The far-away point contributes nothing because the model already assigns it probability $0.99999$ and there is nothing left to gain.</p>
+    <p>Squared loss has <strong>unbounded appetite</strong>: there is no "right enough", so a few easy, extreme points can outvote all the hard, informative ones near the boundary. The loss built in §7 saturates instead — refitting the logistic model with and without the point at $x = 10$ gives $w = 5.5119$, $b = -5.8044$ both times, <strong>identical</strong> to four decimal places, because that point already has probability $0.99999$ and so contributes no gradient.</p>
   </div>
 
   <h3>2.3 Stage 3 — threshold the line (Figure 7)</h3>
 
-  <p>The outputs are invalid, so clamp them. Pick the natural cut at $0.5$: call it class $0$ if the linear regression is below $0.5$, class $1$ otherwise. The notes write this as a new model</p>
+  <p>The outputs are invalid, so clamp them at the natural cut $0.5$: class $0$ below, class $1$ above. The notes write a new model,</p>
 
   $$ \hat{y} = g_{\text{threshold}}(wx + b), \qquad g_{\text{threshold}}(z) = \begin{cases} 0 & z &lt; 0.5\\ 1 & z \ge 0.5\end{cases} $$
 
-  <p>(As written in the notes the threshold is applied at the value $0.5$ of the linear output; equivalently you can absorb the $0.5$ into $b$ and threshold at $0$. Nothing below depends on which convention you pick.)</p>
+  <p>(Equivalently, absorb the $0.5$ into $b$ and threshold at $0$; nothing below depends on the convention.)</p>
 
   <div class="viz">
     <div class="viz-title">Figure 7 (reconstructed) — $\D$ trained on a thresholding model</div>
@@ -156,17 +159,17 @@
     <div class="caption">Now every output is a legal class. But the model's belief goes from "definitely 0" to "definitely 1" across an infinitesimal sliver of the $x$-axis, and its slope is exactly zero everywhere else.</div>
   </div>
 
-  <p>The notes name both problems. Take them in order, because the second one is the argument that actually forces the design.</p>
+  <p>The notes name both problems; the second forces the design.</p>
 
   <h4>Problem (a) — the model is absurdly certain</h4>
 
   <p>In the notes' words: <em>"The model is extremely certain about its predictions! It transitions rapidly from one class to the other right around input values $x = 1$. However, looking at the overlap in our data, we probably want our model to state that for $x = 1$, $P(Y = 1 \mid x) \approx 0.5$."</em></p>
 
-  <p>That is precisely the overlap we read off the table in §2.1. At $x = 1.0$ we have a class-1 point; at $x = 1.2$ a class-0 point. The honest answer at $x = 1$ is "roughly a coin flip." The threshold model instead reports certainty $1$ for class 0 at $x = 0.9666$ and certainty $1$ for class 1 at $x = 0.9668$. It has thrown away every bit of information about <em>where</em> the sample sits relative to the boundary — which is exactly the information §1 said we wanted.</p>
+  <p>That is the overlap from §2.1, so the honest answer at $x = 1$ is a coin flip. The threshold model instead reports certainty $1$ for class 0 at $x = 0.9666$ and certainty $1$ for class 1 at $x = 0.9668$: it has thrown away all information about <em>where</em> the sample sits relative to the boundary — exactly what §1 wanted.</p>
 
   <h4>Problem (b) — there is nothing for gradient descent to descend</h4>
 
-  <p>The notes: <em>"it has a derivative of zero essentially everywhere, making it very problematic to optimize over."</em> This sentence is the hinge of the whole chapter, so let us make it completely precise.</p>
+  <p>The notes: <em>"it has a derivative of zero essentially everywhere, making it very problematic to optimize over."</em> This is the hinge of the chapter, so make it precise.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>Claim.</strong> Gradient descent cannot train $\hat y = g_{\text{threshold}}(wx+b)$.</p>
@@ -181,22 +184,22 @@
     <p>Gradient descent takes a step of length zero, forever. $\blacksquare$</p>
   </div>
 
-  <p>Here is the same fact stated in terms of the landscape rather than the formula, because that is how to remember it. With a threshold model, changing $w$ by a tiny amount either changes no labels at all (the usual case) or flips one point's label (when the boundary sweeps past it). So the training loss, as a function of $\theta$, is a <strong>staircase</strong>: flat plateaus with sudden drops. Gradient descent on a staircase is a blindfolded person on a perfectly flat floor being told to walk downhill. The floor <em>is</em> lower somewhere — but not here, and the slope gives no hint which way to go.</p>
+  <p>The same fact as a landscape: changing $w$ a little either flips no labels or flips exactly one, so the training loss is a <strong>staircase</strong> of flat plateaus with sudden drops. Gradient descent on a staircase is a blindfolded person on a flat floor told to walk downhill.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>The requirement that kills the threshold is not "outputs must be probabilities". It is <strong>"the loss must have a usable slope with respect to the parameters."</strong> Everything in modern machine learning that is trained by gradient descent obeys this constraint, and it is the reason models are built out of smooth pieces. The sigmoid is not chosen because it is pretty. It is chosen because it is <em>differentiable and non-flat</em>.</p>
+    <p>What kills the threshold is not "outputs must be probabilities" but <strong>"the loss must have a usable slope with respect to the parameters."</strong> Every gradient-trained model obeys this, which is why models are built out of smooth pieces. The sigmoid is chosen because it is <em>differentiable and non-flat</em>, not because it is pretty.</p>
   </div>
 
   <h3>2.4 Stage 4 — replace the step with a smooth S (Figure 8)</h3>
 
-  <p>The notes draw the conclusion cleanly: to make a valid classifier we applied a function $g$ to the linear combination $wx + b$. Keep that structure, but choose a $g$ that <em>"smoothly maps all real input values $(-\infty, \infty)$ to the range $(0,1)$"</em> — i.e. to a probability for binary classification. The standard choice is a <strong>sigmoid</strong> ("s-shaped") function, specifically the <strong>logistic function</strong>, which is so common that "the sigmoid" almost always means this one, written $\sigma$:</p>
+  <p>The conclusion: keep the structure "apply a function $g$ to $wx+b$", but choose a $g$ that <em>"smoothly maps all real input values $(-\infty, \infty)$ to the range $(0,1)$"</em> — a probability. The standard choice is a <strong>sigmoid</strong> ("s-shaped") function, specifically the <strong>logistic function</strong> $\sigma$:</p>
 
   <div class="box defn"><span class="label">Definition</span>
     $$ g_{\text{logistic}}(z) \;=\; \sigma(z) \;=\; \frac{1}{1 + e^{-z}} $$
-    <p>$z \in \R$ is any real number (in our model it will be $wx+b$), $e \approx 2.71828$ is Euler's number, and $\sigma(z)$ is the output, which we will prove lies strictly between $0$ and $1$.</p>
+    <p>$z \in \R$ is any real number (here $wx+b$), and $\sigma(z)$ is the output — which we now prove lies strictly between $0$ and $1$.</p>
   </div>
 
-  <p>The notes then say: <em>"Prove to yourself that this function outputs values in $[0,1]$ and outputs $0.5$ when the input is $0$."</em> That is an exercise left to the reader, so let us actually do it.</p>
+  <p>The notes leave it as an exercise: prove that it outputs values in $[0,1]$, and $0.5$ at $0$. So do it.</p>
 
   <h2 id="the-logistic-function">3. The logistic function, proved and differentiated</h2>
 
@@ -219,12 +222,12 @@
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>The notes write "outputs values in $[0,1]$" with <em>closed</em> brackets, which is the usual informal shorthand. Claim 1 shows the range is actually the <strong>open</strong> interval $(0,1)$: $\sigma$ gets arbitrarily close to $0$ and $1$ but never equals either. That matters twice later — once because it means logistic regression can never be <em>absolutely</em> certain (a feature, not a bug), and once because $\log \hat y$ is therefore always finite, which is what keeps the loss in §6 from returning $\infty$ on real data.</p>
+    <p>The notes write "$[0,1]$" with <em>closed</em> brackets, the usual shorthand. Claim 1 shows the range is the <strong>open</strong> interval $(0,1)$: $\sigma$ approaches $0$ and $1$ but never reaches either. That matters twice — logistic regression can never be <em>absolutely</em> certain (a feature), and $\log\hat y$ is always finite, which is what stops the loss returning $\infty$ on real data.</p>
   </div>
 
   <h3>3.1 The derivative — the identity that makes the model trainable</h3>
 
-  <p>Stage 3 died because its derivative was zero. So the very first thing to ask of $\sigma$ is: what is $\sigma'$? The answer is startlingly tidy, and every gradient in the rest of this chapter rests on it.</p>
+  <p>Stage 3 died of a zero derivative, so ask what $\sigma'$ is. Every gradient below rests on the answer.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>Claim: $\sigma'(z) = \sigma(z)\,\bigl(1 - \sigma(z)\bigr)$.</strong></p>
@@ -243,9 +246,9 @@
   <p>Three consequences, each of which you will use:</p>
 
   <ol>
-    <li><strong>$\sigma' &gt; 0$ everywhere.</strong> Since $\sigma \in (0,1)$, both $\sigma$ and $1-\sigma$ are strictly positive, so their product is strictly positive. Hence <strong>$\sigma$ is strictly increasing</strong> — which is what lets us invert the inequality $\sigma(z) \ge 0.5 \iff z \ge 0$ in §5.</li>
-    <li><strong>The derivative is largest at the boundary.</strong> $\sigma(1-\sigma)$ is a downward parabola in $\sigma$, maximised at $\sigma = 1/2$, i.e. at $z = 0$, where $\sigma'(0) = \tfrac12\cdot\tfrac12 = 0.25$. The model is most sensitive exactly where it is most uncertain. That is the opposite of the threshold, whose derivative was zero everywhere <em>except</em> at the boundary.</li>
-    <li><strong>The derivative is expressed in terms of the function's own output.</strong> You never need to recompute $e^{-z}$: if you already have $\hat y = \sigma(z)$, then $\sigma'(z) = \hat y (1 - \hat y)$, one multiply. This is why neural-network backpropagation is cheap.</li>
+    <li><strong>$\sigma' &gt; 0$ everywhere</strong>, since $\sigma$ and $1-\sigma$ are both positive. So <strong>$\sigma$ is strictly increasing</strong>, which is what lets §5 invert $\sigma(z) \ge 0.5 \iff z \ge 0$.</li>
+    <li><strong>Largest at the boundary.</strong> $\sigma(1-\sigma)$ is a downward parabola in $\sigma$, maximised at $\sigma = 1/2$, i.e. $z = 0$, where $\sigma'(0) = 0.25$. The model is most sensitive exactly where it is most uncertain — the opposite of the threshold.</li>
+    <li><strong>It is expressed in the function's own output.</strong> Given $\hat y = \sigma(z)$, $\sigma'(z) = \hat y(1-\hat y)$ — one multiply, no recomputing $e^{-z}$, which is why backpropagation is cheap.</li>
   </ol>
 
   <h3>3.2 One more identity: $\sigma(-z) = 1 - \sigma(z)$</h3>
@@ -257,7 +260,7 @@
     <p>where the last equality is Step 6 of the previous proof. $\blacksquare$</p>
   </div>
 
-  <p>In words: the sigmoid is <strong>antisymmetric about the point $(0, 0.5)$</strong>. Rotating the curve $180°$ about that point maps it onto itself. Practically, this says the model treats the two classes symmetrically — being $2$ units to the right of the boundary makes you class 1 with probability $0.8808$, and being $2$ units to the left makes you class 0 with exactly the same probability $0.8808$.</p>
+  <p>So the sigmoid is <strong>antisymmetric about $(0, 0.5)$</strong>, and the model therefore treats the classes symmetrically: $2$ units right of the boundary gives class 1 probability $0.8808$, and $2$ units left gives class 0 the same $0.8808$.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 8 (reconstructed) — the logistic function and its derivative</div>
@@ -275,11 +278,11 @@
     </tbody>
   </table>
   </div>
-  <p class="tiny muted">Worth memorising three of these: $\sigma(0)=0.5$, $\sigma(2)\approx 0.88$, $\sigma(4)\approx 0.98$. They let you sanity-check any logistic model in your head. Note the columns confirm $\sigma(-z)=1-\sigma(z)$: $0.0180 + 0.9820 = 1$, $0.2689+0.7311 = 1$.</p>
+  <p class="tiny muted">Worth memorising: $\sigma(0)=0.5$, $\sigma(2)\approx 0.88$, $\sigma(4)\approx 0.98$ — enough to sanity-check any logistic model in your head. The columns also confirm $\sigma(-z)=1-\sigma(z)$: $0.0180 + 0.9820 = 1$.</p>
 
   <h2 id="the-model">4. The logistic regression model (Figure 9)</h2>
 
-  <p>Now assemble it. Apply $\sigma$ to the linear transformation of the input, exactly as we applied $g_{\text{threshold}}$ before:</p>
+  <p>Assemble it: apply $\sigma$ to the linear transformation of the input, where $g_{\text{threshold}}$ was before.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>One-dimensional input</strong> ($x \in \R$):</p>
@@ -289,24 +292,22 @@
     <p>Every symbol: $x \in \R^M$ is one sample's feature vector, $\theta \in \R^M$ is the parameter vector, $\theta^\top x = \sum_{j=1}^{M}\theta_j x_j$ is the dot product (a single real number, often called the <em>logit</em> or <em>score</em>), $\sigma$ is the logistic function, and $h$ is the hypothesis function.</p>
   </div>
 
-  <p><strong>What "the bias term is included in this $x$" means.</strong> The notes fold $b$ into $\theta$ by the trick you already used in <a href="feature-engineering.html">chapter 10</a>: prepend a constant $1$ to every feature vector. If the raw input is $\tilde x = (x_1,\dots,x_{M-1})$, set $x = (1, x_1, \dots, x_{M-1})$ and $\theta = (\theta_0, \theta_1, \dots, \theta_{M-1})$. Then</p>
+  <p><strong>"The bias term is included in this $x$"</strong> is <a href="feature-engineering.html">chapter 10</a>'s trick: prepend a constant $1$ to every feature vector, so with $x = (1, x_1, \dots, x_{M-1})$ and $\theta = (\theta_0, \dots, \theta_{M-1})$,</p>
 
   $$ \theta^\top x = \theta_0 \cdot 1 + \theta_1 x_1 + \cdots + \theta_{M-1}x_{M-1} $$
 
-  <p>and $\theta_0$ plays the role of $b$. One notation, no special cases. From here on, "$\theta^\top x$" always includes the bias.</p>
+  <p>and $\theta_0$ plays the role of $b$. From here on "$\theta^\top x$" always includes the bias.</p>
 
   <h3>4.1 Reading the output as a probability</h3>
 
-  <p>This is the payoff of §1. Quoting the notes: <em>"Because the output of the model $h(x)$ is a value in $(0,1)$, we can re-think this value as a probability where $h(x) = P(Y = 1 \mid x)$."</em></p>
-
   <div class="box key"><span class="label">Key idea</span>
     $$ h(x) = P(Y = 1 \mid x), \qquad\text{and therefore}\qquad P(Y = 0 \mid x) = 1 - h(x). $$
-    <p>Read $P(Y=1 \mid x)$ as: "the probability that this sample's label is 1, given that we observed features $x$." The second equation is not an extra assumption — with only two classes, the probabilities must sum to $1$, so $P(Y=0\mid x)$ is forced.</p>
+    <p>The second equation is not an extra assumption — with two classes the probabilities must sum to $1$, so $P(Y=0\mid x)$ is forced.</p>
   </div>
 
-  <p>So the model does not output a class. It outputs a <strong>full probability distribution over the two classes</strong>, $\bigl(1-h(x),\; h(x)\bigr)$. Every complaint in §1.1 is now answerable: you can rank patients by $h(x)$, you can flag $h(x) \in (0.4, 0.6)$ for human review, you can move the operating threshold up or down to trade false positives against false negatives, and you can average two models' probabilities.</p>
+  <p>So the output is the <strong>distribution</strong> $\bigl(1-h(x),\; h(x)\bigr)$, which answers every complaint in §1.1: rank by $h(x)$, flag $h(x)\in(0.4,0.6)$ for review, move the operating threshold, average two models.</p>
 
-  <p>Note the pleasing symmetry this gives with §3.2: since $P(Y=0\mid x) = 1 - \sigma(\theta^\top x) = \sigma(-\theta^\top x)$, the "probability of class 0" is the same model with the sign of $\theta$ flipped. Class 0 and class 1 are on an equal footing; nothing about the model prefers one.</p>
+  <p>With §3.2, $P(Y=0\mid x) = 1 - \sigma(\theta^\top x) = \sigma(-\theta^\top x)$: class 0 is the same model with $\theta$ negated, so neither class is privileged.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 9 (reconstructed) — $\D$ trained on a logistic regression model</div>
@@ -315,10 +316,7 @@
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Everything in a logistic regression happens in two separate steps, and keeping them separate makes the model much easier to think about.</p>
-    <p><strong>Step 1 (linear, learnable):</strong> $z = \theta^\top x$ collapses the whole feature vector down to one number — a <em>score</em> on a line. All the learning lives here.</p>
-    <p><strong>Step 2 (fixed, non-linear):</strong> $\sigma$ squashes that score into a probability. There are no parameters in $\sigma$; it is a fixed piece of plumbing.</p>
-    <p>So a logistic regression is a linear model wearing a probability-shaped hat. Honest caveat on the analogy: the hat is not <em>merely</em> cosmetic, because $\sigma$ changes what the loss surface looks like and therefore what fit you get. But it never changes <em>which</em> functions the model can express as a decision rule — as §5 proves.</p>
+    <p>Keep the two steps separate: $z = \theta^\top x$ collapses the feature vector to one <em>score</em>, and that is where all the learning lives; $\sigma$ then squashes the score into a probability, with no parameters of its own. The squashing changes the loss surface, and so the fit you get, but never <em>which</em> decision rules the model can express — as §5 proves.</p>
   </div>
 
   <div class="quiz" data-answer="2">
@@ -332,7 +330,7 @@
 
   <h2 id="decision-boundary">5. Why this is still a linear classifier</h2>
 
-  <p>Here is the apparent paradox. We just wrapped the linear score in $\sigma$, which is emphatically non-linear — it curves, it saturates, it has an inflection point. Yet the notes insist logistic regression is a <em>linear</em> model for classification. Both things are true, and the reason is worth a proof.</p>
+  <p>$\sigma$ is emphatically non-linear — it curves, it saturates — yet the notes call logistic regression a <em>linear</em> model for classification. Both are true:</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>Claim.</strong> The rule "predict class 1 when $h(x) \ge 0.5$" is <em>identical</em> to the rule "predict class 1 when $\theta^\top x \ge 0$".</p>
@@ -340,23 +338,23 @@
     $$ h(x) \ge 0.5 \iff \sigma(\theta^\top x) \ge 0.5 . $$
     <p>By Claim 2 of §3, $0.5 = \sigma(0)$, so this is</p>
     $$ \sigma(\theta^\top x) \ge \sigma(0). $$
-    <p>By consequence 1 of §3.1, $\sigma' (z) = \sigma(1-\sigma) &gt; 0$ for all $z$, so $\sigma$ is <strong>strictly increasing</strong>, hence injective, hence it has a strictly increasing inverse. A strictly increasing function preserves $\ge$ in both directions:</p>
+    <p>By consequence 1 of §3.1, $\sigma'(z) = \sigma(1-\sigma) &gt; 0$ everywhere, so $\sigma$ is <strong>strictly increasing</strong>, hence injective with a strictly increasing inverse — and a strictly increasing function preserves $\ge$ in both directions:</p>
     $$ \sigma(a) \ge \sigma(b) \iff a \ge b. $$
     <p>Apply it with $a = \theta^\top x$ and $b = 0$:</p>
     $$ \boxed{\;h(x) \ge 0.5 \iff \theta^\top x \ge 0\;} $$
     <p>The set $\{x : \theta^\top x = 0\}$ is, by definition, a <strong>hyperplane</strong> through the origin of the augmented feature space — a point in 1-D, a line in 2-D, a plane in 3-D. The decision boundary is that hyperplane. $\blacksquare$</p>
   </div>
 
-  <p>Concretely, in 1-D with $z = wx+b$, the boundary is the single point $x = -b/w$. In 2-D with $z = \theta_0 + \theta_1x_1 + \theta_2x_2$, the boundary is the straight line $\theta_0 + \theta_1x_1 + \theta_2x_2 = 0$.</p>
+  <p>In 1-D with $z = wx+b$ the boundary is the point $x = -b/w$; in 2-D it is the straight line $\theta_0 + \theta_1x_1 + \theta_2x_2 = 0$.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>$\sigma$ is non-linear, but it is a <strong>monotone</strong> non-linearity applied <em>after</em> the linear part. Monotone functions cannot re-order their inputs, so they cannot change which side of the boundary a point falls on. All $\sigma$ does is relabel the score axis — it turns "score" into "probability" without moving anybody across the line.</p>
-    <p>That is why logistic regression inherits exactly the same expressive limits as a linear classifier: it cannot learn XOR, and it cannot carve out a circle. If you need curved boundaries, you do what <a href="feature-engineering.html">chapter 10</a> taught you — engineer features. Feed it $x_1^2, x_2^2, x_1x_2$ and the boundary becomes a conic section in the original space while staying a hyperplane in the engineered space.</p>
+    <p>$\sigma$ is a <strong>monotone</strong> non-linearity applied <em>after</em> the linear part. Monotone functions cannot re-order their inputs, so they cannot change which side of the boundary a point falls on: $\sigma$ only relabels the score axis as a probability, moving nobody across the line.</p>
+    <p>So it inherits a linear classifier's limits exactly: no XOR, no circles. For curved boundaries, engineer features (<a href="feature-engineering.html">chapter 10</a>) — feed it $x_1^2, x_2^2, x_1x_2$ and the boundary is a conic in the original space, a hyperplane in the engineered one.</p>
   </div>
 
   <h3>5.1 What $\|\theta\|$ does versus what the direction of $\theta$ does</h3>
 
-  <p>Split the parameter vector into the bias and the rest: $\theta = (\theta_0, w)$ with $w = (\theta_1,\dots,\theta_{M-1})$ acting on the real features $\tilde x$. Then $z = w^\top \tilde x + \theta_0$, and from geometry, the <strong>signed distance</strong> from a point $\tilde x$ to the boundary hyperplane is</p>
+  <p>Split $\theta = (\theta_0, w)$, with $w$ acting on the real features $\tilde x$, so $z = w^\top \tilde x + \theta_0$. The <strong>signed distance</strong> from $\tilde x$ to the boundary hyperplane is</p>
 
   $$ d(\tilde x) = \frac{w^\top \tilde x + \theta_0}{\|w\|} \qquad\Longrightarrow\qquad z = \|w\|\,d(\tilde x). $$
 
@@ -366,20 +364,12 @@
 
   <p>Now everything separates cleanly:</p>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="kicker">Direction of $w$</div>
-      <h3>Where the line is, and which side is which</h3>
-      <p>The unit vector $w/\|w\|$ is the normal to the boundary — it sets the <strong>orientation</strong> of the hyperplane and points toward the class-1 side. The bias $\theta_0$ slides the boundary along that normal without rotating it. Change the direction and you rotate the decision line.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">Magnitude $\|w\|$</div>
-      <h3>How fast belief changes as you cross</h3>
-      <p>$\|w\|$ multiplies the distance before it enters $\sigma$, so it controls the <strong>sharpness</strong> of the transition — the width of the fuzzy band. Doubling $\|w\|$ halves the band. As $\|w\| \to \infty$ the model degenerates back into the threshold of stage 3; as $\|w\| \to 0$ it says $0.5$ everywhere. <em>The boundary itself does not move.</em></p>
-    </div>
-  </div>
+  <ul>
+    <li><strong>Direction $w/\|w\|$</strong> — the normal to the boundary: it sets the hyperplane's <strong>orientation</strong> and points to the class-1 side, so changing it rotates the line. The bias $\theta_0$ slides the boundary along that normal without rotating it.</li>
+    <li><strong>Magnitude $\|w\|$</strong> — multiplies the distance before $\sigma$ sees it, so it sets the <strong>sharpness</strong> of the transition: doubling it halves the fuzzy band. $\|w\| \to \infty$ degenerates into stage 3's threshold; $\|w\| \to 0$ says $0.5$ everywhere. <em>The boundary itself does not move.</em></li>
+  </ul>
 
-  <p>The last italicised sentence is the one students trip over, so let us verify it: if you replace $\theta$ by $c\theta$ for any $c &gt; 0$, the boundary set is $\{x : (c\theta)^\top x = 0\} = \{x : c\,(\theta^\top x) = 0\} = \{x: \theta^\top x = 0\}$ — the same set. Scaling $\theta$ changes every probability but not a single predicted label.</p>
+  <p>Algebraically: replacing $\theta$ by $c\theta$ for $c &gt; 0$ leaves the boundary set $\{x : \theta^\top x = 0\}$ unchanged — scaling $\theta$ changes every probability and not one predicted label.</p>
 
   <div class="viz">
     <div class="viz-title">Figure C — 2-D decision boundary with the probability field</div>
@@ -442,7 +432,7 @@
 
   <h2 id="log-odds">6. Log-odds: why the coefficients mean something</h2>
 
-  <p>We have a probability. Can we get back to the linear part? Yes, and the inverse has a name you will meet constantly.</p>
+  <p>Can we get back from the probability to the linear part? The inverse has a name:</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>For a probability $p \in (0,1)$, the <strong>odds</strong> are $\dfrac{p}{1-p}$ — "how many times more likely the event is than its complement". A probability of $0.75$ is odds of $3$, i.e. 3-to-1 on. The <strong>log-odds</strong> or <strong>logit</strong> is $\log\dfrac{p}{1-p}$, which maps $(0,1)$ onto all of $\R$.</p>
@@ -459,24 +449,24 @@
   </div>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Logistic regression is ordinary linear regression performed on the log-odds scale.</strong> The quantity being modelled linearly is not the probability — it is $\log\frac{p}{1-p}$, which lives on all of $\R$ and so is a sensible thing for an unbounded linear function to predict. The sigmoid is nothing but the inverse of the logit, applied to convert back.</p>
+    <p><strong>Logistic regression is ordinary linear regression on the log-odds scale.</strong> What is modelled linearly is not the probability but $\log\frac{p}{1-p}$, which lives on all of $\R$ — a sensible target for an unbounded linear function. The sigmoid is just the inverse of the logit, converting back.</p>
   </div>
 
-  <p>This is what makes the coefficients interpretable. Hold every feature fixed except $x_j$, and increase $x_j$ by one unit. Then $z$ increases by exactly $\theta_j$, so</p>
+  <p>Hence interpretable coefficients. Hold every feature fixed but $x_j$ and raise $x_j$ by one unit: $z$ rises by exactly $\theta_j$, so</p>
 
   $$ \frac{\text{new odds}}{\text{old odds}} = \frac{e^{z + \theta_j}}{e^{z}} = e^{\theta_j}. $$
 
   <div class="box example"><span class="label">Example</span>
-    <p>You fit a model predicting whether a student passes a course. The coefficient on <em>hours studied per week</em> comes out as $\theta_j = 0.7$.</p>
-    <p><strong>Interpretation:</strong> each extra hour per week multiplies the odds of passing by $e^{0.7} = 2.0138$ — it roughly <em>doubles the odds</em>. Not the probability: the odds.</p>
-    <p><strong>Worked numbers.</strong> Suppose a particular student currently has $P(\text{pass}) = 0.4$.</p>
+    <p>A model predicts whether a student passes. The coefficient on <em>hours studied per week</em> is $\theta_j = 0.7$.</p>
+    <p><strong>Interpretation:</strong> each extra hour multiplies the odds of passing by $e^{0.7} = 2.0138$ — it roughly <em>doubles the odds</em>, not the probability.</p>
+    <p><strong>Worked numbers.</strong> A student currently at $P(\text{pass}) = 0.4$:</p>
     <ul>
       <li>Current odds: $\dfrac{0.4}{1-0.4} = \dfrac{0.4}{0.6} = 0.6667$.</li>
       <li>Add one study hour: odds $\times\, 2.0138 = 0.6667 \times 2.0138 = 1.3425$.</li>
       <li>Convert back to a probability with $p = \dfrac{\text{odds}}{1+\text{odds}} = \dfrac{1.3425}{2.3425} = 0.5731$.</li>
     </ul>
-    <p>So the probability went from $0.400$ to $0.573$, a jump of $17.3$ percentage points. Now do the <em>same</em> hour for a student already at $P = 0.95$: odds $= 19$, new odds $= 38.26$, new $p = 38.26/39.26 = 0.9745$ — a jump of only $2.5$ points.</p>
-    <p><strong>The moral:</strong> the effect on the <em>odds</em> is a constant multiplier, the same for everybody. The effect on the <em>probability</em> depends on where you started, and is largest near $p = 0.5$. That is the sigmoid's saturation, restated. It is also why reporting logistic coefficients as "a one-hour increase raises the pass rate by 17 points" is wrong — it is only true for students near $40\%$.</p>
+    <p>So $0.400 \to 0.573$: a jump of $17.3$ percentage points. The <em>same</em> hour for a student already at $P = 0.95$: odds $= 19$, new odds $= 38.26$, new $p = 38.26/39.26 = 0.9745$ — a jump of only $2.5$ points.</p>
+    <p><strong>The moral:</strong> the effect on the <em>odds</em> is a constant multiplier for everybody; the effect on the <em>probability</em> depends on where you started and is largest near $p = 0.5$. So "a one-hour increase raises the pass rate by 17 points" is wrong; it holds only near $40\%$.</p>
   </div>
 
   <div class="quiz" data-answer="1">
@@ -490,14 +480,14 @@
 
   <h2 id="loss">7. The loss: cross-entropy</h2>
 
-  <p>The pre-reading closed by promising three things for lecture: how to measure this model's error, how to train it, and how to extend it to many classes. The <strong>Logistic Regression lecture notes</strong> deliver all three, and this section and the next two follow them.</p>
+  <p>Three things remain: measuring this model's error, training it, and extending it to many classes.</p>
 
   <h3>7.0 The lecture's framing: grading an LLM</h3>
 
-  <p>The lecture opens with a different motivating example. You evaluate an LLM on many tasks and record, for each, how easy the task is ($x \in \R$) and whether the LLM succeeded ($y \in \{0,1\}$). The catch: tasks of the same easiness sometimes succeed and sometimes fail — even <em>the same task, run twice</em>, can go either way. At an easiness where the LLM succeeds half the time, <strong>any</strong> prediction of $y$ is wrong half the time. Predicting the label is the wrong question.</p>
+  <p>The lecture's example: grade an LLM on many tasks, recording each task's easiness ($x \in \R$) and whether it succeeded ($y \in \{0,1\}$). Tasks of equal easiness sometimes succeed and sometimes fail, so where the LLM succeeds half the time <strong>any</strong> prediction of the label is wrong half the time.</p>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>So estimate $P(y = 1)$ for each $x$ instead. That number is continuous, which turns classification into a <strong>regression problem on probabilities</strong> — the name "logistic <em>regression</em>" is literally accurate from this angle. The two design questions are then the usual ERM ones: <strong>which loss</strong> (0–1? squared? something else?) and <strong>which model class</strong> (trees? linear? — the sigmoid of a linear function, §4).</p>
+    <p>Estimate $P(y=1)$ for each $x$ instead. That number is continuous, so classification becomes a <strong>regression problem on probabilities</strong> — which is why "logistic <em>regression</em>" is literally accurate. The design questions are then the usual ERM ones: <strong>which loss</strong>, and <strong>which model class</strong> (here, the sigmoid of a linear function).</p>
   </div>
 
   <p>The lecture chooses the loss from two principles about grading a probability $\hat p$ for an event that then happens:</p>
@@ -507,7 +497,7 @@
   </ol>
   <p>From information theory (<a href="information-theory.html">chapter 7</a>), the <strong>surprisal</strong> of an event you gave probability $\hat p$ is $\log\frac{1}{\hat p}$ — and it satisfies both: it falls as $\hat p$ rises, and it goes to $\infty$ as $\hat p \to 0$. That is the loss. The notes write it as</p>
   $$ \ell(\hat p, y) = \1\{y=1\}\log\frac{1}{\hat p} + \1\{y=0\}\log\frac{1}{1-\hat p} = y\log\frac{1}{\hat p} + (1-y)\log\frac{1}{1-\hat p}, $$
-  <p>which is the same thing as the $-[\,y\log\hat y + (1-y)\log(1-\hat y)\,]$ form below ($\log\frac1a = -\log a$). §7.1 shows why the obvious alternative, squared loss, fails.</p>
+  <p>the same as the $-[\,y\log\hat y + (1-y)\log(1-\hat y)\,]$ form below, since $\log\frac1a = -\log a$. First, why the obvious alternative fails.</p>
 
   <h3>7.1 Why not squared loss?</h3>
 
@@ -515,11 +505,11 @@
 
   $$ J_{\text{sq}}(\theta) = \frac{1}{N}\sum_{i=1}^{N}\Bigl(y^{(i)} - \sigma\bigl(\theta^\top x^{(i)}\bigr)\Bigr)^{2}. $$
 
-  <p>It is not <em>absurd</em> — it is bounded, it is differentiable, it is minimised when $\hat y = y$. But it fails on two counts, and both matter.</p>
+  <p>Not absurd: bounded, differentiable, minimised when $\hat y = y$. But it fails on two counts.</p>
 
   <h4>Failure 1: it is not convex in $\theta$</h4>
 
-  <p>For linear regression, squared loss gave a bowl: one global minimum, no local traps, and a closed-form solution. Wrap the prediction in $\sigma$ and the bowl buckles. Here is the smallest possible demonstration, which you can check by hand.</p>
+  <p>For linear regression, squared loss gave a bowl: one global minimum, a closed form. Wrap the prediction in $\sigma$ and the bowl buckles:</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p>Take a dataset of <em>one</em> point, $x = 1$ (no bias), $y = 0$. Then $\hat y = \sigma(w)$ and</p>
@@ -536,7 +526,7 @@
     <p>Numerically: $J''(0) = +0.125$ and $J''(2) = -0.1188$. A convex function has $J'' \ge 0$ everywhere, so $J_{\text{sq}}$ is <strong>not convex</strong>. $\blacksquare$</p>
   </div>
 
-  <p>With many points and many parameters this produces genuine local minima and flat plateaus, so gradient descent's answer depends on where you started. That is a bad property for a model whose selling point is simplicity.</p>
+  <p>With many points and parameters this gives genuine local minima and flat plateaus, so gradient descent's answer depends on where you started.</p>
 
   <h4>Failure 2: the gradient vanishes exactly when the model is most wrong</h4>
 
@@ -544,9 +534,9 @@
 
   $$ \frac{\partial}{\partial\theta}\bigl(y - \sigma(z)\bigr)^2 = -2\bigl(y - \sigma(z)\bigr)\,\underbrace{\sigma(z)\bigl(1-\sigma(z)\bigr)}_{\sigma'(z)}\,x . $$
 
-  <p>Now imagine the worst case: the true label is $y = 1$ and the model says $\hat y = \sigma(z) = 0.001$. It is as wrong as it is possible to be. The error factor $(y - \hat y) = 0.999$ is large — good. But the $\sigma'$ factor is $0.001 \times 0.999 = 0.000999$. Their product is $\approx 0.000998$. <strong>The gradient is a thousandth of the size it would be for a point sitting right at the boundary</strong> ($0.25$ there). The model is confidently wrong and the optimiser barely notices.</p>
+  <p>The worst case: $y = 1$ and the model says $\hat y = 0.001$. The error factor $(y-\hat y) = 0.999$ is large, but the $\sigma'$ factor is $0.001\times0.999 = 0.000999$, so the product is $\approx 0.000998$ — <strong>a thousandth of what a point at the boundary would give</strong> ($0.25$ there). The model is confidently wrong and the optimiser barely notices.</p>
 
-  <p>This is the pathology of stage 3 creeping back in through the side door: saturation makes $\sigma'$ small, and squared loss multiplies by $\sigma'$. We need a loss whose derivative <em>cancels</em> that factor.</p>
+  <p>Stage 3's pathology, back through the side door: saturation makes $\sigma'$ small and squared loss multiplies by $\sigma'$. We need a loss whose derivative <em>cancels</em> that factor.</p>
 
   <h3>7.2 The cross-entropy (negative log-likelihood) loss</h3>
 
@@ -557,19 +547,19 @@
     $$ J(\theta) = \frac{1}{N}\sum_{i=1}^{N} -\Bigl[\,y^{(i)}\log \sigma\bigl(\theta^\top x^{(i)}\bigr) + \bigl(1-y^{(i)}\bigr)\log\bigl(1 - \sigma(\theta^\top x^{(i)})\bigr)\Bigr]. $$
   </div>
 
-  <p><strong>Read the two branches.</strong> $y$ is either $0$ or $1$, so one of the two terms is always multiplied by zero and disappears. The formula is a switch written without an <code>if</code>:</p>
+  <p><strong>Read the two branches.</strong> $y$ is $0$ or $1$, so one term is always multiplied by zero — a switch written without an <code>if</code>:</p>
 
   <ul>
-    <li><strong>If $y = 1$:</strong> the second term dies ($1-y = 0$) and $\ell = -\log\hat y$. You are charged for the log of the probability you assigned to the <em>right</em> answer. Say $\hat y = 0.9$ and you pay $0.105$; say $\hat y = 0.5$ and you pay $0.693$; say $\hat y = 0.01$ and you pay $4.605$.</li>
-    <li><strong>If $y = 0$:</strong> the first term dies and $\ell = -\log(1-\hat y)$. Same charge, applied to $1 - \hat y = P(Y=0\mid x)$, which is again the probability you assigned to the right answer.</li>
+    <li><strong>If $y = 1$:</strong> the second term dies and $\ell = -\log\hat y$ — the log of the probability you gave the <em>right</em> answer. $\hat y = 0.9$ costs $0.105$; $0.5$ costs $0.693$; $0.01$ costs $4.605$.</li>
+    <li><strong>If $y = 0$:</strong> the first term dies and $\ell = -\log(1-\hat y)$ — the same charge on $P(Y=0\mid x)$, again the probability given to the right answer.</li>
   </ul>
 
   <p>Both branches are the same sentence: <strong>your loss is $-\log(\text{the probability you gave the true label})$.</strong></p>
 
   <div class="box intuition"><span class="label">Intuition</span>
     <p>Where does $-\log$ come from? Two equivalent stories.</p>
-    <p><strong>Likelihood.</strong> The model claims the label is a Bernoulli draw: $P(y \mid x) = \hat y^{\,y}(1-\hat y)^{1-y}$ (check both cases: $y=1$ gives $\hat y$, $y=0$ gives $1-\hat y$). The probability of the whole dataset, assuming samples are independent, is the product $\prod_i P(y^{(i)}\mid x^{(i)})$. Maximising a product of tiny numbers is numerically awful, so take logs — which turns the product into a sum and is legal because $\log$ is increasing, so it does not move the maximiser. Then flip the sign to turn "maximise" into "minimise". You get exactly $J(\theta)$. Cross-entropy <strong>is</strong> negative log-likelihood; fitting a logistic regression <strong>is</strong> maximum likelihood estimation.</p>
-    <p><strong>Information.</strong> From <a href="information-theory.html">chapter 7</a>, $-\log p$ is the number of nats of surprise in an event you assigned probability $p$. Cross-entropy loss charges you your <em>surprise at the truth</em>. A model that is confidently wrong is infinitely surprised, and pays accordingly.</p>
+    <p><strong>Likelihood.</strong> The model treats the label as a Bernoulli draw, $P(y\mid x) = \hat y^{\,y}(1-\hat y)^{1-y}$. For independent samples the dataset's probability is $\prod_i P(y^{(i)}\mid x^{(i)})$; take logs — legal, since $\log$ is increasing and so does not move the maximiser — to turn the product into a sum, then flip the sign to turn maximise into minimise. You get exactly $J(\theta)$. Cross-entropy <strong>is</strong> negative log-likelihood, and fitting a logistic regression <strong>is</strong> maximum likelihood estimation.</p>
+    <p><strong>Information.</strong> $-\log p$ is the nats of surprise in an event you gave probability $p$ (<a href="information-theory.html">chapter 7</a>), so cross-entropy charges your <em>surprise at the truth</em>: a confidently wrong model is infinitely surprised and pays accordingly.</p>
   </div>
 
   <div class="viz">
@@ -639,7 +629,7 @@
 
   <h3>7.3 Training it — the gradient</h3>
 
-  <p>To run <a href="optimization.html">gradient descent</a> we need $\nabla_\theta J$. Derive it for a single sample first; the average comes along for free by linearity of differentiation.</p>
+  <p>To run <a href="optimization.html">gradient descent</a> we need $\nabla_\theta J$. Derive it for one sample; the average follows by linearity of differentiation.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p>Fix one sample $(x, y)$ and write $z = \theta^\top x$, $\hat y = \sigma(z)$. The per-sample loss is</p>
@@ -672,16 +662,16 @@
   </div>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Look at how clean that is. Every $\log$, every $e$, every $\sigma'$ has cancelled. What is left is</p>
+    <p>Every $\log$, every $e$, every $\sigma'$ has cancelled. What is left is</p>
     $$ \nabla_\theta J = \frac{1}{N}\sum_i (\text{prediction}_i - \text{truth}_i)\cdot x^{(i)} $$
-    <p>— literally "average the feature vectors, weighted by how wrong you were on each." Compare it with the linear-regression gradient from <a href="linear-regression.html">chapter 8</a>:</p>
+    <p>— "average the feature vectors, weighted by how wrong you were." Compare the linear-regression gradient of <a href="linear-regression.html">chapter 8</a>:</p>
     $$ \nabla_\theta J_{\text{lin}} = \frac{1}{N}\sum_i \bigl(\theta^\top x^{(i)} - y^{(i)}\bigr)x^{(i)} \qquad\text{vs}\qquad \nabla_\theta J_{\text{log}} = \frac{1}{N}\sum_i \bigl(\sigma(\theta^\top x^{(i)}) - y^{(i)}\bigr)x^{(i)} $$
-    <p><strong>Identical form.</strong> The only difference is that the prediction passes through $\sigma$. This is not a coincidence — it is a general property of the exponential family, of which both models are members. <span class="pill">beyond syllabus</span></p>
+    <p><strong>Identical form</strong>, the only difference being that the prediction passes through $\sigma$ — a general property of the exponential family. <span class="pill">beyond syllabus</span></p>
   </div>
 
-  <p>And note what this gradient does <em>not</em> have: the $\sigma'$ factor that crippled squared loss. Consider again the confidently-wrong point ($y=1$, $\hat y = 0.001$). The gradient contribution is $(0.001 - 1)x = -0.999\,x$ — essentially full strength. A confidently-<em>right</em> point ($y=1$, $\hat y = 0.999$) contributes $-0.001\,x$ — essentially nothing. <strong>The loss and the model were designed together so that the saturation cancels exactly.</strong> That is also the reason the far-away point at $x=10$ in Figure B left the logistic fit unchanged.</p>
+  <p>Note what this gradient does <em>not</em> have: the $\sigma'$ factor that crippled squared loss. The confidently-wrong point ($y=1$, $\hat y = 0.001$) contributes $(0.001-1)x = -0.999\,x$, essentially full strength; a confidently-<em>right</em> point ($\hat y = 0.999$) contributes $-0.001\,x$, essentially nothing. <strong>The loss and the model were designed together so the saturation cancels exactly</strong> — which is why Figure B's far-away point left the logistic fit unchanged.</p>
 
-  <p>This gradient is exactly the lecture's $\nabla_\theta J^{(i)}(\theta) = \bigl(\hat p^{(i)}_\theta - y^{(i)}\bigr)x^{(i)}$. The lecture then asks the question that matters before running GD: <em>linear regression's objective was a parabola, so GD got close to the optimum — but this is not a parabola. So now what?</em> §7.5 answers it.</p>
+  <p>This is the lecture's $\nabla_\theta J^{(i)}(\theta) = \bigl(\hat p^{(i)}_\theta - y^{(i)}\bigr)x^{(i)}$. One question remains before running GD: linear regression's objective was a parabola — this is not, so now what?</p>
 
   <h3>7.4 There is no closed form</h3>
 
@@ -689,16 +679,16 @@
 
   $$ \sum_{i=1}^{N}\sigma\bigl(\theta^\top x^{(i)}\bigr)\,x^{(i)} \;=\; \sum_{i=1}^{N} y^{(i)}x^{(i)} . $$
 
-  <p>In linear regression the analogous step gave $X^\top X\theta = X^\top y$ — <em>linear</em> in $\theta$, so you invert a matrix and you are done. Here $\theta$ is trapped inside $\sigma$, i.e. inside an exponential. The equation is transcendental and has no solution in elementary functions. There is <strong>no normal equation for logistic regression</strong>.</p>
+  <p>In linear regression the same step gave $X^\top X\theta = X^\top y$ — <em>linear</em> in $\theta$, so you invert a matrix and stop. Here $\theta$ is trapped inside an exponential, the equation is transcendental, and there is <strong>no normal equation for logistic regression</strong>.</p>
 
-  <p>So you iterate. Since $J$ is convex and differentiable, <a href="optimization.html">gradient descent</a> is guaranteed to find the global minimum given a small enough step size:</p>
+  <p>So you iterate. $J$ is convex and differentiable, so <a href="optimization.html">gradient descent</a> finds the global minimum given a small enough step size:</p>
 
   <pre><code>θ ← 0                                   # or small random values
 repeat until converged:
     g ← (1/N) Σ_i ( σ(θᵀx⁽ⁱ⁾) − y⁽ⁱ⁾ ) x⁽ⁱ⁾     # full-batch gradient
     θ ← θ − α·g                         # α is the learning rate</code></pre>
 
-  <p>and for large $N$ you use <a href="optimization.html">stochastic gradient descent</a> instead — replace the sum over all $N$ samples with a sum over one sample (or a minibatch) chosen at random. The gradient formula is unchanged; only the set you average over shrinks. Everything you learned in chapter 9 about learning rates, convergence and minibatches transfers verbatim.</p>
+  <p>For large $N$ use <a href="optimization.html">stochastic gradient descent</a>: the same formula, averaged over one random sample or minibatch instead of all $N$. Everything from chapter 9 transfers verbatim.</p>
 
   <div class="viz">
     <div class="viz-title">Figure E — fit the model yourself (the centrepiece)</div>
@@ -799,16 +789,16 @@ repeat until converged:
 
   <h3 id="convexity-sub">7.5 Convexity: why GD still finds the global minimum</h3>
 
-  <p>Gradient descent only ever looks downhill locally. On a bumpy surface it can settle in a dent that isn't the lowest point (<a href="optimization.html">chapter 9</a>, local vs global minima). What made linear regression safe was not "being a parabola" as such — it was being <strong>bowl-shaped</strong>. Convexity is the precise version of "bowl-shaped".</p>
+  <p>Gradient descent looks downhill only locally, so on a bumpy surface it can settle in a dent that is not the lowest point (<a href="optimization.html">chapter 9</a>). What made linear regression safe was being <strong>bowl-shaped</strong>; convexity is the precise version of that.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>$f:\R\to\R$ is <strong>convex</strong> if the chord joining any two points on its graph never goes below the graph:</p>
     $$ f\bigl(\lambda z_1 + (1-\lambda) z_2\bigr) \;\le\; \lambda f(z_1) + (1-\lambda) f(z_2) \qquad \forall\, z_1, z_2 \in \R,\ \lambda\in[0,1]. $$
-    <p>Read it left to right: $\lambda z_1 + (1-\lambda)z_2$ is a point <em>between</em> $z_1$ and $z_2$ (it is $z_2$ at $\lambda=0$, $z_1$ at $\lambda=1$); the left side is the <em>function</em> there; the right side is the same blend of the two endpoint <em>values</em> — the height of the chord. For twice-differentiable $f$ an equivalent test is $f''(z) \ge 0$ for all $z$: the slope never decreases. Both definitions extend to $f:\R^d \to \R$, with $f''$ replaced by the Hessian matrix (it must be positive semi-definite).</p>
+    <p>Left to right: $\lambda z_1 + (1-\lambda)z_2$ is a point <em>between</em> $z_1$ and $z_2$ ($z_2$ at $\lambda=0$, $z_1$ at $\lambda=1$); the left side is the <em>function</em> there, the right side the same blend of the endpoint <em>values</em> — the height of the chord. For twice-differentiable $f$ the equivalent test is $f''(z) \ge 0$ everywhere: the slope never decreases. Both forms extend to $f:\R^d\to\R$, with $f''$ replaced by the Hessian, which must be positive semi-definite.</p>
   </div>
 
   <div class="box key"><span class="label">Key idea — the property that matters</span>
-    <p><strong>For a convex function, every local minimum is a global minimum.</strong> Why: suppose $z_1$ were a local minimum but some $z_2$ had $f(z_2) &lt; f(z_1)$. Points on the segment just next to $z_1$ lie under the chord from $(z_1, f(z_1))$ to $(z_2, f(z_2))$, which slopes <em>downward</em> from $z_1$ — so they are strictly lower than $f(z_1)$ arbitrarily close to $z_1$, contradicting "local minimum". So GD/SGD, which finds local minima, finds the global one.</p>
+    <p><strong>For a convex function, every local minimum is a global minimum.</strong> Suppose $z_1$ were a local minimum but $f(z_2) &lt; f(z_1)$ for some $z_2$. Points on the segment just next to $z_1$ lie under the chord from $(z_1, f(z_1))$ to $(z_2, f(z_2))$, which slopes <em>downward</em> from $z_1$ — so they are strictly lower than $f(z_1)$ arbitrarily close to it, contradicting "local minimum". Hence GD/SGD, which find local minima, find the global one.</p>
   </div>
 
   <div class="viz">
@@ -829,7 +819,7 @@ repeat until converged:
   </div>
 
   <div class="box proof"><span class="label">Proof — the lecture's exercise: logistic ERM is convex (scalar case)</span>
-    <p>Take $\mathcal X = \R$, parameters $(\omega, b)$, and one sample $(x, y)$. Write $z = \omega x + b$ and $\hat p = \sigma(z)$. It is enough to show one term is convex, because <strong>a sum of convex functions is convex</strong> (add the chord inequalities term by term).</p>
+    <p>Take $\mathcal X = \R$, parameters $(\omega, b)$, one sample $(x, y)$, $z = \omega x + b$, $\hat p = \sigma(z)$. One term suffices, because <strong>a sum of convex functions is convex</strong> (add the chord inequalities term by term).</p>
     <p><strong>Step 1 — rewrite the loss without $\hat p$.</strong> Since $\frac{1}{\sigma(z)} = 1+e^{-z}$ and $\frac{1}{1-\sigma(z)} = 1 + e^{z}$,</p>
     $$ \ell = y\log(1+e^{-z}) + (1-y)\log(1+e^{z}). $$
     <p><strong>Step 2 — first derivative in $z$.</strong> $\frac{d}{dz}\log(1+e^{-z}) = \frac{-e^{-z}}{1+e^{-z}} = -(1-\sigma(z))$ and $\frac{d}{dz}\log(1+e^{z}) = \frac{e^{z}}{1+e^{z}} = \sigma(z)$. So</p>
@@ -843,7 +833,7 @@ repeat until converged:
   </div>
 
   <div class="box intuition"><span class="label">Intuition — where the convexity comes from</span>
-    <p>The loss is "a convex function ($\log(1+e^{\pm z})$, a softened hinge) of a linear function of the parameters". Plugging a linear map into a convex function keeps it convex. Squared loss fails because $(y - \sigma(z))^2$ is <em>not</em> convex in $z$ — the sigmoid's flattening bends it the wrong way. That is the §7.1 counterexample, seen from the other side.</p>
+    <p>The loss is a convex function ($\log(1+e^{\pm z})$, a softened hinge) <em>of a linear function</em> of the parameters, and composing a linear map inside a convex function keeps it convex. Squared loss fails because $(y-\sigma(z))^2$ is not convex in $z$: the sigmoid's flattening bends it the wrong way.</p>
   </div>
 
   <div class="quiz" data-answer="2">
@@ -857,11 +847,11 @@ repeat until converged:
 
   <h2 id="multiclass">8. More than two classes: softmax regression</h2>
 
-  <p>The notes' third promise. Binary logistic regression outputs one number. For $K$ classes we want a whole distribution, $\hat y_1,\dots,\hat y_K$ with $\hat y_k \ge 0$ and $\sum_k \hat y_k = 1$. Give each class its own parameter vector $\theta_k \in \R^M$, compute $K$ scores $\theta_k^\top x$, and normalise them with the <strong>softmax</strong>:</p>
+  <p>For $K$ classes we want a distribution: $\hat y_k \ge 0$ with $\sum_k \hat y_k = 1$. Give each class a parameter vector $\theta_k \in \R^M$, compute the $K$ scores $\theta_k^\top x$, and normalise with the <strong>softmax</strong>:</p>
 
   <div class="box defn"><span class="label">Definition</span>
     $$ \hat y_k \;=\; P(Y = k \mid x) \;=\; \frac{\exp\bigl(\theta_k^\top x\bigr)}{\sum_{j=1}^{K}\exp\bigl(\theta_j^\top x\bigr)} $$
-    <p>$\exp$ makes every score positive; dividing by the sum makes them add to $1$. So the output really is a probability distribution over the $K$ classes, by construction.</p>
+    <p>$\exp$ makes every score positive and dividing by the sum makes them add to $1$, so the output is a distribution over the $K$ classes by construction.</p>
   </div>
 
   <div class="box proof"><span class="label">Proof</span>
@@ -869,30 +859,30 @@ repeat until converged:
     $$ \hat y_1 = \frac{e^{\theta_1^\top x}}{e^{\theta_1^\top x} + e^{\theta_0^\top x}} . $$
     <p>Divide numerator and denominator by $e^{\theta_1^\top x}$ (non-zero, so legal):</p>
     $$ \hat y_1 = \frac{1}{1 + e^{\theta_0^\top x - \theta_1^\top x}} = \frac{1}{1 + e^{-(\theta_1 - \theta_0)^\top x}} = \sigma\bigl((\theta_1-\theta_0)^\top x\bigr). \qquad\blacksquare $$
-    <p>This is the lecture's exercise ("set $K=2$ and let $\theta = \theta_1 - \theta_2$"), with the second class indexed $0$ here instead of $2$. So binary logistic regression is the $K=2$ softmax with $\theta = \theta_1 - \theta_0$. Only the <em>difference</em> of the two parameter vectors is identifiable, which is why two classes need one vector, not two — and in general why softmax has $K$ vectors but only $K-1$ degrees of freedom (adding a constant vector to every $\theta_k$ cancels top and bottom and leaves all predictions unchanged).</p>
+    <p>This is the lecture's exercise ("set $K=2$ and let $\theta = \theta_1 - \theta_2$"), with the second class indexed $0$ here. Only the <em>difference</em> of the two parameter vectors is identifiable, which is why two classes need one vector and not two — and in general why softmax has $K$ vectors but $K-1$ degrees of freedom: adding a constant vector to every $\theta_k$ cancels top and bottom.</p>
   </div>
 
   <p>The loss generalises the same way. With the true class $y \in \{1,\dots,K\}$, <strong>multi-class cross-entropy</strong> is</p>
 
   $$ \ell(y, \hat y) = -\sum_{k=1}^{K}\1\{y = k\}\log\hat y_k \;=\; -\log \hat y_{\,y} $$
 
-  <p>where $\1\{\cdot\}$ is the indicator (1 if true, 0 otherwise). Same sentence as before: <em>minus the log of the probability you gave the true class</em>. The binary formula is the $K=2$ case written out. And the gradient keeps its shape too:</p>
+  <p>where $\1\{\cdot\}$ is the indicator — the same sentence as before, <em>minus the log of the probability you gave the true class</em>. The gradient keeps its shape:</p>
 
   $$ \nabla_{\theta_k} J = \frac{1}{N}\sum_{i=1}^{N}\Bigl(\hat y^{(i)}_k - \1\{y^{(i)} = k\}\Bigr)x^{(i)} $$
 
-  <p>— prediction minus truth, times the input, exactly as in §7.3, now once per class. The lecture names it <strong>softmax regression</strong> or <strong>multinomial logistic regression</strong>, and one trains it by ERM under this loss and model class. <span class="pill">beyond syllabus</span> This model is also called softmax regression, multinomial logistic regression, or (in a neural network) "a linear layer with a softmax output" — it is the last layer of essentially every classifier you will ever train.</p>
+  <p>— prediction minus truth, times the input, exactly as in §7.3, now once per class. Under ERM with this loss it is called <strong>softmax regression</strong> or <strong>multinomial logistic regression</strong>; in a neural network it is "a linear layer with a softmax output".</p>
 
   <h2 id="mistakes">9. Common mistakes</h2>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>1. "Logistic regression is regression, so it predicts a number."</strong> No — it is a <strong>classification</strong> model. It is the model this chapter built to solve a classification problem, its labels are in $\{0,1\}$, and its output is used to choose a class.</p>
-    <p>So why the name? Because of §6. The model performs a <em>linear regression on the log-odds</em>: $\log\frac{p}{1-p} = \theta^\top x$ is a bona fide linear regression, whose response variable happens to be the logit of a probability rather than an observed number. The name records the mathematics of how the model was originally derived in 19th-century statistics, not the task it is used for. It is a historical label, and it misleads roughly one student per semester into fitting it with squared loss and wondering why nothing works.</p>
+    <p><strong>1. "Logistic regression is regression, so it predicts a number."</strong> No — it is a <strong>classification</strong> model: labels in $\{0,1\}$, output used to choose a class.</p>
+    <p>The name comes from §6: $\log\frac{p}{1-p} = \theta^\top x$ is a bona fide <em>linear regression on the log-odds</em>, whose response happens to be a logit rather than an observed number. The name records the mathematics, not the task — and it misleads about one student a semester into fitting it with squared loss and wondering why nothing works.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>2. Always thresholding at $0.5$.</strong> Nothing in the mathematics says $0.5$ is the right operating point; it is just the value that makes the decision rule coincide with $\theta^\top x \ge 0$. Two situations break it:</p>
+    <p><strong>2. Always thresholding at $0.5$.</strong> Nothing says $0.5$ is the right operating point; it is just the value making the rule coincide with $\theta^\top x \ge 0$. Two situations break it:</p>
     <ul>
-      <li><strong>Class imbalance.</strong> If only $1\%$ of samples are class 1, a well-fitted model may never output $h(x) &gt; 0.5$ at all, and thresholding at $0.5$ gives you a classifier that says "class 0" to everything — $99\%$ accurate and completely useless.</li>
+      <li><strong>Class imbalance.</strong> If only $1\%$ of samples are class 1, a well-fitted model may never output $h(x) &gt; 0.5$, so thresholding there says "class 0" to everything: $99\%$ accurate, useless.</li>
       <li><strong>Asymmetric loss.</strong> Recall the asymmetric loss table from <a href="ml-formulation.html">chapter 5</a>: if a false negative costs $C_{\text{FN}}$ and a false positive costs $C_{\text{FP}}$, the expected-cost-minimising rule is to predict class 1 when $h(x)\,C_{\text{FN}} &gt; (1-h(x))\,C_{\text{FP}}$, i.e. when</li>
     </ul>
     $$ h(x) \;&gt;\; \frac{C_{\text{FP}}}{C_{\text{FP}} + C_{\text{FN}}} . $$
@@ -900,13 +890,13 @@ repeat until converged:
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>3. Forgetting the bias term.</strong> If you write $h(x) = \sigma(w^\top \tilde x)$ with no $\theta_0$, the decision boundary is $w^\top \tilde x = 0$, a hyperplane <em>forced through the origin</em>. Your model can rotate the boundary but never translate it. On our 1-D dataset that means the boundary is stuck at $x = 0$ instead of $x = 1.05$, and five points are misclassified no matter what $w$ you pick.</p>
-    <p>In practice the bug looks like this: you build the design matrix from your features, forget to prepend the column of ones (the same column <a href="feature-engineering.html">chapter 10</a> added to $\Phi$), and get an accuracy that is stubbornly mediocre with no error message. Always check that $\theta$ has $M+1$ entries when you have $M$ features.</p>
+    <p><strong>3. Forgetting the bias term.</strong> Write $h(x) = \sigma(w^\top \tilde x)$ with no $\theta_0$ and the boundary $w^\top\tilde x = 0$ is <em>forced through the origin</em>: the model can rotate it but never translate it. On our 1-D dataset it is stuck at $x = 0$ instead of $x = 1.05$, and five points are misclassified whatever $w$ you pick.</p>
+    <p>The bug: you build the design matrix and forget to prepend the column of ones (<a href="feature-engineering.html">chapter 10</a>'s column), then get stubbornly mediocre accuracy with no error message. Check that $\theta$ has $M+1$ entries for $M$ features.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p><strong>4. Assuming $\sigma(\theta^\top x)$ is a <em>calibrated</em> probability.</strong> The output is a number in $(0,1)$ and we <em>interpret</em> it as $P(Y=1\mid x)$. That interpretation is an assumption about the model class — namely that the true log-odds really are linear in $x$. When that is roughly right (and the training loss really is cross-entropy, which is what pushes the outputs toward the empirical rates), the numbers come out well calibrated. When it is not, they can be systematically off even while the <em>rankings</em> and the accuracy are fine.</p>
-    <p><strong>How to check.</strong> Bin your held-out predictions — say all samples with $h(x) \in [0.7, 0.8)$ — and compute what fraction of them were actually class 1. Calibrated means the fraction is about $0.75$. Plot bin-midpoint against observed frequency (a <em>reliability diagram</em>); calibrated is the diagonal. Regularisation, class rebalancing, and any tree-ensemble or neural model all routinely distort this. <span class="pill">beyond syllabus</span> Post-hoc fixes exist (Platt scaling, isotonic regression) but the first step is simply to look.</p>
+    <p><strong>4. Assuming $\sigma(\theta^\top x)$ is a <em>calibrated</em> probability.</strong> The output is a number in $(0,1)$ that we <em>interpret</em> as $P(Y=1\mid x)$, which assumes the true log-odds really are linear in $x$. When that is roughly right (and the loss really is cross-entropy, which pushes outputs toward the empirical rates), the numbers come out well calibrated; when it is not, they can be systematically off while the <em>rankings</em> and the accuracy stay fine.</p>
+    <p><strong>How to check.</strong> Bin held-out predictions — say all samples with $h(x)\in[0.7,0.8)$ — and compute what fraction were actually class 1; calibrated means about $0.75$. Plotting bin midpoint against observed frequency (a <em>reliability diagram</em>) should give the diagonal. <span class="pill">beyond syllabus</span> Post-hoc fixes exist (Platt scaling, isotonic regression), but the first step is to look.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
@@ -915,19 +905,14 @@ repeat until converged:
 
   <h2 id="recap">10. Recap</h2>
 
+  <p>Every formula and condition is in the Essentials box at the top. Five things worth saying once more:</p>
+
   <ol>
-    <li>A hard class label tells you nothing about <strong>strength of belief</strong>, so we want $P(Y = k \mid x)$ instead.</li>
-    <li>Decision trees classify non-linearly; logistic regression classifies while staying a <strong>linear model</strong>, keeping interpretable coefficients and easy optimisation.</li>
-    <li>Plain linear regression on $\{0,1\}$ labels produces outputs outside $[0,1]$ and is dragged around by far-away points.</li>
-    <li>Thresholding fixes the outputs but makes the model absurdly certain and — fatally — gives a <strong>derivative of zero almost everywhere</strong>, so gradient descent cannot move.</li>
-    <li>The logistic function $\sigma(z) = 1/(1+e^{-z})$ maps $\R$ smoothly onto $(0,1)$, with $\sigma(0) = 0.5$, asymptotes at $0$ and $1$, $\sigma(-z) = 1-\sigma(z)$, and the crucial identity $\sigma' = \sigma(1-\sigma)$.</li>
-    <li>The model is $h(x) = \sigma(\theta^\top x) = P(Y=1\mid x)$, with $P(Y=0\mid x) = 1-h(x)$.</li>
-    <li>$h(x)\ge 0.5 \iff \theta^\top x \ge 0$, a hyperplane — so it is a linear classifier. The direction of $w$ orients the boundary; $\|w\|$ sets the sharpness; $\theta_0$ slides it.</li>
-    <li>$\log\frac{h}{1-h} = \theta^\top x$: a unit increase in $x_j$ multiplies the odds by $e^{\theta_j}$.</li>
-    <li>Train with cross-entropy $\ell = -[y\log\hat y + (1-y)\log(1-\hat y)]$, not squared loss (non-convex, vanishing gradients).</li>
-    <li>$\nabla_\theta J = \frac{1}{N}\sum_i(\sigma(\theta^\top x^{(i)}) - y^{(i)})x^{(i)}$ — same form as linear regression. No closed form, so run <a href="optimization.html">GD or SGD</a>.</li>
-    <li>The objective is <strong>convex</strong> (chord never below the graph; $\ell''(z) = \sigma(1-\sigma) \ge 0$), so every local minimum is global and GD/SGD gets close to the true optimum.</li>
-    <li>$K$ classes: softmax $\hat y_k = e^{\theta_k^\top x}/\sum_j e^{\theta_j^\top x}$, which is the sigmoid when $K=2$, with multi-class cross-entropy $-\log\hat y_y$.</li>
+    <li>One requirement drives the chapter: <strong>the loss must have a usable slope in the parameters.</strong> That is what kills the threshold and chooses the sigmoid.</li>
+    <li>$\sigma' = \sigma(1-\sigma)$ is the load-bearing identity: it makes the gradient cancel down to $(\hat y - y)x$, and it is why confidently-correct points stop voting.</li>
+    <li>Non-linear in $x$, linear as a <em>classifier</em>: a monotone squashing cannot move a point across $\theta^\top x = 0$.</li>
+    <li>Cross-entropy, not squared loss: squared loss is non-convex here, and its gradient vanishes exactly where the model is most wrong.</li>
+    <li>Convexity licenses gradient descent — every local minimum is global — and there is no closed form, so iterating is the only option.</li>
   </ol>
 
   <div class="quiz" data-answer="3">

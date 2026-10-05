@@ -16,11 +16,27 @@
 
   <div data-toc></div>
 
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>How to build a decision tree from labelled examples by hand, and why the error-rate splitting criterion has to be thrown away.</p>
+    <ul>
+      <li><strong>Decision tree</strong> — internal nodes split on an attribute $x_j$, leaves carry labels; inference walks root to leaf, reading one attribute per node. Benefit: human interpretable. Cost: accuracy on hard, non-axis-aligned problems.</li>
+      <li><strong>Decision stump</strong> — a tree with exactly one split. Two free choices: which attribute, and which label in each leaf. With $d$ binary attributes there are only $4d$ stumps, so brute force works.</li>
+      <li><strong>Majority vote</strong> — a leaf predicts $\hat y = \argmax_{k \in \Y} \sum_i \1\!\left(y^{(i)} = k\right)$. A constant predictor $c$ makes $n - n_c$ mistakes, so majority vote provably minimises leaf mistakes and the leaf labels are forced once the structure is fixed. State a tie-break rule (this guide: predict $1$).</li>
+      <li><strong>Construction</strong> — <code>DT(S, A)</code>: if $A = \emptyset$ or all of $S$ shares a label, return a leaf with the majority vote; else take $b = $ <code>BestAttribute</code>$(S,A)$ and recurse on $\{x_b = 1\}$ and $\{x_b = 0\}$ with $A \setminus \{b\}$. $A$ shrinks every level, so depth $\le d$ and the recursion terminates.</li>
+      <li><strong>BestAttribute v1</strong> — minimise the stump's training error: split, majority-vote each child, add the mistakes. On the poll dataset $x_2$ scores $1/8$ against $3/8$ for $x_1$ and $x_3$; one further split on $x_1$ reaches zero training error.</li>
+      <li><strong>Classification error rate</strong> — $\text{err} = \frac{1}{N}\sum_i \1\!\left(y^{(i)} \ne \hat y^{(i)}\right)$: the empirical risk $\hat R(h)$ under zero-one loss. A fine way to <em>evaluate</em> a finished tree, a bad way to <em>choose</em> a split.</li>
+      <li><strong>Greedy is suboptimal</strong> — a one-step-lookahead approximation to ERM, used because the smallest consistent tree is NP-hard while greedy costs $O(Nd)$ per node. XOR defeats <em>every</em> one-step criterion (error rate and mutual information both score 0), yet the recursion still reaches a perfect depth-2 tree — unless a zero-gain early stop quits at the root.</li>
+      <li><strong>Boundaries are axis-aligned staircases</strong> — each node tests one coordinate against a constant, so each leaf owns an intersection of axis-aligned half-spaces (a box). A diagonal rule can only be approximated, at roughly $O(1/\varepsilon)$ splits, each thinning the data.</li>
+      <li><strong>Stopping criteria</strong> — $A = \emptyset$; pure node; gain threshold (dangerous — blind to XOR); depth limit; minimum leaf size. They exist because a tree grown to purity memorises the training set.</li>
+      <li><strong>Why error rate is broken as a criterion</strong> — it sees only which class wins, not by how much. On the 8-row $(y,a,b)$ dataset no split, splitting on $a$ and splitting on $b$ all score $2/8$, while $I(Y;a) = 0$ and $I(Y;b) = 0.311$ bits correctly prefer $b$.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="apartment">The apartment problem</h2>
 
-  <p>You are moving to Pittsburgh and there are four hundred apartments listed. You cannot tour four hundred apartments. You need a cheap, fast rule that says <em>go see this one</em> or <em>skip it</em>, and you need to be able to explain that rule to your roommate.</p>
-
-  <p>So you write one down. Not as a formula — as a sequence of questions, each one narrowing things down:</p>
+  <p>Four hundred apartments are listed and you cannot tour four hundred. You need a cheap rule that says <em>go see this one</em> or <em>skip it</em>, explainable to your roommate. So you write one down — not as a formula, but as a sequence of questions:</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1 · The hand-written apartment tree</div>
@@ -78,7 +94,7 @@
     <div class="caption">What to notice: nothing here is symmetric. The <em>No</em> side of "Rent low?" is willing to accept an expensive place only if it is really close to campus (1 mile); the <em>Yes</em> side, having already saved money on rent, is far more forgiving — it will walk 2 miles, or take a bus. The tree encodes that trade-off without ever writing a utility function.</div>
   </div>
 
-  <p>Read it out loud and it is a policy: <em>if the rent is low and the deposit is low, go. If the rent is low, the deposit is high, but you're within 2 miles, go. If the rent is high, you only bother if it's within a mile.</em> That is a <strong>decision tree</strong>.</p>
+  <p>Read it out loud and it is a policy: <em>if the rent is low and the deposit is low, go; if the rent is low, the deposit high, but you are within 2 miles, go; if the rent is high, you only bother within a mile.</em> That is a <strong>decision tree</strong>.</p>
 
   <h2 id="anatomy">Anatomy, and what interpretability actually buys you</h2>
 
@@ -90,35 +106,15 @@
     </ul>
   </div>
 
-  <p>The professor flags one benefit in capital letters, and it is the right one to flag:</p>
-
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Major benefit: human interpretable.</strong> You can print a decision tree on one page, hand it to a person with no mathematical training, and they can both <em>execute</em> it and <em>argue with it</em>.</p>
+    <p><strong>Major benefit: human interpretable.</strong> You can print a decision tree on one page, hand it to someone with no mathematical training, and they can both <em>execute</em> it and <em>argue with it</em>.</p>
   </div>
 
-  <p>Be honest about what that is worth, because "interpretable" gets used as a magic word. Here is the real ledger.</p>
-
-  <div class="grid2">
-    <div class="card">
-      <div class="kicker">What interpretability buys</div>
-      <p style="margin-top:8px">You can <strong>audit</strong> the model: "it rejected this apartment because the deposit was high and it's 2.3 miles out" is a complete, checkable explanation. You can <strong>debug</strong> it: a nonsense split is visible instantly. You can <strong>deploy it legally</strong> in domains (credit, medicine) where a decision must be justified. And you can <strong>edit it by hand</strong> — bolt on a rule the data never saw.</p>
-    </div>
-    <div class="card">
-      <div class="kicker">What it costs</div>
-      <p style="margin-top:8px">Accuracy, on hard problems. A neural network for image classification has millions of parameters and no human-readable story; a tree that tried to classify raw pixels with "is pixel 4,117 bright?" would be both huge and terrible. Trees also carve feature space into <em>axis-aligned boxes</em> (see <a href="#real-valued">below</a>), so a genuinely diagonal rule costs them a staircase of splits.</p>
-    </div>
-  </div>
-
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>A decision tree is a <strong>triage flowchart</strong> taped to the wall of an emergency room. A neural network is an <strong>experienced attending physician</strong>. The attending is usually more accurate. But when the flowchart is wrong you can find the box and fix it, and when the attending is wrong all you can do is ask them to explain, and hope the explanation is the actual reason.</p>
-    <p class="tiny muted" style="margin-bottom:0">Where the analogy breaks: the flowchart on the wall was written by a committee of experts. The whole point of this chapter is that we are going to <em>learn</em> the flowchart from data instead.</p>
-  </div>
+  <p>Concretely, you can <strong>audit</strong> it ("rejected because the deposit was high and it's 2.3 miles out"), <strong>debug</strong> it, <strong>deploy it legally</strong> where decisions must be justified, and <strong>edit it by hand</strong>. The cost is accuracy on hard problems: trees carve feature space into <em>axis-aligned boxes</em> (see <a href="#real-valued">below</a>), so a diagonal rule costs a staircase of splits.</p>
 
   <h2 id="rules-vs-learning">Rule-based vs. learned: the actual ML question</h2>
 
-  <p>Look again at Figure 1 and ask: where did it come from? You made it up. You already knew that rent matters more than bus access, and you guessed the thresholds. That is a <strong>rule-based approach</strong>, and it is perfectly legitimate when you have the rules.</p>
-
-  <p>The notes' objection is two-part, and both halves matter:</p>
+  <p>Where did Figure 1 come from? You made it up: you already knew rent matters more than bus access, and you guessed the thresholds. That is a <strong>rule-based approach</strong>, legitimate when you have the rules. The notes' objection is two-part:</p>
 
   <ul>
     <li><strong>You often don't have the rules.</strong> Nobody can write down, from first principles, which combination of 40 blood-panel numbers indicates sepsis.</li>
@@ -132,7 +128,7 @@
 
   <h2 id="examples">What the examples comprise</h2>
 
-  <p>Before you can learn anything you have to say precisely what one "example" is. In the apartment problem:</p>
+  <p>First say precisely what one "example" is. In the apartment problem:</p>
 
   <ul>
     <li><strong>Each example is one prospective apartment.</strong></li>
@@ -145,22 +141,16 @@
   $$N = \#\text{ prospective apartments},\qquad \X = \{\text{Yes},\text{No}\}^5 = \{0,1\}^5, \qquad \Y = \{Y, N\} = \{0,1\}$$
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>Read those three lines slowly, because every symbol is doing work.</p>
-    <ul style="margin-bottom:0">
-      <li>$N$ is a <em>count of examples</em> (rows of your table), not a count of attributes.</li>
-      <li>$\X$ is the <strong>input space</strong> — the set of all <em>possible</em> $x$, not the set you happen to have. $\{0,1\}^5$ has $2^5 = 32$ elements; your dataset might contain 12 apartments, some repeated.</li>
-      <li>The superscript in $x^{(i)}$ is an <strong>index, not a power</strong>. $x^{(3)}$ is the third apartment. $x^{(3)}_2$ is the third apartment's answer to question 2. The subscript indexes attributes, the parenthesised superscript indexes examples.</li>
-      <li>Encoding Yes as $1$ and No as $0$ is a <em>choice</em>. Nothing breaks if you flip it; the learned tree just flips its Yes/No branches.</li>
-    </ul>
+    <p>$N$ counts <em>examples</em> (rows), not attributes. $\X$ is the <strong>input space</strong>: all <em>possible</em> $x$, not the ones you have — $\{0,1\}^5$ has $2^5 = 32$ elements while your dataset might hold 12 apartments, some repeated. And the superscript in $x^{(i)}$ is an <strong>index, not a power</strong>: $x^{(3)}_2$ is the third apartment's answer to question 2, subscript for attributes, parenthesised superscript for examples.</p>
   </div>
 
-  <p>Having fixed the concrete problem, generalise. For the rest of the chapter:</p>
+  <p>Now generalise. For the rest of the chapter:</p>
 
   $$\X = \{0,1\}^d \ \ (d \text{ binary attributes}), \qquad \Y = \{0,1\}$$
 
   <h3>Inference: running a new point down the tree</h3>
 
-  <p>Once you have a tree, prediction is trivial and that is the point. Given a new apartment $x^{(\mathrm{new})} \in \X$, start at the root, evaluate the question there, follow the matching branch, repeat, and output the label of whatever leaf you land in.</p>
+  <p>Prediction is trivial, and that is the point. Given a new apartment $x^{(\mathrm{new})} \in \X$: start at the root, answer the question, follow the matching branch, repeat, and output the label of the leaf you land in.</p>
 
   <div class="box example"><span class="label">Example</span>
     <p>Take $x^{(\mathrm{new})} = (\text{rent low}=\text{Yes},\ \text{deposit low}=\text{No},\ \text{1mi}=\text{No},\ \text{2mi}=\text{No},\ \text{bus}=\text{Yes})$.</p>
@@ -178,7 +168,7 @@
 
   <h2 id="stump">The key building block: the decision stump</h2>
 
-  <p>Trees are recursive, so we should start with the smallest possible tree that still does something. The notes call it the key building block:</p>
+  <p>Trees are recursive, so start with the smallest tree that still does something — the notes' key building block:</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A <strong>decision stump</strong> is a decision tree with exactly one split: a single internal node "Is a certain attribute $= 1$?" branching straight into two leaves, each carrying a chosen output label.</p>
@@ -218,7 +208,7 @@
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Majority vote.</strong> Given a leaf's subset of training points, each with a discrete label $y^{(i)} \in \Y$:</p>
     $$\hat y \;=\; \argmax_{k \in \Y} \; \sum_i \1\!\left(y^{(i)} = k\right)$$
-    <p style="margin-bottom:0">In words, symbol by symbol: $\1(\cdot)$ is the <strong>indicator function</strong>, which is $1$ when the statement inside is true and $0$ otherwise. So $\sum_i \1(y^{(i)} = k)$ simply <strong>counts how many points in this leaf have label $k$</strong>. The $\argmax_{k}$ then returns the label $k$ with the biggest count. Put plainly: <em>the majority vote is the output class that appears most often in the training subset at that leaf.</em></p>
+    <p style="margin-bottom:0">Symbol by symbol: $\1(\cdot)$ is the <strong>indicator function</strong>, $1$ when the statement inside is true and $0$ otherwise, so $\sum_i \1(y^{(i)} = k)$ <strong>counts the points in this leaf with label $k$</strong> and $\argmax_k$ returns the label with the biggest count — <em>the class that appears most often in the leaf's training subset.</em></p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
@@ -238,7 +228,7 @@
 
   <h2 id="algorithm">The recursive construction algorithm</h2>
 
-  <p>From a stump to a tree is one idea: <em>do it again on each leaf</em>. Each leaf holds a subset of the data; run the stump procedure on that subset; repeat until a stopping criterion fires. Here is the algorithm exactly as the professor's notes state it.</p>
+  <p>From a stump to a tree is one idea: <em>do it again on each leaf</em>. Each leaf holds a subset; run the stump procedure on that subset; repeat until a stopping criterion fires. The algorithm exactly as the notes state it:</p>
 
 <pre><code>Algorithm 1  Decision Tree Construction
 
@@ -262,16 +252,12 @@
   <h3>The recursion in words, line by line</h3>
 
   <ul>
-    <li><strong>Line 2 — the two base cases.</strong> $A = \emptyset$ means you have run out of questions to ask: every attribute has already been used on the path down to here, so no further split is even possible. "All examples in $S$ have the same label" means the node is <strong>pure</strong> — splitting it cannot reduce training error below the zero it already has.</li>
-    <li><strong>Line 3 — the leaf.</strong> Majority vote, as proved above. Note it is needed even in the first base case, where $S$ may well be mixed.</li>
-    <li><strong>Line 5 — the only interesting line.</strong> <code>BestAttribute</code> is a black box for now. Swapping in different implementations of it is what distinguishes the algorithms in the literature; that is the subject of <a href="#best-attribute">the BestAttribute section</a> and all of <a href="information-theory.html">Chapter 7</a>.</li>
-    <li><strong>Lines 6&ndash;7 — the partition.</strong> Every point in $S$ goes to exactly one child, because $x_b$ is either $1$ or $0$ and never both. The two children partition $S$: $|S_{\text{left}}| + |S_{\text{right}}| = |S|$. And $b$ is removed from $A$, so the sub-problems are strictly smaller in <em>both</em> arguments — which is why the recursion terminates: depth can be at most $d$.</li>
-    <li><strong>Line 8 — assembling.</strong> The recursive calls return whole sub-trees, not labels. You hang them off the new node and return the result upward.</li>
+    <li><strong>Line 2 — the two base cases.</strong> $A = \emptyset$: every attribute on this path is used up, so no split is possible. Same label throughout $S$: the node is <strong>pure</strong> and splitting cannot beat the zero error it already has.</li>
+    <li><strong>Line 3 — the leaf.</strong> Majority vote, as proved above; needed even in the first base case, where $S$ may be mixed.</li>
+    <li><strong>Line 5 — the only interesting line.</strong> <code>BestAttribute</code> is a black box for now, and swapping implementations is what distinguishes the algorithms in the literature (see <a href="#best-attribute">below</a> and <a href="information-theory.html">Chapter 7</a>).</li>
+    <li><strong>Lines 6&ndash;7 — the partition.</strong> $x_b$ is $1$ or $0$, so every point goes to exactly one child and $|S_{\text{left}}| + |S_{\text{right}}| = |S|$. Removing $b$ from $A$ shrinks both arguments, so the recursion terminates at depth $\le d$.</li>
+    <li><strong>Line 8 — assembling.</strong> The recursive calls return sub-trees, not labels.</li>
   </ul>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>This is the same shape as every divide-and-conquer algorithm you already know. Quicksort picks a pivot and recurses on two sub-arrays; <code>DT</code> picks an <em>attribute</em> and recurses on two sub-<em>datasets</em>. The difference is that quicksort's pivot choice only affects speed, whereas <code>DT</code>'s attribute choice affects the answer. That is why <code>BestAttribute</code> gets a whole chapter of theory and quicksort's pivot rule gets a footnote.</p>
-  </div>
 
   <div class="viz">
     <div class="viz-title">Figure 3 · The call tree of DT on the 8-row dataset (the recursion, not the model)</div>
@@ -318,23 +304,21 @@
 
   <h3>A wrinkle worth naming: "Is $x_b = 1$?" vs "Is $x_b = 0$?"</h3>
 
-  <p>The pseudocode always asks <strong>"Is $x_b = 1$?"</strong> and sends the Yes group left. But the tree the notes present for the worked example asks <strong>"Is $x_2 = 0$?"</strong>. These are not different algorithms — asking "is it 0?" is the same split as asking "is it 1?" with the two branches swapped. Which phrasing you write down is cosmetic. Keep the <em>partition</em> straight and the labels will take care of themselves.</p>
+  <p>The pseudocode always asks <strong>"Is $x_b = 1$?"</strong>, while the notes' worked example asks <strong>"Is $x_2 = 0$?"</strong>. Not different algorithms: "is it 0?" is the same split with the branches swapped. The phrasing is cosmetic — keep the <em>partition</em> straight and the labels take care of themselves.</p>
 
   <h2 id="best-attribute-error">BestAttribute, version 1: minimise training error</h2>
 
-  <p>We need to fill in <code>BestAttribute</code>. The notes' first proposal is the most obvious one imaginable:</p>
+  <p>We need to fill in <code>BestAttribute</code>. The notes' first proposal is the most obvious one:</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>Pretend you are allowed <strong>only one split</strong> — i.e. you must produce a decision stump. Then ask: <em>which choice of attribute to split on (and which labels for the two resulting leaves) gives the lowest training error?</em> Pick that attribute.</p>
   </div>
 
-  <p>This is a finite search you can do by hand. For each candidate attribute $b \in A$: split $S$ into the $x_b=1$ group and the $x_b=0$ group, majority-vote each group, count the mistakes in each group, add them. The attribute with the smallest total wins.</p>
-
-  <p>The leaf labels do not need a separate search, because of the proof above: given the split, majority vote is already optimal. So "choose attribute and choose labels" collapses to "choose attribute".</p>
+  <p>A finite search you can do by hand: for each $b \in A$, split $S$ into the $x_b = 1$ and $x_b = 0$ groups, majority-vote each, add the mistakes; smallest total wins. Leaf labels need no separate search — majority vote is already optimal given the split — so "choose attribute and labels" collapses to "choose attribute".</p>
 
   <h2 id="poll">The poll example, solved completely</h2>
 
-  <p>The notes pose this exact question and then say only <em>"Answer: In poll."</em> Here is the full answer, every split, every count.</p>
+  <p>The notes pose this question and answer only <em>"In poll."</em> Here is the full answer, every split, every count.</p>
 
   <div class="box example"><span class="label">Example</span>
     <p><strong>Training data.</strong> $N = 8$, $d = 3$, all attributes and labels binary. I have added a row index $i$; the notes give only the four columns.</p>
@@ -356,7 +340,7 @@
 
   <h3>Step 0 — the root before any split</h3>
 
-  <p>Labels in $S$: rows 1, 2, 3 have $y=0$ and rows 4&ndash;8 have $y=1$. So <strong>3 zeros, 5 ones</strong>. If we refused to split at all and just majority-voted the whole dataset, we would predict $\hat y = 1$ and be wrong on the 3 zeros: a baseline training error of $3/8$. Any split has to beat that to be worth anything.</p>
+  <p>Rows 1, 2, 3 have $y=0$ and rows 4&ndash;8 have $y=1$: <strong>3 zeros, 5 ones</strong>. Majority-voting the whole dataset without splitting predicts $\hat y = 1$ and is wrong on the 3 zeros — a baseline training error of $3/8$, which any split has to beat.</p>
 
   <h3>Step 1 — try every attribute as a stump</h3>
 
@@ -388,16 +372,14 @@
   </table>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>$x_2$ is the best first split</strong>, with training error $1/8$ against $3/8$ for the other two. The reason is visible in the table: the $x_2 = 1$ side is <strong>perfectly pure</strong> — all four rows there have $y=1$ — so that entire branch is finished in one step.</p>
+    <p><strong>$x_2$ is the best first split</strong>, $1/8$ against $3/8$ for the other two, because the $x_2 = 1$ side is <strong>perfectly pure</strong> — all four rows there have $y=1$ — so that branch is finished in one step.</p>
   </div>
 
   <h3>Step 2 — recurse on the impure branch</h3>
 
-  <p>The call is <code>DT({rows 5,6,7,8}, A = {1,3})</code> on one side and <code>DT({rows 1,2,3,4}, A = {1,3})</code> on the other.</p>
+  <p>The calls are <code>DT({rows 5,6,7,8}, A = {1,3})</code> and <code>DT({rows 1,2,3,4}, A = {1,3})</code>.</p>
 
-  <p><strong>The $x_2 = 1$ branch</strong> holds rows 5, 6, 7, 8, all with $y = 1$. Line 2 of the algorithm fires: all examples share a label. Return a leaf with value $1$. Done.</p>
-
-  <p><strong>The $x_2 = 0$ branch</strong> holds rows 1, 2, 3, 4 — labels $0,0,0,1$ — which is not pure, and $A = \{1,3\}$ is not empty, so we recurse. The sub-dataset is:</p>
+  <p><strong>The $x_2 = 1$ branch</strong> holds rows 5&ndash;8, all with $y = 1$: line 2 fires, return a leaf with value $1$. <strong>The $x_2 = 0$ branch</strong> holds rows 1&ndash;4 with labels $0,0,0,1$ — not pure, and $A = \{1,3\}$ is not empty, so recurse on:</p>
 
   <table class="tight center">
     <thead><tr><th>$i$</th><th>$y$</th><th>$x_1$</th><th>$x_3$</th></tr></thead>
@@ -474,7 +456,7 @@
     </tbody>
   </table>
 
-  <p>Sum of the last column is $0$, so the error rate is $\tfrac{1}{8}\cdot 0 = 0$. The tree fits this training set perfectly. (Whether that is <em>good</em> is a different question — see <a href="#stopping">stopping criteria and overfitting</a>.)</p>
+  <p>The last column sums to $0$, so the error rate is $\tfrac{1}{8}\cdot 0 = 0$: a perfect fit to this training set. (Whether that is <em>good</em> is another question — see <a href="#stopping">stopping criteria</a>.)</p>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>What if we had been forced to split on $x_3$ first?</div>
@@ -510,7 +492,7 @@
 
   <h2 id="builder">Build the tree yourself</h2>
 
-  <p>Reading a split table is not the same as feeling it. Below, the 8 rows are live. <strong>Click any leaf</strong> to select it, then split it on an attribute and watch the counts flow into the children and the running training error drop.</p>
+  <p>Reading a split table is not the same as feeling it. The 8 rows below are live: <strong>click any leaf</strong> to select it, split it on an attribute, and watch the counts flow into the children and the training error drop.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 5 · Interactive tree builder — the poll dataset</div>
@@ -540,11 +522,7 @@
     <p>The construction algorithm is a <strong>greedy approach towards ERM</strong> (empirical risk minimisation, see <a href="ml-formulation.html">Chapter 5</a>). Greediness is <strong>suboptimal</strong> but helps <strong>computational efficiency</strong>.</p>
   </div>
 
-  <p>Unpack both halves.</p>
-
-  <p><strong>Why it is suboptimal.</strong> True ERM would say: search over <em>all</em> trees of some size and return the one with lowest training error. The greedy algorithm instead commits to the root split using a <em>one-step lookahead</em> — it judges an attribute by what it does on its own, immediately, and never reconsiders. A split that looks useless alone can be indispensable in combination.</p>
-
-  <p><strong>Why we do it anyway.</strong> Finding the smallest tree consistent with a dataset is NP-hard. Greedy costs $O(N \cdot d)$ work per node and is the difference between "trains in a second" and "does not train."</p>
+  <p><strong>Why it is suboptimal.</strong> True ERM would search over <em>all</em> trees of a given size; greedy commits to the root split on a <em>one-step lookahead</em>, judging each attribute by what it does alone and never reconsidering — and a split that looks useless alone can be indispensable in combination. <strong>Why we do it anyway:</strong> finding the smallest consistent tree is NP-hard, while greedy costs $O(N \cdot d)$ per node.</p>
 
   <h3>The canonical failure: XOR</h3>
 
@@ -565,13 +543,9 @@
     <p style="margin-bottom:0">So the one-step criterion reports that <strong>both attributes are worthless</strong>, even though the pair of them determines $y$ exactly. (The same is true of mutual information here: $I(Y;x_1) = I(Y;x_2) = 0$. XOR defeats <em>every</em> one-step-lookahead criterion, not just error rate — this is worth knowing, because students often assume entropy rescues XOR. It does not.)</p>
   </div>
 
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>Greedy search is a hiker who always walks in the locally steepest downhill direction. XOR is a landscape where the ground is perfectly flat in both compass directions from where you stand, but there is a deep valley diagonally. No single-direction probe detects it.</p>
-  </div>
-
   <h3>How the algorithm still recovers</h3>
 
-  <p>Here is the part people forget. Run the algorithm literally on XOR:</p>
+  <p>The part people forget — run the algorithm literally on XOR:</p>
 
   <ol>
     <li>At the root, all attributes tie. <code>BestAttribute</code> breaks the tie somehow — say it returns $x_1$.</li>
@@ -595,7 +569,7 @@
 
   <h2 id="evaluating">Evaluating decision trees</h2>
 
-  <p>The pre-reading asks a deceptively simple question: here are two decision trees for the Iris task — <em>which is better?</em></p>
+  <p>The pre-reading asks: here are two decision trees for the Iris task — <em>which is better?</em></p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p><strong>You cannot tell.</strong> Comparing two models by staring at them is not a thing. You need (a) <strong>data</strong> and (b) a <strong>performance measure</strong>.</p>
@@ -605,12 +579,12 @@
 
   $$\text{err} \;=\; \frac{1}{N} \sum_i \1\!\left(y^{(i)} \ne \hat y^{(i)}\right)$$
 
-  <p>Naming every symbol: $N$ is the number of examples you are evaluating on; $y^{(i)}$ is the true (measured) label of example $i$; $\hat y^{(i)} = h(x^{(i)})$ is what the tree predicts for it; $\1(\cdot)$ is again the indicator, contributing $1$ for a mismatch and $0$ for a match. The sum counts mistakes, and dividing by $N$ turns a count into a rate so datasets of different sizes are comparable.</p>
+  <p>Naming the symbols: $N$ is how many examples you are evaluating on, $y^{(i)}$ the true label, $\hat y^{(i)} = h(x^{(i)})$ the tree's prediction, and $\1(\cdot)$ the indicator, contributing $1$ for a mismatch. The sum counts mistakes; dividing by $N$ makes it a rate, comparable across dataset sizes.</p>
 
-  <p>This is the <strong>empirical risk</strong> $\hat R(h)$ from <a href="ml-formulation.html">Chapter 5</a> with the <strong>zero-one loss</strong> $\ell(y,\hat y) = \1(y \ne \hat y)$ plugged in. Nothing new — just the general machinery specialised to classification.</p>
+  <p>This is the <strong>empirical risk</strong> $\hat R(h)$ from <a href="ml-formulation.html">Chapter 5</a> with the <strong>zero-one loss</strong> $\ell(y,\hat y) = \1(y \ne \hat y)$ plugged in — the general machinery specialised to classification.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>Error rate treats all mistakes as equally bad. That is often wrong. The pre-reading's own medical example makes the point with an asymmetric loss table, where predicting "healthy" for an ill patient (a false negative) costs $10$ and the reverse costs $2$:</p>
+    <p>Error rate treats all mistakes as equally bad, which is often wrong. The pre-reading's medical table charges $10$ for predicting "healthy" for an ill patient and $2$ for the reverse:</p>
     <table class="tight center">
       <thead><tr><th>$\ell(y, \hat y)$</th><th>$\hat y = 0$</th><th>$\hat y = 1$</th></tr></thead>
       <tbody>
@@ -618,7 +592,7 @@
         <tr><th>$y = 1$</th><td>10</td><td>0</td></tr>
       </tbody>
     </table>
-    <p style="margin-bottom:0">Everything in this chapter works with a weighted loss too — you just replace "count the mistakes" with "add up the losses" in the majority vote and in <code>BestAttribute</code>. The leaf then predicts the <em>cost-minimising</em> class rather than the most common one.</p>
+    <p style="margin-bottom:0">Everything here works with a weighted loss: replace "count the mistakes" with "add up the losses" in the majority vote and in <code>BestAttribute</code>, and the leaf predicts the <em>cost-minimising</em> class rather than the most common one.</p>
   </div>
 
   <h3>The Iris comparison, worked in full</h3>
@@ -707,7 +681,7 @@
 
   $$\text{err}(A) = \frac{1}{7}\sum_i \1(y^{(i)} \ne \hat y^{(i)}) = \frac{1}{7} \approx 0.143, \qquad \text{err}(B) = \frac{2}{7} \approx 0.286$$
 
-  <p><strong>Model A performs better on this dataset.</strong> That is exactly the pre-reading's conclusion. Notice the qualifier — <em>on this dataset</em>. Seven flowers is far too few to conclude that petal measurements beat sepal measurements in general; with $N=7$, a single flower is 14 percentage points of error rate.</p>
+  <p><strong>Model A performs better on this dataset</strong> — the pre-reading's conclusion. Note the qualifier: seven flowers is far too few to conclude that petal measurements beat sepal measurements in general, since one flower is 14 percentage points of error rate.</p>
 
   <div class="quiz" data-answer="0">
     <div class="q">Model A scores $1/7$ and Model B scores $2/7$ on these seven flowers. What have we learned?</div>
@@ -719,7 +693,7 @@
 
   <h2 id="other-examples">Two more reconstructed examples</h2>
 
-  <p><span class="pill">reconstruction</span> The pre-reading illustrates "using decision trees" with two figures that did not survive PDF extraction: a medical (cesarean-section) tree and the Iris species tree. Both are redrawn here so the ideas still land. <strong>The structures are mine, not the professor's</strong>, though the attributes are the standard ones for each problem.</p>
+  <p><span class="pill">reconstruction</span> The pre-reading illustrates "using decision trees" with two figures that did not survive PDF extraction — a cesarean-section tree and the Iris species tree — redrawn here. <strong>The structures are mine, not the professor's</strong>, though the attributes are standard for each problem.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 7 · Medical classification — should this delivery be a cesarean section? (reconstruction)</div>
@@ -806,10 +780,10 @@
 
   <h3>Attributes with more than $\{0,1\}$ values</h3>
 
-  <p>Two cases, and they are handled differently.</p>
+  <p>Two cases, handled differently.</p>
 
   <ul>
-    <li><strong>Categorical with $m$ values</strong> (e.g. colour $\in$ {red, green, blue}). Either split the node into $m$ branches at once, or binarise: test "colour = red?" and let the No branch test the rest. Multi-way splits consume the attribute entirely in one node; binary tests let you come back to it.</li>
+    <li><strong>Categorical with $m$ values</strong> (colour $\in$ {red, green, blue}): either split into $m$ branches at once, or binarise — test "colour = red?" and let the No branch test the rest. Multi-way splits consume the attribute in one node; binary tests let you return to it.</li>
     <li><strong>Real-valued</strong> (e.g. petal length $\in \R$). You cannot enumerate the values, so the node tests a <strong>threshold</strong>: "Is $x_j \ge t$?" Now <code>BestAttribute</code> must choose both $j$ <em>and</em> $t$.</li>
   </ul>
 
@@ -896,30 +870,21 @@
     <p>The model's $0$-region is a union of such boxes, and so is its $1$-region. A boundary between two unions of axis-aligned boxes can only consist of axis-aligned pieces. $\blacksquare$</p>
   </div>
 
-  <p><strong>Consequence for a diagonal boundary.</strong> Suppose the truth is $y = \1(x_1 + x_2 \ge 5)$ — a clean 45&deg; line. A tree can never draw that line. It can only approximate it with a staircase: many alternating horizontal and vertical splits, each shaving off one small rectangle. To get within $\varepsilon$ you need roughly $O(1/\varepsilon)$ splits, and every extra split subdivides the data further, so the leaves get sparse and the fit gets noisy.</p>
+  <p><strong>Consequence for a diagonal boundary.</strong> If the truth is $y = \1(x_1 + x_2 \ge 5)$ — a clean 45&deg; line — a tree can never draw it. It can only approximate it with a staircase of alternating horizontal and vertical splits, each shaving off one rectangle: roughly $O(1/\varepsilon)$ splits to get within $\varepsilon$, and every extra split thins the data, so leaves get sparse and the fit gets noisy. A tree cuts only with a guillotine held parallel to the table edges.</p>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>A decision tree can only cut with a guillotine held parallel to the table edges. It can approximate a diagonal cut, but only by making a very large number of tiny straight cuts — and each cut costs it data.</p>
-    <p style="margin-bottom:0">The fix is not a better tree algorithm, it is a better <em>feature</em>: add the column $z = x_1 + x_2$ and one split on $z$ does the job. That is precisely the subject of <a href="feature-engineering.html">feature engineering</a>.</p>
+    <p>The fix is not a better tree algorithm but a better <em>feature</em>: add the column $z = x_1 + x_2$ and one split on $z$ does the job. That is precisely the subject of <a href="feature-engineering.html">feature engineering</a>.</p>
   </div>
 
   <h3>How threshold candidates are chosen <span class="pill">beyond syllabus</span></h3>
 
-  <p>Every student asks this, so: for a real-valued attribute $x_j$, you do <em>not</em> search all of $\R$. Sort the $N$ training values of $x_j$, and consider only the <strong>midpoints between consecutive distinct sorted values</strong> as candidate thresholds.</p>
-
-  <p>The reason is that the partition of the training data only changes when $t$ crosses a data value. Between two consecutive values, every $t$ induces exactly the same split and therefore exactly the same training error. There are at most $N-1$ distinct partitions, so at most $N-1$ candidates. Putting $t$ at the midpoint rather than on a data point is a small extra kindness: it maximises the margin to the nearest training points, which usually generalises a touch better.</p>
-
-  <div class="box example"><span class="label">Example</span>
-    <p>Petal lengths $1.4,\ 1.5,\ 4.1,\ 4.5,\ 4.8,\ 5.1,\ 6.0$. Candidate thresholds: $1.45,\ 2.8,\ 4.3,\ 4.65,\ 4.95,\ 5.55$. Six candidates for this attribute, not infinitely many. The tree in Figure 8 used $2.5$, which is inside the wide gap $(1.5, 4.1)$ and induces the same split as the candidate $2.8$.</p>
-  </div>
+  <p>You do not search all of $\R$: sort the $N$ values of $x_j$ and take the <strong>midpoints between consecutive distinct values</strong>. The partition changes only when $t$ crosses a data value, so there are at most $N-1$ candidates. Petal lengths $1.4, 1.5, 4.1, 4.5, 4.8, 5.1, 6.0$ give $1.45, 2.8, 4.3, 4.65, 4.95, 5.55$ — six, not infinitely many.</p>
 
   <h2 id="stopping">Extensions: attribute reuse and stopping criteria</h2>
 
   <h3>You need not remove the chosen attribute</h3>
 
-  <p>Line 6&ndash;7 of the pseudocode pass $A \setminus \{b\}$ down. The notes point out this is optional: <em>need not remove the chosen attribute when calling the function again in the recursion.</em></p>
-
-  <p>Why it is harmless to keep $b$: for <strong>binary</strong> attributes, re-splitting on $b$ in a child is merely wasteful, never wrong. Every point in the left child already has $x_b = 1$, so a second test on $b$ sends all of them one way and leaves the other child empty. It gains nothing, but it breaks nothing.</p>
+  <p>Lines 6&ndash;7 pass $A \setminus \{b\}$ down, but the notes say this is optional. For <strong>binary</strong> attributes, keeping $b$ is wasteful rather than wrong: every point in the left child already has $x_b = 1$, so a second test on $b$ sends them all one way and leaves the other child empty.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
     <p>For <strong>real-valued</strong> attributes you <strong>must not</strong> remove the attribute. Look at Figure 9 and imagine the truth were a horizontal band $2 \le x_2 \le 4.5$. You need <em>two</em> thresholds on $x_2$ — one at $4.5$, another at $2$ further down the tree. Delete $x_2$ from $A$ after the first split and that band becomes unlearnable.</p>
@@ -947,29 +912,29 @@
   </div>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>Depth limit and minimum leaf size are two ways to enforce one rule: <em>never make a claim about a region of feature space based on two data points.</em> A leaf holding 40 examples that are 90% positive is a claim you can defend. A leaf holding 1 example is an anecdote.</p>
+    <p>Depth limit and minimum leaf size both enforce one rule: <em>never make a claim about a region of feature space from two data points.</em> A leaf holding 40 examples that are 90% positive is a defensible claim; a leaf holding 1 example is an anecdote.</p>
   </div>
 
   <h2 id="best-attribute">Extension: the menu of BestAttribute criteria</h2>
 
-  <p>The notes give three options. Here they are, with the formula for each.</p>
+  <p>The notes give three options, with the formula for each.</p>
 
   <h4>1. Minimise training error</h4>
-  <p>Done above, in full. Split $S$ on each candidate attribute, majority-vote both children, add the mistakes, take the minimum. Simple, intuitive — and, as the next section shows, badly behaved.</p>
+  <p>Done above in full: split on each candidate attribute, majority-vote both children, add the mistakes, take the minimum. Simple, intuitive — and, as the next section shows, badly behaved.</p>
 
   <h4>2. Minimise Gini impurity <span class="pill">beyond syllabus</span></h4>
-  <p>The notes say "won't discuss here", so one line: the Gini impurity of a node with class proportions $p_k$ is</p>
+  <p>The notes say "won't discuss here", so one line: for class proportions $p_k$,</p>
   $$G \;=\; 1 - \sum_{k \in \Y} p_k^2,$$
-  <p>and you choose the split minimising the weighted average of $G$ over the children — exactly the same weighting scheme as conditional entropy. It is the probability that two points drawn at random from the node have different labels. It is the default in CART and scikit-learn, behaves almost identically to entropy, and is cheaper because it needs no logarithm.</p>
+  <p>the probability that two points drawn at random from the node have different labels; choose the split minimising the weighted average of $G$ over the children, exactly as with conditional entropy. It is the CART and scikit-learn default, behaves almost identically to entropy, and needs no logarithm.</p>
 
   <h4>3. Maximise mutual information</h4>
-  <p>Instead of asking "how many mistakes would a stump make?", ask <strong>"how much of the uncertainty in the labels does this attribute remove?"</strong> Quantifying that requires entropy, which is the whole of <a href="information-theory.html">Chapter 7</a>. The criterion, stated now so you know where you are going:</p>
+  <p>Instead of "how many mistakes would a stump make?", ask <strong>"how much of the uncertainty in the labels does this attribute remove?"</strong> Quantifying that needs entropy, which is all of <a href="information-theory.html">Chapter 7</a>. The criterion, stated now:</p>
   $$b \;=\; \argmax_{a \in A} \; I(Y; a) \;=\; \argmax_{a \in A} \big[\,H(Y) - H(Y \mid a)\,\big]$$
   <p>This is also called the <strong>information gain</strong> method.</p>
 
   <h2 id="error-is-broken">Why error rate is a broken splitting criterion</h2>
 
-  <p>The pre-reading drops a warning and moves on: <em>"Later we'll learn that error rate as a splitting criterion is problematic and will replace it with other splitting criteria such as mutual information."</em> That sentence is the hinge between this chapter and the next, so it deserves a concrete demonstration rather than a promise.</p>
+  <p>The pre-reading drops a warning and moves on: <em>"error rate as a splitting criterion is problematic and will [be replaced] with other splitting criteria such as mutual information."</em> That sentence is the hinge between this chapter and the next, so here is the demonstration rather than the promise.</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>The defect: error rate only counts <strong>which class wins</strong> in each child. It is completely blind to <em>by how much</em>. A child that goes from 50/50 to 75/25 has become dramatically more certain, but the majority label did not change, so the error count did not change either. <strong>Error rate cannot see progress that does not immediately flip a prediction.</strong></p>
@@ -1018,7 +983,7 @@
 
   <h3>Mutual information does have an opinion</h3>
 
-  <p>The next chapter derives all of this; here is the punchline, so you can see the bridge. With $H$ the entropy in bits:</p>
+  <p>The next chapter derives all of this; here is the punchline. With $H$ the entropy in bits:</p>
 
   <table class="center">
     <thead><tr><th>Split</th><th>Child 1 (size, labels)</th><th>Child 0 (size, labels)</th><th>Training error</th><th>$H(Y \mid \cdot)$</th><th>$I(Y;\cdot)$</th></tr></thead>
@@ -1036,11 +1001,9 @@
   $$H(Y \mid b) = \tfrac{4}{8}(0) + \tfrac{4}{8}(1) = 0.5 \;\Longrightarrow\; I(Y;b) = 0.81128 - 0.5 = \mathbf{0.31128}$$
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>Mutual information says, correctly and unambiguously: <strong>$a$ is worthless ($I = 0$, the children are statistically identical to the parent) and $b$ is valuable ($I = 0.311$ bits, it purified half the data).</strong> Error rate could not tell them apart.</p>
-    <p style="margin-bottom:0">That is the reason the course switches criteria. Error rate is a fine way to <em>evaluate a finished tree</em> — it is the thing you actually care about. It is a bad way to <em>choose a split</em>, because choosing a split is about making progress toward a future prediction, and progress is measured in certainty, not in flipped labels.</p>
+    <p>Mutual information says, unambiguously: <strong>$a$ is worthless ($I = 0$ — the children are statistically identical to the parent) and $b$ is valuable ($I = 0.311$ bits — it purified half the data).</strong> Error rate could not tell them apart.</p>
+    <p style="margin-bottom:0">Hence the switch of criteria. Error rate is a fine way to <em>evaluate a finished tree</em>; it is a bad way to <em>choose a split</em>, because a split is progress toward a future prediction, and progress is measured in certainty, not in flipped labels.</p>
   </div>
-
-  <p>Keep going to <a href="information-theory.html">Chapter 7</a>, where $H$ and $I$ get defined from scratch via a game of 20 questions.</p>
 
   <div class="guided">
     <div class="g-head"><span class="tag">Guided problem</span>Grow the broken-criterion dataset to completion</div>
@@ -1124,17 +1087,7 @@
 
   <h2 id="recap">Recap</h2>
 
-  <ul>
-    <li>A decision tree is internal nodes that split on attributes plus leaves that carry labels. Its headline benefit is human interpretability; its cost is accuracy on hard, non-axis-aligned problems.</li>
-    <li>Hand-written trees are rule-based. The ML question is how to <em>construct</em> a tree from $N$ labelled examples with $\X = \{0,1\}^d$, $\Y = \{0,1\}$.</li>
-    <li>Inference is just walking root-to-leaf. Training is the recursive algorithm <code>DT(S, A)</code>: stop if $A = \emptyset$ or $S$ is pure, otherwise pick $b = $ <code>BestAttribute</code>, partition on $x_b$, recurse.</li>
-    <li>Leaves predict by majority vote $\hat y = \argmax_k \sum_i \1(y^{(i)}=k)$, which provably minimises mistakes at a leaf, with a stated tie-break.</li>
-    <li><code>BestAttribute</code> v1 = minimise the training error of the resulting stump. On the poll dataset this picks $x_2$ ($1/8$) over $x_1$ and $x_3$ (both $3/8$), and one further split on $x_1$ reaches zero training error.</li>
-    <li>The algorithm is greedy — a one-step lookahead approximation to ERM. XOR defeats the lookahead, but the recursion still recovers the perfect tree, as long as you did not add a zero-gain early stop.</li>
-    <li>Evaluation uses classification error rate $\frac{1}{N}\sum_i \1(y^{(i)} \ne \hat y^{(i)})$: Model A $1/7$ beats Model B $2/7$ on the Iris data.</li>
-    <li>Extensions: multi-valued and real-valued attributes (threshold tests at sorted midpoints), axis-aligned staircase decision boundaries, keeping attributes in $A$, and the whole menu of stopping criteria, which exist to control overfitting.</li>
-    <li>Error rate is a fine evaluation measure and a bad splitting criterion, because it is blind to purity changes that do not flip a majority. Mutual information is not. Next chapter.</li>
-  </ul>
+  <p>Every statement worth memorising is in the <strong>Essentials</strong> box at the top. The one line to carry forward: <strong>error rate is a fine way to evaluate a finished tree and a bad way to choose a split</strong>, because it is blind to purity changes that do not flip a majority. Mutual information is not — that is <a href="information-theory.html">Chapter 7</a>, where $H$ and $I$ are built from scratch via a game of 20 questions.</p>
 
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>

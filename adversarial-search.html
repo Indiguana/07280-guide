@@ -16,59 +16,58 @@
 
   <div data-toc></div>
 
+  <div class="box key">
+    <span class="label">Essentials</span>
+    <p>How to pick a move when someone else moves next — and when you cannot search to the end.</p>
+    <ul>
+      <li><strong>The answer is an action, not a value.</strong> $\hat a = \argmax_{a} V(\text{Result}(s_0,a))$, while $V(s_0) = \max_a V(\text{Result}(s_0,a))$. A game solution is a <em>policy</em> $\pi : S \to A$ (a contingent plan), not a fixed sequence of moves.</li>
+      <li><strong>Minimax value</strong> — $\text{Utility}(s)$ at a terminal, $\max_a V(\text{Result}(s,a))$ at a MAX node, $\min_a V(\text{Result}(s,a))$ at a MIN node. Every number is written from MAX's point of view. It is what MAX can <em>guarantee</em>: a floor, so a weaker opponent can only hand you more.</li>
+      <li><strong>Cost of minimax</strong> — time $O(b^m)$, space $O(bm)$ (DFS keeps one path plus each node's siblings). Chess: $b \approx 35$, $m \approx 100$, so $35^{100} \approx 10^{154}$ nodes.</li>
+      <li><strong>Depth limit / horizon</strong> — stop at a preset depth and return $\text{EVAL}(s)$ instead of a utility. The optimality guarantee is gone: you now solve a truncated game with invented payoffs.</li>
+      <li><strong>Evaluation function</strong> — $\text{EVAL}(s) = \sum_i w_i f_i(s)$, a weighted linear sum of features. Richer features cost depth: the feature-complexity vs computation-complexity tradeoff.</li>
+      <li><strong>α-β cutoffs</strong> — in <code>max-value</code>: <code>v = max(v, …)</code>, then <code>if v &gt;= beta: return v</code>, then <code>alpha = max(alpha, v)</code>. In <code>min-value</code>: <code>if v &lt;= alpha: return v</code>, then <code>beta = min(beta, v)</code>. Always test the <em>other</em> player's bound and update your own.</li>
+      <li><strong>α-β guarantees</strong> — the root value and root move are exactly minimax's, for any move ordering; interior nodes may return only a bound. Time $O(b^m)$ with the worst ordering, $O(b^{m/2})$ with perfect ordering, so the effective branching factor is $\sqrt b$ and the reachable depth doubles.</li>
+      <li><strong>Chance nodes</strong> — $V(s) = \sum_{s'} P(s')\,V(s')$, and the value always lies between the smallest and largest child. Choose the highest <em>expected</em> value, never the biggest single outcome. No pruning without bounded utilities, because an average is not monotone in the outcomes seen so far.</li>
+      <li><strong>Modelling errors are asymmetric</strong> — pessimism (minimax against a merely random world) costs upside; optimism (expectimax against a real adversary) costs the game.</li>
+    </ul>
+    <p class="tiny muted">Everything below is the explanation and the practice. If you are short on time, read this box, then go to the problems.</p>
+  </div>
+
   <h2 id="why-games">Why games, and what changes from Chapter 1</h2>
 
-  <p>In <a href="search-foundations.html">search</a> and <a href="informed-search.html">informed search</a> the world sat still while you thought. You had a start state, a transition model, a goal test, and the universe politely waited for you to plan a route. The answer was a <em>sequence</em>: Left, Left, Up, Right.</p>
-
-  <p>Now something in the world pushes back. In a game there is another agent choosing actions, and that agent gets to choose <em>after</em> seeing what you did. A plan that is a fixed sequence of moves is worthless: your second move has to depend on what your opponent just played. This one change — a second decision-maker interleaved with yours — is what "adversarial" means, and it forces a different kind of answer out of the algorithm.</p>
-
-  <div class="box key"><span class="label">Key idea</span>
-    <p>Single-agent search asks <strong>"what path gets me to the goal?"</strong> and returns a <em>sequence of actions</em>. Adversarial search asks <strong>"what should I do in every situation the opponent can put me in?"</strong> and returns a <em>strategy</em> — a rule that maps any reachable state to a move. The tree looks similar. The output type is completely different.</p>
-  </div>
+  <p>In <a href="search-foundations.html">search</a> and <a href="informed-search.html">informed search</a> the world sat still while you thought, and the answer was a <em>sequence</em>: Left, Left, Up, Right. Now another agent is choosing actions too, and it chooses <em>after</em> seeing what you did. A fixed sequence of moves is worthless: your second move has to depend on what the opponent just played. That one change — a second decision-maker interleaved with yours — is what "adversarial" means, and it changes the type of the answer.</p>
 
   <h3>Where the uncertainty comes from</h3>
 
-  <p>An opponent is only one source of uncertainty, and the lecture opens by listing the others, because they all end up handled by the same machinery:</p>
+  <p>An opponent is only one source of uncertainty; the lecture lists the others, all handled by the same machinery:</p>
 
   <ul>
-    <li><strong>Hidden information</strong> — the cards in another player's hand. You genuinely cannot see part of the state.</li>
-    <li><strong>Noise</strong> — sensor noise on a robot. You see the state, but through a distorting lens.</li>
-    <li><strong>Too complicated to model</strong> — leaves blowing in the wind. It is deterministic physics in principle; it is randomness in practice.</li>
-    <li><strong>Infinitely many possible configurations</strong> — the continuous world doesn't come pre-discretised.</li>
-    <li><strong>More possibilities than any computer can enumerate in reasonable time</strong> — tic-tac-toe → checkers → chess. Nothing is hidden in chess; it is just too big.</li>
+    <li><strong>Hidden information</strong> — another player's cards: part of the state is invisible.</li>
+    <li><strong>Noise</strong> — a robot's sensors: you see the state through a distorting lens.</li>
+    <li><strong>Too complicated to model</strong> — leaves in the wind: deterministic in principle, random in practice.</li>
+    <li><strong>Infinitely many configurations</strong> — the continuous world isn't pre-discretised.</li>
+    <li><strong>More possibilities than any computer can enumerate</strong> — tic-tac-toe → checkers → chess.</li>
   </ul>
 
-  <p>That last bullet is worth staring at. In chess there is no hidden information, no dice, no noise. The entire game is visible on the board. And yet no machine and no human will ever play it perfectly. <em>Computational limits produce uncertainty that is, from the agent's point of view, indistinguishable from randomness.</em> Half of this chapter (evaluation functions, depth limits, pruning) exists only because of that.</p>
+  <p>That last bullet is the one that matters. Chess hides nothing — no dice, no noise, the whole board is visible — and yet no machine and no human will ever play it perfectly. <em>Computational limits produce uncertainty that is, from the agent's point of view, indistinguishable from randomness.</em> Half of this chapter (evaluation functions, depth limits, pruning) exists only because of that.</p>
 
-  <h2 id="history">Seventy-five years of game AI, and what it actually taught us</h2>
+  <h2 id="history">Seventy-five years of game AI, in one screen</h2>
 
-  <p>The history here is not trivia. Each milestone is a lesson about which idea mattered, and every one of those ideas shows up later in this course or the next one.</p>
+  <p>Untestable, but each milestone names an idea you meet again. ("Ply" = one player's move.)</p>
 
-  <h3>Checkers</h3>
-
-  <p>The <strong>first computer checkers player appeared in 1950</strong>. In <strong>1994, Chinook became the first computer world champion in any game</strong>, ending Marion Tinsley's forty-year reign as human champion — a reign in which he lost a handful of games total, to anyone. Chinook leaned on a complete <strong>8-piece endgame database</strong>: every position with eight or fewer pieces on the board had its true value looked up, not searched. In <strong>2007 checkers was solved outright</strong>, with an endgame database of <strong>39 trillion states</strong>; the game is a draw with perfect play on both sides.</p>
-
-  <p>Lesson: search from the front, lookup from the back, meet in the middle. And Samuel's checkers work is where <strong>machine learning of an evaluation function</strong> — a direct ancestor of reinforcement learning — was born.</p>
-
-  <h3>Chess</h3>
-
-  <p>The founding generation, roughly <strong>1945–1960</strong>, is a who's-who: <strong>Zuse, Wiener, Shannon, Turing, Newell, Simon, McCarthy</strong>. Shannon's 1950 paper laid out the whole recipe still in use: game tree, depth limit, evaluation function. Then came decades of steady grinding on that "standard model."</p>
-
-  <p>In <strong>1997 Deep Blue beat Garry Kasparov</strong> in a six-game match, examining <strong>200 million positions per second</strong> and extending its search <strong>up to 40 ply</strong> along forcing lines. ("Ply" = one player's move; two plies make one full round of chess.) Today a program on an ordinary PC rates <strong>above 3200 Elo</strong>, against <strong>2870</strong> for Magnus Carlsen. The gap is not close and will not close.</p>
-
-  <p>Lesson: brute force plus a good evaluation function plus α-β pruning was enough to pass humans, decades before anything that looked like modern learning. <strong>Iterative deepening</strong> as a practical technique comes out of this era of chess engineering.</p>
-
-  <h3>Go</h3>
-
-  <p><strong>Zobrist's 1968 program</strong> could play <em>legal</em> Go moves — and that was the achievement. The branching factor is <strong>b &gt; 300</strong>, so the tree explodes far faster than chess, and nobody could write an evaluation function for a Go position that was worth anything: a stone's value depends on a whole-board fight forty moves away. From <strong>2005–2014, Monte Carlo tree search</strong> changed that: instead of evaluating a position with hand-built features, play thousands of fast random games from it and use the win rate. Programs jumped from hopeless to beating strong amateurs, then professionals at a handicap. AlphaGo's 2016 win over Lee Sedol bolted a learned neural evaluation onto exactly that MCTS skeleton. <span class="pill">beyond syllabus</span></p>
+  <ul>
+    <li><strong>Checkers.</strong> First program 1950; <strong>Chinook</strong> (1994) the first computer world champion in any game, built on a complete <strong>8-piece endgame database</strong> — search from the front, lookup from the back. <strong>Solved in 2007</strong> (a draw) with 39 trillion states. Samuel's checkers work is where <em>learning</em> an evaluation function began.</li>
+    <li><strong>Chess.</strong> Shannon's 1950 recipe is still the one in use: game tree, depth limit, evaluation function. <strong>Deep Blue beat Kasparov in 1997</strong> at 200 million positions per second — brute force plus a good EVAL plus α-β, decades before modern learning. <strong>Iterative deepening</strong> comes from this era.</li>
+    <li><strong>Go.</strong> Branching factor <strong>b &gt; 300</strong>, and no hand-written position evaluation ever worked. <strong>Monte Carlo tree search</strong> (2005–2014) used the win rate of thousands of random playouts instead; AlphaGo learned the evaluation on that skeleton. <span class="pill">beyond syllabus</span></li>
+  </ul>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>What changed across all three games was <em>never</em> "we found the true minimax value." It was always one of: (1) search deeper for the same money — α-β pruning; (2) judge a non-final position better — evaluation functions; (3) replace a hand-written judgement with a learned or sampled one — Samuel, MCTS, AlphaGo. Those three levers are the whole chapter.</p>
+    <p>What changed across all three was <em>never</em> "we found the true minimax value," but one of: search deeper for the same money (α-β); judge a non-final position better (evaluation functions); or replace a hand-written judgement with a learned or sampled one (Samuel, MCTS). Those three levers are the whole chapter.</p>
   </div>
 
   <h2 id="classifying-games">Classifying games along five axes</h2>
 
-  <p>Before writing an algorithm, work out which game you are in. The course gives five independent questions to ask.</p>
+  <p>Before writing an algorithm, work out which game you are in. Five independent questions:</p>
 
   <div class="viz">
     <div class="viz-title">Figure 1a · The five axes, with real games at each pole</div>
@@ -134,7 +133,7 @@
     <p>A game is <strong>zero-sum</strong> if the players' utilities are exactly opposed: for every terminal state $s$, $\text{Utility}(s,\text{P}_1) + \text{Utility}(s,\text{P}_2) = 0$. (Any constant sum works identically — "zero-sum" is the conventional name.) A <strong>general</strong> game puts no such constraint on the utilities; each agent simply has its own.</p>
   </div>
 
-  <p>Why does anyone care about this technicality? Because of a bookkeeping miracle. In a zero-sum game, player two's utility carries no information that player one's utility doesn't already carry: it is just the negative. So instead of labelling every node with a vector of utilities, <strong>you can label every node with a single number — player one's utility</strong> — and describe the two players' behaviour with two words:</p>
+  <p>Why care about this technicality? Because player two's utility carries no information that player one's doesn't already carry: it is just the negative. So instead of a vector of utilities per node, <strong>you can label every node with a single number — player one's utility</strong> — and describe both players with two words:</p>
 
   <ul>
     <li>Player one (call them <strong>MAX</strong>) wants that number as <em>large</em> as possible.</li>
@@ -143,40 +142,37 @@
 
   <p>One number, two opposite preferences. That is the entire reason the algorithm is called <em>mini-max</em> and not something with a subscript per player.</p>
 
-  <p>General games are qualitatively different, not just messier. With independent utilities you can get <strong>cooperation, indifference, competition, shifting alliances</strong>, and mixtures of these — two players can find a move that helps them both at a third player's expense without ever communicating. We handle that case in the <a href="#generalized-minimax">generalized minimax</a> section; the miracle above stops applying and the values become tuples again.</p>
+  <p>General games are qualitatively different, not just messier. With independent utilities you get <strong>cooperation, indifference, competition, shifting alliances</strong> — two players can find a move that helps them both at a third's expense without ever communicating. See <a href="#generalized-minimax">generalized minimax</a>: the single number becomes a tuple again.</p>
 
   <h2 id="formulation">The standard game formulation</h2>
 
-  <p>The course focuses on <strong>"standard" games</strong>: <em>deterministic, fully observable, two-player, turn-taking, zero-sum</em>. That is one specific corner of the five-axis space, and the rest of this chapter is a tour of what you do when you fall out of that corner.</p>
+  <p>The course focuses on <strong>"standard" games</strong>: <em>deterministic, fully observable, two-player, turn-taking, zero-sum</em> — one corner of the five-axis space. The rest of this chapter is what you do when you fall out of it.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>A standard game is the tuple:</p>
     <ul>
-      <li>$s_0$ — the <strong>initial state</strong>, the starting configuration of the board.</li>
-      <li>$\text{Player}(s)$ — <strong>whose move it is</strong> in state $s$. In chess, whether it is white's or black's turn.</li>
-      <li>$\text{Actions}(s)$ — the set of <strong>legal moves</strong> available to $\text{Player}(s)$ at $s$.</li>
+      <li>$s_0$ — the <strong>initial state</strong>.</li>
+      <li>$\text{Player}(s)$ — <strong>whose move it is</strong> at $s$.</li>
+      <li>$\text{Actions}(s)$ — the <strong>legal moves</strong> available to $\text{Player}(s)$ at $s$.</li>
       <li>$\text{Result}(s,a)$ — the <strong>transition model</strong>: the state you land in after playing $a$ in $s$.</li>
       <li>$\text{Terminal-Test}(s)$ — true iff the game is <strong>over</strong> at $s$ (checkmate, stalemate, board full).</li>
       <li>$\text{Utility}(s,p)$ — the <strong>payoff to player $p$</strong> at terminal state $s$. In a zero-sum two-player game you can drop the $p$ and write $\text{Utility}(s)$, always meaning "the value to the player deciding at the root."</li>
     </ul>
   </div>
 
-  <p>Compare this line by line with the search problem from Chapter 1. $s_0$, $\text{Actions}$, $\text{Result}$ — identical. The two changes are: $\text{Player}(s)$ is new (someone else moves on alternate turns), and <strong>the goal test has been replaced by a terminal test plus a number</strong>. In search, a state was goal or not-goal: a bit. In a game, terminating isn't the point — terminating <em>well</em> is. So we carry a real-valued utility instead of a boolean.</p>
+  <p>Compare line by line with the Chapter 1 search problem: $s_0$, $\text{Actions}$, $\text{Result}$ are identical. Two things change. $\text{Player}(s)$ is new, and <strong>the goal test has been replaced by a terminal test plus a number</strong> — terminating isn't the point, terminating <em>well</em> is, so we carry a real-valued utility instead of a boolean.</p>
 
   <h3>The output is a policy, not a plan. Belabour this.</h3>
 
-  <p>Here is the sentence from the notes: <em>"Our goal is to calculate a contingent plan, also called a strategy or policy, which recommends a move for every possible game state."</em> Three words for the same object — <strong>contingent plan = strategy = policy</strong> — and the important word is <strong>contingent</strong>.</p>
+  <p>From the notes: <em>"Our goal is to calculate a contingent plan, also called a strategy or policy, which recommends a move for every possible game state."</em> Three words for one object — <strong>contingent plan = strategy = policy</strong> — and the important word is <strong>contingent</strong>.</p>
 
-  <p>In Chapter 1 the solution to the 8-puzzle was a list: <code>[Up, Left, Left, Down]</code>. You could write it on a napkin, hand it to someone, and they'd solve the puzzle by reading it out. Nothing could interfere.</p>
-
-  <p>Try that in chess. You write down <code>[e4, Nf3, Bc4, Qh5, Qxf7#]</code> and hand it over. Your opponent plays something other than the moves your napkin silently assumed, and by move two the list is nonsense — it may not even be legal. The napkin failed not because the moves were bad but because <strong>it was the wrong type of object</strong>.</p>
+  <p>In Chapter 1 the solution to the 8-puzzle was a list, <code>[Up, Left, Left, Down]</code>, that you could write on a napkin and hand to someone. Try that in chess. You write <code>[e4, Nf3, Bc4, Qh5, Qxf7#]</code>, your opponent plays something other than the moves the napkin silently assumed, and by move two the list is nonsense — possibly not even legal. It failed not because the moves were bad but because <strong>it was the wrong type of object</strong>.</p>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p>A sequence of actions is a <em>recipe</em>: step 1, step 2, step 3, do them in order. A policy is a <em>flowchart</em>, or better, a chess opening book: "after 1.e4 e5 2.Nf3, if they play Nc6 then Bb5; if they play Nf6 then Nxe5; if they play d6 then d4…" It has an answer prepared for every branch, including branches that will never happen. That is why it is called <em>contingent</em> — it is a plan contingent on what the other player does.</p>
-    <p>Where the analogy strains: a real opening book only covers sensible moves and shrugs at nonsense. A true policy is total — defined at every reachable state, including the absurd ones.</p>
+    <p>A sequence of actions is a <em>recipe</em>: do step 1, step 2, step 3 in order. A policy is a chess opening book: "after 1.e4 e5 2.Nf3, if Nc6 then Bb5; if Nf6 then Nxe5; if d6 then d4…" — an answer prepared for every branch, including branches that never happen. Where the analogy strains: a real opening book covers sensible moves and shrugs at nonsense, while a policy is total, defined at every reachable state.</p>
   </div>
 
-  <p>Formally: a policy is a function $\pi : S \to A$ with $\pi(s) \in \text{Actions}(s)$ for every state $s$ where it is your turn. Its size is on the order of the number of reachable states, not the length of a path. That is why a game solution is exponentially bigger than a search solution, and why the algorithms below spend all their effort on <em>not</em> writing the whole thing down. Minimax computes the policy <em>implicitly</em>: it hands you the value of every child of wherever you are now, and you take the argmax; do that again each turn and you have executed the policy without ever storing it. You will meet the symbol $\pi$ again, with exactly this meaning, when this course reaches MDPs and reinforcement learning.</p>
+  <p>Formally a policy is a function $\pi : S \to A$ with $\pi(s) \in \text{Actions}(s)$ at every state where it is your turn. Its size is on the order of the number of reachable states, not the length of a path — which is why a game solution is exponentially bigger than a search solution, and why the algorithms below work hard at <em>not</em> writing it down. Minimax computes the policy <em>implicitly</em>: it hands you the values of the children of wherever you are, you take the argmax, and doing that every turn executes the policy without ever storing it. You meet $\pi$ again with exactly this meaning at MDPs and reinforcement learning.</p>
 
   <div class="quiz" data-answer="2">
     <div class="q">Your opponent makes a move you thought was terrible and never planned for. What does a correct policy do?</div>
@@ -201,16 +197,16 @@
     $$
   </div>
 
-  <p>Read the symbols: $V(s)$ is a single number, the value of state $s$ <em>to MAX</em>. $\text{Result}(s,a)$ is the child state you reach by playing $a$. The $\max$ and $\min$ range over MAX's and MIN's legal actions at $s$. Nothing here is approximate — this is a definition by recursion on the game tree, bottoming out at terminal states.</p>
+  <p>Read the symbols: $V(s)$ is a single number, the value of state $s$ <em>to MAX</em>; $\text{Result}(s,a)$ is the child you reach by playing $a$; the $\max$ and $\min$ range over the legal actions at $s$. Nothing here is approximate — it is a definition by recursion on the game tree, bottoming out at terminal states.</p>
 
-  <p>Note the word <strong>guarantee</strong>. It is the strongest claim in this chapter. If minimax says a state is worth $+4$ to you, then there exists a strategy for you that gets at least $4$ <em>against every possible opponent</em>, optimal or not. And if your opponent plays optimally, you cannot get more than 4. It is a floor you can always reach and a ceiling a good opponent can always impose.</p>
+  <p>Note the word <strong>guarantee</strong> — the strongest claim in this chapter. If minimax says a state is worth $+4$ to you, some strategy of yours gets at least 4 <em>against every possible opponent</em>, and against an optimal one you cannot get more: a floor you can always reach and a ceiling a good opponent can impose.</p>
 
   <h3>Drawing the tree</h3>
 
-  <p>We draw states as nodes and actions as branches. Conventionally (and in your lecture slides):</p>
+  <p>States are nodes, actions are branches. Conventionally, as in the slides:</p>
   <ul>
-    <li><strong>MAX nodes</strong> — blue, <strong>upward</strong>-pointing triangles. The point of the triangle points up: "push the value up." The node's value is the <em>maximum</em> over its children.</li>
-    <li><strong>MIN nodes</strong> — red, <strong>downward</strong>-pointing triangles. The node's value is the <em>minimum</em> over its children.</li>
+    <li><strong>MAX nodes</strong> — blue, <strong>upward</strong>-pointing triangles ("push the value up"); value = the <em>maximum</em> over its children.</li>
+    <li><strong>MIN nodes</strong> — red, <strong>downward</strong>-pointing triangles; value = the <em>minimum</em> over its children.</li>
     <li><strong>Terminal states</strong> — squares, holding the number $\text{Utility}(s)$ directly.</li>
   </ul>
 
@@ -284,8 +280,6 @@
     <p>The value $V$ and the decision $\hat a$ are computed by the same sweep; one is the max, the other is the argmax. Exams ask for the action. Give the action.</p>
   </div>
 
-  <p>Notice what "Right looks great" costs you. The Right branch contains 15, the largest leaf in the tree. A greedy player who scans for big numbers picks Right and receives 2 — the <em>worst</em> of the three options — because MIN gets to answer and will obviously choose 2 over 15. Minimax is immune to this because it evaluates each of your moves by what the opponent will do afterwards, not by the best thing that could conceivably happen.</p>
-
   <h3>The generic pseudocode</h3>
 
   <p>Straight from the notes. Two functions: one that picks the move at the root, one recursive routine that computes a value.</p>
@@ -302,9 +296,9 @@ function value(state):
     if state.player is MIN:
         return min over value(state.result(a)) for a in state.actions</code></pre>
 
-  <p>Three things to note. (1) There is exactly <strong>one</strong> recursive function, dispatching on whose turn it is — you do not need separate <code>max_value</code>/<code>min_value</code> routines, though people often write them for clarity (and α-β will make us write them). (2) The base case is <code>is_leaf</code>, i.e. <code>Terminal-Test</code>. (3) <code>max_decision</code> returns an <em>action</em>, <code>value</code> returns a <em>number</em>: the type distinction from the Key idea box, made concrete in code.</p>
+  <p>Three things to note: there is exactly <strong>one</strong> recursive function, dispatching on whose turn it is (α-β will force us to split it into <code>max_value</code>/<code>min_value</code>); the base case is <code>is_leaf</code>, i.e. <code>Terminal-Test</code>; and <code>max_decision</code> returns an <em>action</em> while <code>value</code> returns a <em>number</em> — the type distinction from the Key idea box, made concrete in code.</p>
 
-  <p>The same skeleton with a chance case bolted on — <strong>expectiminimax</strong> — is what we'll use in the <a href="#expectimax">expectimax</a> section:</p>
+  <p>The same skeleton with a chance case bolted on is <strong>expectiminimax</strong>, used in the <a href="#expectimax">expectimax</a> section:</p>
 
 <pre><code>function value(state):
     if state.is_leaf:
@@ -352,7 +346,7 @@ function value(state):
 
   <h2 id="efficiency">What minimax costs, and bounded rationality</h2>
 
-  <p>Minimax as written is just exhaustive depth-first search of the game tree, with an arithmetic operation on the way back up. So its complexity is DFS's complexity.</p>
+  <p>Minimax as written is exhaustive depth-first search of the game tree with an arithmetic operation on the way back up, so its complexity is DFS's.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>Time: $O(b^m)$.</strong> Let $b$ be the branching factor (legal moves per state) and $m$ the maximum depth of the tree in plies. The root generates $b$ children; each of those generates $b$, giving $b^2$ at depth 2; by induction depth $k$ holds $b^k$ nodes. Every node must be visited, because a node's value depends on <em>all</em> of its children (the max or min is over the complete set). Total work:</p>
@@ -365,17 +359,13 @@ function value(state):
 
   <p>For chess, $b \approx 35$ and $m \approx 100$. So the tree has on the order of</p>
   $$35^{100} \approx 10^{154}$$
-  <p>nodes. For scale: there are roughly $10^{80}$ atoms in the observable universe. You could devote every atom to storing a node, run since the Big Bang, and not finish a rounding error's worth of the tree. <strong>Exact solution of chess is not "hard", it is physically impossible</strong>, and always will be. The lecture's summary slide notes video games are worse still: $b = 10^{500}$, $|S| = 10^{4000}$, $m = 10{,}000$.</p>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>And yet humans play chess well. Humans do <em>not</em> have a secret polynomial algorithm; a grandmaster examines perhaps a hundred positions before a move, seven orders of magnitude fewer than Deep Blue. What they have is a very good approximate evaluation of a position and a very good sense of which few moves are worth looking at.</p>
-  </div>
+  <p>nodes, against roughly $10^{80}$ atoms in the observable universe. <strong>Exact solution of chess is not "hard", it is physically impossible.</strong> And yet humans play chess well, examining perhaps a hundred positions per move — not with a secret polynomial algorithm but with a good approximate evaluation and a good sense of which few moves are worth looking at.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Bounded rationality</strong> (Herbert Simon, 1957) — the observation that real decision-makers, human or machine, do not optimise. They are limited in the information they have, in the time available, and in their own ability to compute. So rationality must be redefined relative to those limits: a bounded-rational agent <em>satisfices</em>, searching until it finds an option good enough rather than provably best.</p>
   </div>
 
-  <p>This is a genuinely important idea and not just an excuse for approximation. The classical definition — "a rational agent maximises expected utility" — is vacuous when the maximisation cannot be performed. Simon's move is to treat the <em>cost of deliberating</em> as part of the problem: the right question is not "what is the optimal move?" but "what is the best move I can identify with the computation I can afford?" It won him a Nobel Prize in economics, and every technique in the remainder of this chapter — depth limits, evaluation functions, pruning, Monte Carlo sampling — is an answer to that second question. Chess engines are not failed exact solvers; they are successful bounded-rational agents.</p>
+  <p>This is not just an excuse for approximation. "A rational agent maximises expected utility" is vacuous when the maximisation cannot be performed, so Simon treats the <em>cost of deliberating</em> as part of the problem: not "what is the optimal move?" but "what is the best move I can identify with the computation I can afford?" Every technique below — depth limits, evaluation functions, pruning, sampling — answers that second question. Chess engines are not failed exact solvers; they are successful bounded-rational agents.</p>
 
   <h2 id="resource-limits">Resource limits: bounded lookahead and the horizon</h2>
 
@@ -446,54 +436,39 @@ function value(state):
     <li>Plain minimax visits about $b^d$ nodes to depth $d$. With $b \approx 35$: $35^4 = 1{,}500{,}625 \approx 10^6$. So $d \approx 4$.</li>
   </ul>
 
-  <p>Depth 4 means "I move, you move, I move, you move" — two moves each. The slides' verdict: <strong>"not so good."</strong> A club player looks further than that. Solving $35^d = 10^6$ exactly gives $d = \log_{35}(10^6) = 6/\log_{10}35 \approx 6/1.544 \approx 3.9$. Hold on to this number: <a href="#ab-properties">α-β pruning will double it</a>, and that one improvement is the difference between an engine that embarrasses itself and one that does not.</p>
+  <p>Depth 4 is two moves each, and the slides' verdict is <strong>"not so good"</strong> — a club player looks further. Exactly: $d = \log_{35}(10^6) = 6/\log_{10}35 \approx 6/1.544 \approx 3.9$. Hold on to this number; <a href="#ab-properties">α-β pruning will double it</a>.</p>
 
   <h3>Depth matters</h3>
 
-  <p>Three claims from the slides, in order of importance:</p>
+  <p>Two claims from the slides, in order of importance:</p>
 
   <ol>
     <li><strong>Evaluation functions are always imperfect.</strong> If yours were perfect it would return the true minimax value, you would search depth 1, and the game would be solved. It isn't and you can't.</li>
-    <li><strong>Deeper search ⟹ better play (usually).</strong> Why? Because errors made by EVAL at the frontier get <em>filtered</em> on the way up through many layers of max and min. A position that merely looks good at depth 2 has had 6 more plies of the opponent's best objections applied to it by depth 8. Deeper search converts a noisy heuristic into a sharper decision. The hedge "usually" is real, though: pathological trees exist where deeper minimax is worse, because minimax propagates the <em>extreme</em> of a set of noisy estimates and extremes are biased. <span class="pill">beyond syllabus</span></li>
-    <li><strong>Or: deeper search buys the same quality of play from a less accurate evaluation function.</strong> This is the framing that makes it an engineering decision rather than a fact.</li>
+    <li><strong>Deeper search ⟹ better play (usually).</strong> EVAL's errors at the frontier get <em>filtered</em> on the way up through many layers of max and min: a position that merely looks good at depth 2 has had six more plies of the opponent's best objections applied to it by depth 8. ("Usually" is a real hedge — pathological trees exist where deeper minimax is worse, because it propagates the <em>extreme</em> of a set of noisy estimates. <span class="pill">beyond syllabus</span>)</li>
   </ol>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>This is <strong>the tradeoff between complexity of features and complexity of computation</strong>. You have a fixed budget of nodes per move. A richer evaluation function (more features, slower per call) costs you nodes and therefore depth. A crude, fast one buys depth. Neither extreme wins: an EVAL that just counts material is fast but blind; an EVAL that is nearly the true minimax value is so slow you only see one ply. Real engines sit in the middle and tune the balance empirically. You will meet exactly this tradeoff again as the bias–variance and model-capacity story in Part II.</p>
+    <p>This is <strong>the tradeoff between complexity of features and complexity of computation</strong>. With a fixed budget of nodes per move, a richer evaluation function (more features, slower per call) costs you depth; a crude fast one buys depth. Neither extreme wins: an EVAL that only counts material is fast but blind, and one that is nearly the true minimax value is so slow you see one ply. You meet this tradeoff again as bias–variance and model capacity in Part II.</p>
   </div>
 
   <h2 id="evaluation-functions">Evaluation functions</h2>
 
-  <p><strong>Evaluation functions score non-terminals in depth-limited search.</strong> They answer: "this game isn't over — how good does it look for MAX?"</p>
-
-  <p>The <strong>ideal</strong> evaluation function returns the <em>actual minimax value</em> of the position. Then bounded lookahead is exact. Of course, computing it is the problem we were trying to avoid, so the ideal is a definition of the target, not a proposal.</p>
-
-  <p>In practice, the standard form is a <strong>weighted linear sum of features</strong>:</p>
+  <p><strong>Evaluation functions score non-terminals in depth-limited search</strong>: "this game isn't over — how good does it look for MAX?" The <strong>ideal</strong> one returns the position's <em>actual minimax value</em>, which would make bounded lookahead exact — but computing that is the problem we were avoiding, so the ideal defines the target, not a method. In practice the standard form is a <strong>weighted linear sum of features</strong>:</p>
 
   $$\text{EVAL}(s) \;=\; w_1 f_1(s) + w_2 f_2(s) + \cdots + w_n f_n(s)$$
 
-  <p>Naming every symbol: $f_i(s)$ is the $i$-th <strong>feature</strong>, a number you can compute cheaply from the board — not a probability, just a measurement. $w_i$ is the <strong>weight</strong> saying how much that feature matters and in which direction. $\text{EVAL}(s)$ is the resulting score, positive for "good for MAX."</p>
+  <p>Naming the symbols: $f_i(s)$ is the $i$-th <strong>feature</strong>, a number computed cheaply from the board; $w_i$ is its <strong>weight</strong>, saying how much it matters and in which direction; $\text{EVAL}(s)$ is the resulting score, positive for "good for MAX."</p>
 
-  <p>The classic chess example from the slides: $w_1 = 9$ with $f_1(s) = (\text{number of white queens} - \text{number of black queens})$. Read it carefully — the feature is a <em>difference</em>, so it is automatically zero-sum-symmetric and automatically negative when black is ahead. The weight 9 is the queen's value in pawn units. A full material term is $9\Delta Q + 5\Delta R + 3\Delta B + 3\Delta N + 1\Delta P$, plus positional features: pawn structure, king safety, centre control, mobility (number of legal moves), rook on an open file.</p>
+  <p>The classic chess example: $w_1 = 9$ with $f_1(s) = (\text{number of white queens} - \text{number of black queens})$. The feature is a <em>difference</em>, so it is automatically zero-sum-symmetric and goes negative when black is ahead, and the weight 9 is the queen's value in pawn units. A full material term is $9\Delta Q + 5\Delta R + 3\Delta B + 3\Delta N + 1\Delta P$, plus positional features: pawn structure, king safety, centre control, mobility, rook on an open file.</p>
 
   <div class="box example"><span class="label">Example</span>
-    <p><strong>Evaluation for Pacman.</strong> A depth-limited Pacman agent that only scores "current game score" plays terribly — it stalls, because eating a dot two steps away and eating it five steps away look identical inside the horizon. Useful features:</p>
-    <ul>
-      <li>$f_1$ = current game score (weight strongly positive)</li>
-      <li>$f_2$ = <em>negative</em> distance to the nearest food — this is where the <a href="informed-search.html">heuristics</a> of the last chapter come back as features</li>
-      <li>$f_3$ = number of remaining food pellets (weight negative: fewer left is better)</li>
-      <li>$f_4$ = distance to the nearest non-scared ghost (positive, and usually capped — being 3 squares away is fine, 30 squares is not 10× better)</li>
-      <li>$f_5$ = distance to the nearest <em>scared</em> ghost (negative — now you want to chase it)</li>
-      <li>$f_6$ = number of power capsules left (negative: an unused capsule is wasted value)</li>
-    </ul>
-    <p>Note $f_4$ and $f_5$ have opposite signs on the same underlying measurement, which is why a single "ghost distance" feature fails. And note that the sign of $f_3$ is negative while $f_1$ is positive even though they are nearly redundant — redundant features with tuned weights are fine in a linear EVAL; it is missing features that kill you.</p>
+    <p><strong>Evaluation for Pacman.</strong> An agent scoring only "current game score" stalls, because a dot two steps away and a dot five steps away look identical inside the horizon. Useful features: game score (positive); <em>negative</em> distance to the nearest food (the <a href="informed-search.html">heuristics</a> of the last chapter returning as features); food pellets remaining (negative); distance to the nearest non-scared ghost (positive, usually capped — 30 squares away is not 10× better than 3); distance to the nearest <em>scared</em> ghost (negative, you chase it); capsules left (negative).</p>
+    <p>The last two have opposite signs on the same underlying measurement, which is why a single "ghost distance" feature fails. Redundant features with tuned weights are fine in a linear EVAL; it is missing features that kill you.</p>
   </div>
 
   <h3>What a bad evaluation function does to you</h3>
 
-  <p>The most famous failure mode is the <strong>horizon effect</strong>. <span class="pill">beyond syllabus</span> Suppose your engine is about to lose a bishop — permanently, in three plies, nothing can stop it. It also has the option of throwing away a pawn to check the enemy king, which delays the bishop's capture by four plies. Now the loss of the bishop is <em>past the horizon</em>, and the truncated tree says: "sacrifice the pawn, position looks fine." The engine will throw away pawn after pawn to push the inevitable just past where it can see, and lose worse than if it had accepted the bishop loss immediately. The evaluation function isn't wrong about any position it is asked about — it is simply never asked about the position that matters.</p>
-
-  <p>The standard fix is <strong>quiescence search</strong>: do not call EVAL at a "noisy" position where captures are pending; extend the search along forcing moves until things settle down, then evaluate. <span class="pill">beyond syllabus</span> The lesson generalises beyond chess: <em>a bounded agent's blind spot is exactly where an adversary will aim.</em></p>
+  <p>The most famous failure mode is the <strong>horizon effect</strong>. <span class="pill">beyond syllabus</span> Your engine is losing a bishop in three plies, unavoidably — but it can throw away a pawn to check the king and delay the capture past its depth limit. The truncated tree then says "sacrifice the pawn, the position looks fine," so the engine sheds pawn after pawn to push the inevitable just beyond where it can see. EVAL is not wrong about any position it is asked about; it is never asked about the one that matters. The standard fix is <strong>quiescence search</strong>: at a position with captures pending, extend along forcing moves until things settle, then evaluate. The lesson generalises: <em>a bounded agent's blind spot is exactly where an adversary will aim.</em></p>
 
   <div class="quiz" data-answer="1">
     <div class="q">Your chess engine gets twice as fast. Which is <em>not</em> a sensible way to spend the speedup?</div>
@@ -506,7 +481,7 @@ function value(state):
 
   <h2 id="generalized-minimax">Generalized minimax: non-zero-sum and multiplayer games</h2>
 
-  <p>What if the game is not zero-sum, or has more than two players? The zero-sum bookkeeping miracle fails: with three players you cannot recover players 2 and 3's utilities from player 1's. So you stop trying.</p>
+  <p>If the game is not zero-sum, or has more than two players, the single-number trick fails: you cannot recover players 2 and 3's utilities from player 1's. So you stop trying.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p><strong>Generalized minimax.</strong> For an $n$-player game:</p>
@@ -518,9 +493,7 @@ function value(state):
     <p>Crucially the node inherits the <em>whole tuple</em> of the winning child, not just the component that was maximised — because the players above still need to know what <em>they</em> get if play goes down here.</p>
   </div>
 
-  <p>Two-player zero-sum is a special case: with $u_2 = -u_1$, "player 2 maximises $u_2$" is literally "player 2 minimises $u_1$," and you can drop the second component. Minimax is generalized minimax with a redundancy removed.</p>
-
-  <p>The interesting consequence: <strong>cooperation and competition arise dynamically</strong>, without being programmed in. Nobody tells the agents to form an alliance. It just happens that at some nodes, the move that is best for player 2 also happens to be good for player 1, and at other nodes it does not. Watch it happen in the example below — players 1 and 2 have identical payoffs everywhere in this tree, so they behave like partners against player 3 for free.</p>
+  <p>Two-player zero-sum is the special case $u_2 = -u_1$, where "player 2 maximises $u_2$" is literally "player 2 minimises $u_1$" and the second component is redundant. The interesting consequence of the general case: <strong>cooperation and competition arise dynamically</strong>, without being programmed in. In the tree below players 1 and 2 have identical payoffs everywhere, so they behave like partners against player 3 for free.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 4 · Generalized minimax with three players — every node carries a tuple</div>
@@ -573,25 +546,9 @@ function value(state):
 
   <h3>Walking Figure 4 node by node</h3>
 
-  <p><strong>Player 3's row (bottom interior nodes), maximising the third component:</strong></p>
-  <ul>
-    <li>Leftmost: children $(1,1,6)$ and $(0,0,7)$. Compare third components: $6$ vs $7$. Player 3 takes $7$, so the node's value is the <em>entire tuple</em> $(0,0,7)$. Notice player 3 just cost players 1 and 2 a point each, and does not care.</li>
-    <li>Second: $(9,9,0)$ vs $(8,8,1)$. Third components $0$ vs $1$ ⟹ node value $(8,8,1)$. Player 3 gives up nothing it values to take a whole point away from each of the others... except it gains 1, so it is genuine self-interest.</li>
-    <li>Third: $(9,9,0)$ vs $(7,7,2)$. Third components $0$ vs $2$ ⟹ $(7,7,2)$.</li>
-    <li>Fourth: $(0,0,8)$ vs $(0,0,7)$. Third components $8$ vs $7$ ⟹ $(0,0,8)$.</li>
-  </ul>
+  <p><strong>Player 3's row</strong> compares third components: $(1,1,6)$ vs $(0,0,7)$ ⟹ $(0,0,7)$; $(9,9,0)$ vs $(8,8,1)$ ⟹ $(8,8,1)$; $(9,9,0)$ vs $(7,7,2)$ ⟹ $(7,7,2)$; $(0,0,8)$ vs $(0,0,7)$ ⟹ $(0,0,8)$ — the <em>entire tuple</em> of the winner moves up each time, and player 3 is indifferent to what it costs the others. <strong>Player 2's row</strong> compares second components: $(0,0,7)$ vs $(8,8,1)$ ⟹ $(8,8,1)$; $(7,7,2)$ vs $(0,0,8)$ ⟹ $(7,7,2)$. <strong>Player 1 at the root</strong> compares first components: $(8,8,1)$ vs $(7,7,2)$ ⟹ <strong>root value $(8,8,1)$</strong>, so player 1 plays Left.</p>
 
-  <p><strong>Player 2's row, maximising the second component:</strong></p>
-  <ul>
-    <li>Left: children $(0,0,7)$ and $(8,8,1)$. Second components $0$ vs $8$ ⟹ node value $(8,8,1)$.</li>
-    <li>Right: children $(7,7,2)$ and $(0,0,8)$. Second components $7$ vs $0$ ⟹ node value $(7,7,2)$.</li>
-  </ul>
-
-  <p><strong>Player 1 at the root, maximising the first component:</strong> children $(8,8,1)$ and $(7,7,2)$. First components $8$ vs $7$ ⟹ <strong>root value $(8,8,1)$</strong>, so player 1 plays Left.</p>
-
-  <div class="box intuition"><span class="label">Intuition</span>
-    <p>Look at what just happened. Player 1 and player 2 never negotiated, yet both chose moves that steered toward $(8,8,1)$ and away from player 3's preferred $(0,0,7)$ and $(0,0,8)$. That is an <strong>alliance, emergent from self-interest</strong>, because their payoffs happen to be aligned in this tree. Change one leaf so player 2 prefers $(0,0,7)$ and the alliance dissolves immediately — nothing in the algorithm changes. This is why general-sum games are genuinely harder to reason about: the coalition structure is a consequence of the numbers, not an input.</p>
-  </div>
+  <p>Players 1 and 2 never negotiated, yet both steered toward $(8,8,1)$ and away from player 3's preferred leaves: an <strong>alliance emergent from self-interest</strong>, because their payoffs happen to align here. Change one leaf and it dissolves, with nothing in the algorithm changing — the coalition structure is a consequence of the numbers, not an input.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
     <p>Do not maximise <em>every</em> component, and do not propagate only the component that was maximised. Node 2 in player 3's row is $(8,8,1)$, not $1$ and not $(9,9,1)$. The tuple travels intact.</p>
@@ -599,7 +556,7 @@ function value(state):
 
   <h2 id="alpha-beta">Alpha-beta pruning</h2>
 
-  <p>Minimax visits every node. But the worked example already showed that most of them do not matter: once MIN's left subtree revealed a 3, everything else in that subtree was irrelevant. α-β pruning is the systematic version of that observation. It computes <strong>exactly the same root value as minimax</strong> while often skipping most of the tree.</p>
+  <p>Minimax visits every node, but the worked example already showed that most of them do not matter: once MIN's left subtree revealed a 3, the rest of that subtree was irrelevant. α-β pruning is the systematic version, and it computes <strong>exactly the same root value as minimax</strong> while often skipping most of the tree.</p>
 
   <div class="box defn"><span class="label">Definition</span>
     <p>Two numbers are carried down the recursion along the current path:</p>
@@ -612,18 +569,11 @@ function value(state):
 
   <h3>What the cutoff test actually means</h3>
 
-  <p>This is the part everybody memorises and nobody understands, so here it is in slow motion. Consider a MIN node $n$ we are in the middle of evaluating.</p>
+  <p>This is the part everybody memorises and nobody understands, so here it is in slow motion. Consider a MIN node $n$ in the middle of being evaluated. Two facts: (i) MIN takes the minimum over $n$'s children, so <strong>$n$'s value can only go <em>down</em></strong> as more children are examined — whatever it ends up as, it is $\le$ anything seen so far at $n$; (ii) somewhere on the path above there is a MAX node that already has an alternative worth $\alpha$.</p>
 
-  <p>Facts we have: (i) MIN will take the minimum over $n$'s children, so <strong>whatever value $n$ ends up with, it is $\le$ anything we have seen so far at $n$.</strong> $n$'s value can only go <em>down</em> as we examine more children. (ii) Somewhere on the path above us there is a MAX node that already has an alternative move worth $\alpha$.</p>
+  <p>So if the running value at $n$ reaches $v \le \alpha$, then $n$'s final value is $\le v \le \alpha$, and the MAX node above is comparing "at most $\alpha$" (through $n$) against "$\alpha$, guaranteed" (what it already holds). <strong>MAX is never coming down here</strong>, and the remaining children can only lower $n$ further. Stop and return $v$ immediately.</p>
 
-  <p>Now suppose at $n$ we compute a running value $v \le \alpha$. Then $n$'s final value is $\le v \le \alpha$. So the MAX node above will compare "at most $\alpha$" (coming through $n$) with "$\alpha$, guaranteed" (the alternative it already has) — and it will never prefer $n$. <strong>MAX is never going to come down here.</strong> The remaining children of $n$ cannot change that, because they can only lower $n$ further. So stop and return $v$ immediately.</p>
-
-  <p>The mirror image, at a MAX node $n$: its value can only go <em>up</em> as we see more children. If a running $v \ge \beta$, then $n$'s final value is $\ge \beta$, and the MIN node above already has an option worth $\beta$, so MIN will never choose to come down here either. Stop.</p>
-
-  <div class="box analogy"><span class="label">Analogy</span>
-    <p>You are hiring, and candidate A has already accepted a $\$120$k offer... no. Better: you are comparing apartments, and you've committed to taking one that costs $\$1200$ (that's your $\alpha$ — the best you've <em>secured</em>). Your landlord-adversary shows you a second building and starts listing units: unit 1 costs $\$1400$. You already know the landlord will quote you the <em>worst</em> unit in that building — wait, invert it: your adversary chooses which unit you get, so you'll get the most expensive one available... </p>
-    <p>Cleanest version: you're buying a car and the dealer picks which car you get from whatever lot you walk into. You already have a deal worth $\$1200$ of value. You walk into a second lot, and the first car the dealer could stick you with is worth $\$900$. You can leave <em>right now</em>. You don't need to see the rest of the lot, because the dealer is going to give you the worst car there, which is at most $\$900$, which is worse than the $\$1200$ you already hold. Any other car on that lot is information you will never use. That "you can leave right now" is <code>if v &lt;= α: return v</code>.</p>
-  </div>
+  <p>The mirror image at a MAX node $n$: its value can only go <em>up</em>, so if the running $v \ge \beta$ then $n$'s final value is $\ge \beta$, the MIN node above already has an option worth $\beta$, and MIN will never come down here either. Stop.</p>
 
   <h3>The exact pseudocode</h3>
 
@@ -650,10 +600,10 @@ def min-value(state, α, β):
         β = min(β, v)
     return v</code></pre>
 
-  <p>Line by line for <code>max-value</code>: <code>v</code> is the best child value found so far at this node, starting at $-\infty$ so the first child always improves it. For each successor we recurse (passing the <em>current</em> window down). After updating <code>v</code> we test <code>v ≥ β</code>: if our value has already reached the level MIN can avoid, quit. Otherwise we raise <code>α</code> — because if MAX ends up choosing this node, MAX has now secured at least <code>v</code>, and every deeper node should know that.</p>
+  <p>Line by line for <code>max-value</code>: <code>v</code> is the best child value so far, starting at $-\infty$ so the first child always improves it; we recurse into each successor passing the <em>current</em> window down; after updating <code>v</code> we test <code>v ≥ β</code> and quit if our value has reached the level MIN can avoid; otherwise we raise <code>α</code>, because if MAX chooses this node it has secured at least <code>v</code> and every deeper node should know.</p>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>The order of the three statements inside the loop is not negotiable: <strong>update v, then test the cutoff, then update the bound.</strong> Updating $\alpha$ before testing would compare $v$ against a $\beta$... no — worse: at a MIN node, updating $\beta$ before testing <code>v ≤ α</code> is harmless, but testing before updating <code>v</code> does nothing, and updating $\alpha$ inside <code>min-value</code> (instead of $\beta$) is the classic bug. In <code>max-value</code> you test against $\beta$ and update $\alpha$. In <code>min-value</code> you test against $\alpha$ and update $\beta$. <em>You always test against the other player's bound and update your own.</em></p>
+    <p>The order of the three statements inside the loop is not negotiable: <strong>update v, then test the cutoff, then update the bound.</strong> And do not mirror the bounds wrongly — updating $\alpha$ inside <code>min-value</code> instead of $\beta$ is the classic bug. In <code>max-value</code> you test against $\beta$ and update $\alpha$. In <code>min-value</code> you test against $\alpha$ and update $\beta$. <em>You always test against the other player's bound and update your own.</em></p>
   </div>
 
   <h3>Two tiny examples, to drill the tests</h3>
@@ -662,12 +612,12 @@ def min-value(state, α, β):
     <div class="card">
       <div class="kicker">max-value cutoff</div>
       <p style="margin-top:6px">We are at a MAX node that was called with <strong>β = 10</strong>. Its first child returns 10, so $v = 10$. Test: is $v \ge \beta$? $10 \ge 10$ — <strong>yes, return immediately.</strong> The second child (which happens to be worth 100) is never examined.</p>
-      <p><em>Why:</em> the MIN node above already has a move worth 10. This node is worth <em>at least</em> 10 and can only grow. MIN will take its 10 elsewhere and never enter here, so the 100 is unreachable. Note the cutoff fires on equality — a tie is enough, because we only need to know MIN has an option <em>at least as good</em>.</p>
+      <p><em>Why:</em> the MIN node above already has a move worth 10, and this node is worth <em>at least</em> 10 and can only grow, so MIN takes its 10 elsewhere and the 100 is unreachable. The cutoff fires on equality — a tie is enough, since we only need MIN to have an option <em>at least as good</em>.</p>
     </div>
     <div class="card">
       <div class="kicker">min-value cutoff</div>
       <p style="margin-top:6px">We are at a MIN node called with <strong>α = 10</strong>, whose children are 10, 100, 2 left to right. Child 1: $v = 10$; is $10 \le 10$? Yes — <strong>cutoff, return 10</strong>. The 100 and the 2 are never examined.</p>
-      <p><em>Why:</em> MAX already holds 10 above. This node is worth at most 10, so MAX gains nothing by coming here. And look what we skipped: the 2, which would have been this node's true value. <strong>We returned 10 when the true value is 2.</strong> That is allowed, and it is the subject of the properties section below.</p>
+      <p><em>Why:</em> MAX already holds 10 above, so this node, worth at most 10, gains MAX nothing. And look what we skipped: the 2, which was this node's true value. <strong>We returned 10 when the true value is 2.</strong> That is allowed, and it is the subject of the properties section below.</p>
     </div>
   </div>
 
@@ -694,14 +644,14 @@ def min-value(state, α, β):
     <li><strong>Root (MAX)</strong> starts with $\alpha = -\infty$, $\beta = +\infty$, $v = -\infty$.</li>
     <li><strong>Node A (MIN)</strong>, called with $(-\infty, +\infty)$. Leaves 3, 12, 8. After 3: $v = 3$, is $3 \le -\infty$? No, so $\beta \leftarrow 3$. After 12: $v = \min(3,12) = 3$. After 8: $v = 3$. Nothing prunes here — with $\alpha = -\infty$ nothing <em>can</em> prune, since MAX has secured nothing yet. A returns <strong>3</strong>.</li>
     <li><strong>Back at the root:</strong> $v = \max(-\infty, 3) = 3$. Is $3 \ge +\infty$? No. So $\alpha \leftarrow 3$. <em>MAX has now secured 3.</em> This single fact is what powers every prune that follows.</li>
-    <li><strong>Node B (MIN)</strong>, called with $(\alpha=3, \beta=+\infty)$. First leaf: 2. $v = 2$. Test: $2 \le \alpha = 3$? <strong>Yes — cut off.</strong> Return 2 without looking at B's other two children. In words: B is worth at most 2; MAX already has 3; MAX will never play toward B; B's remaining children are irrelevant <em>regardless of their values</em>.</li>
+    <li><strong>Node B (MIN)</strong>, called with $(\alpha=3, \beta=+\infty)$. First leaf: 2. $v = 2$. Test: $2 \le \alpha = 3$? <strong>Yes — cut off.</strong> Return 2 without looking at B's other two children: B is worth at most 2, MAX already has 3, so B's remaining children are irrelevant <em>regardless of their values</em>.</li>
     <li><strong>Back at the root:</strong> $v = \max(3,2) = 3$. $\alpha$ stays 3.</li>
     <li><strong>Node C (MIN)</strong>, called with $(\alpha=3, \beta=+\infty)$. Leaf 14: $v = 14$; is $14 \le 3$? No; $\beta \leftarrow 14$. Leaf 5: $v = 5$; $5 \le 3$? No; $\beta \leftarrow 5$. Leaf 2: $v = 2$; $2 \le 3$? <strong>Yes — cut off</strong> and return 2. (Here the cutoff saves nothing, because 2 was C's last child anyway. A cutoff on the final child is free but useless.)</li>
     <li><strong>Root:</strong> $v = \max(3,2) = 3$. Done. Root value <strong>3</strong>, and the action is <strong>the one leading to A</strong> — the leftmost move.</li>
   </ol>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>Leaves never examined: B's second and third children.</strong> Two of nine leaves, skipped because MAX had already secured 3 and B had already shown it could be held to 2. Their values are <em>genuinely irrelevant</em>: set them to $-10^6$ or $+10^6$ and the root value is still 3 and the root move is still Left. If setting a leaf to $+10^6$ <em>could</em> change the answer, the algorithm would not have been allowed to skip it — that is the content of the soundness theorem below.</p>
+    <p><strong>Leaves never examined: B's second and third children</strong> — two of nine, skipped because MAX had secured 3 and B had shown it could be held to 2. Their values are <em>genuinely irrelevant</em>: set them to $\pm 10^6$ and the root value is still 3 and the root move is still Left. If a $+10^6$ <em>could</em> change the answer, the algorithm would not have been allowed to skip it — that is the soundness theorem below.</p>
   </div>
 
   <h2 id="ab-properties">Properties of α-β: what it does and doesn't guarantee</h2>
@@ -723,7 +673,7 @@ def min-value(state, α, β):
 
   <p>But we cannot order moves by their values — computing the values is the whole problem. So we guess, using cheap heuristics: try captures first in chess, try the move that was best at the previous depth, try killer moves that caused cutoffs in sibling nodes.</p>
 
-  <p>That "best at the previous depth" trick is why <strong>iterative deepening helps</strong>. Run the search to depth 1, then 2, then 3, and so on; each pass is cheap relative to the next (the last level dominates the node count), and each pass leaves behind a good guess at the best move to try first in the next pass. The re-searching looks wasteful and is overwhelmingly repaid by the extra pruning it enables. It also gives you an anytime algorithm: when the clock runs out you always have a complete answer from the last finished depth.</p>
+  <p>That "best at the previous depth" trick is why <strong>iterative deepening helps</strong>: search to depth 1, then 2, then 3, each pass cheap relative to the next (the last level dominates the node count) and each leaving behind a good first move for the next. The re-searching looks wasteful and is overwhelmingly repaid by the extra pruning. It is also anytime — when the clock runs out you have a complete answer from the last finished depth.</p>
 
   <div class="box proof"><span class="label">Proof</span>
     <p><strong>With perfect ordering, time drops to $O(b^{m/2})$.</strong></p>
@@ -735,7 +685,7 @@ def min-value(state, α, β):
 
   <p>Redo the chess budget with this. Still $10^6$ nodes per move, still $b \approx 35$, but now $\sqrt{35} \approx 5.92$:</p>
   $$5.92^{\,d} = 10^6 \;\Longrightarrow\; d = \frac{6}{\log_{10} 5.92} = \frac{6}{0.772} \approx 7.8 \approx 8$$
-  <p>Or directly: $b^{m/2} = 35^{4} \approx 10^6$ gives $m = 8$. <strong>1M nodes/move ⟹ depth 8, which the slides call "respectable."</strong> Same hardware, same evaluation function, four extra plies — purely from refusing to examine nodes that cannot matter. In practice α-β with good ordering is worth several hundred Elo points, which is the difference between a strong club player and a grandmaster.</p>
+  <p>Or directly: $b^{m/2} = 35^{4} \approx 10^6$ gives $m = 8$. <strong>1M nodes/move ⟹ depth 8, which the slides call "respectable."</strong> Same hardware, same evaluation function, four extra plies — purely from refusing to examine nodes that cannot matter.</p>
 
   <div class="quiz" data-answer="1">
     <div class="q">True or false: α-β pruning is an approximation that trades accuracy for speed.</div>
@@ -858,11 +808,11 @@ def min-value(state, α, β):
   <p>Minimax rests on one assumption: <em>the other node is a minimiser.</em> Two very common situations break it.</p>
 
   <ul>
-    <li><strong>Genuine chance.</strong> Backgammon rolls dice; Monopoly rolls dice; Tetris deals a random piece; a card game shuffles. The node after your move is not chosen by anybody — it is sampled. Calling it a minimiser means assuming the dice hate you personally.</li>
-    <li><strong>Suboptimal opponents.</strong> A beginner, a random ghost, a distracted human, a rule-based bot. Assuming they play the single most damaging move available is simply a false model of them.</li>
+    <li><strong>Genuine chance.</strong> Dice in backgammon or Monopoly, Tetris's next piece, a shuffle. The node after your move is not chosen by anybody but sampled, and calling it a minimiser assumes the dice hate you personally.</li>
+    <li><strong>Suboptimal opponents.</strong> A beginner, a random ghost, a rule-based bot. Assuming they play the most damaging move available is simply a false model of them.</li>
   </ul>
 
-  <p>As the notes put it: <strong>making worst-case assumptions about stochastic or suboptimal opponents leads to poor decisions.</strong> Not merely conservative decisions — <em>poor</em> ones. If you believe every unlikely disaster is certain, you will refuse opportunities that are nearly free, and you will rank two bad-looking options by their worst cases when their averages say the opposite.</p>
+  <p>As the notes put it: <strong>making worst-case assumptions about stochastic or suboptimal opponents leads to poor decisions.</strong> Not merely conservative ones — if you believe every unlikely disaster is certain, you refuse opportunities that are nearly free.</p>
 
   <h3>Probability refresher</h3>
 
@@ -874,7 +824,7 @@ def min-value(state, α, β):
 
   $$P(T = \text{none}) = 0.25, \qquad P(T = \text{light}) = 0.50, \qquad P(T = \text{heavy}) = 0.25$$
 
-  <p>Check the normalisation: $0.25 + 0.50 + 0.25 = 1$. Always check. If your weights don't sum to one you either forgot an outcome or you are not holding a distribution. Note the capital $T$ is the variable (the uncertain quantity) and lower-case values like "light" are its outcomes; $P(T=t)$ is read "the probability that $T$ takes the value $t$."</p>
+  <p>Check the normalisation: $0.25 + 0.50 + 0.25 = 1$. Always check — if the weights don't sum to one you forgot an outcome. Capital $T$ is the variable; lower-case values like "light" are its outcomes, and $P(T=t)$ reads "the probability that $T$ takes the value $t$."</p>
 
   <h3>Expected value</h3>
 
@@ -897,11 +847,11 @@ def min-value(state, α, β):
   $$\E_T[f(T)] = \sum_t P(T=t) f(t) = 0.25 \times 20 \;+\; 0.50 \times 30 \;+\; 0.25 \times 60$$
   $$= 5 \;+\; 15 \;+\; 15 \;=\; \mathbf{35 \text{ minutes}}$$
 
-  <p>Three observations worth making on such a small example. (1) $35$ is not a possible outcome — you will never take exactly 35 minutes. An expectation is a summary, not a prediction. (2) $35$ is larger than the median outcome (30), pulled up by the heavy-traffic tail. Expectations are sensitive to rare extremes in a way that minimax is not and medians are not. (3) The pessimist's answer is 60 and the optimist's is 20; both are answers to different questions ("worst case?" and "best case?"). Expectimax answers "on average?"</p>
+  <p>Two observations. $35$ is not a possible outcome at all — an expectation is a summary, not a prediction — and it sits above the median outcome (30), pulled up by the heavy-traffic tail, so expectations are sensitive to rare extremes. The pessimist answers 60, the optimist 20, expectimax 35: three answers to three different questions.</p>
 
   <h3>The expectimax node rules</h3>
 
-  <p>We <strong>model chance as a player in the game tree</strong>. Instead of $s'$ being the deterministic result of taking action $a$, $s'$ is one of several possible outcomes, each with a probability. Chance nodes are drawn as <strong>circles</strong>. The three node types then read:</p>
+  <p>We <strong>model chance as a player in the game tree</strong>: instead of $s'$ being the deterministic result of action $a$, it is one of several outcomes, each with a probability. Chance nodes are drawn as <strong>circles</strong>, and the three node types read:</p>
 
   <div class="box key"><span class="label">Key idea</span>
     <p>
@@ -911,11 +861,11 @@ def min-value(state, α, β):
     <p>Same tree, same recursion, one new kind of node. A chance node does not choose — it averages. And notice the chance rule <em>is</em> the expected-value formula from above, with $f$ replaced by "the value of the resulting state."</p>
   </div>
 
-  <p>Names: <strong>expectimax</strong> for MAX + CHANCE (you against a random world, no adversary — Tetris, investing); <strong>expectiminimax</strong> for MAX + MIN + CHANCE (an adversary <em>and</em> dice — backgammon, Monopoly); plain <strong>minimax</strong> for MAX + MIN (tic-tac-toe, chess). Same code, different node types present.</p>
+  <p>Names: <strong>expectimax</strong> = MAX + CHANCE (a random world, no adversary — Tetris); <strong>expectiminimax</strong> = MAX + MIN + CHANCE (adversary <em>and</em> dice — backgammon); <strong>minimax</strong> = MAX + MIN (chess). Same code, different node types present.</p>
 
   <h3>The worked example</h3>
 
-  <p>The notes describe three actions — Left, Center, Right — each leading to a chance node, with expected values $7$, $7$ and $8$, so the answer is <strong>Right</strong>. The notes' figure didn't survive into the text, but the lecture deck carries the same tree with its numbers intact, so the probabilities and leaves below are <strong>recovered from the slide version of the example</strong> rather than invented — and they do reproduce $7, 7, 8$ exactly.</p>
+  <p>Three actions — Left, Center, Right — each leading to a chance node, with expected values $7$, $7$ and $8$, so the answer is <strong>Right</strong>. The notes' figure didn't survive into the text, so the probabilities and leaves below are <strong>recovered from the slide version of the example</strong> rather than invented; they reproduce $7, 7, 8$ exactly.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 6 · Expectimax — circles are chance nodes, edge labels are probabilities</div>
@@ -977,11 +927,11 @@ def min-value(state, α, β):
   </ul>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p><strong>We select the action leading to the highest expected value, not the highest individual outcome.</strong> The single biggest number in Figure 6 is a 12, and there are two of them — one under Left and one under Right. Neither is the reason Right wins. Right wins because its <em>worst</em> outcome (6) is decent and carries most of the weight. Expectimax rewards the shape of the whole distribution, not its best point.</p>
+    <p><strong>We select the action leading to the highest expected value, not the highest individual outcome.</strong> Figure 6's biggest number, 12, sits under both Left and Right and is the reason for neither answer. Right wins because its <em>worst</em> outcome (6) is decent and carries most of the weight. Expectimax rewards the shape of the whole distribution, not its best point.</p>
   </div>
 
   <div class="box warn"><span class="label">Common mistake</span>
-    <p>Running a min or a max at a chance node. A chance node is <em>not</em> a player, so it never chooses; and it is not a MAX node in disguise, so its value can be lower than every... no — its value always lies between its smallest and largest child, strictly inside unless one outcome has probability 1. If you ever compute a chance value outside that range, you have an arithmetic error, and the usual cause is probabilities that don't sum to one.</p>
+    <p>Running a min or a max at a chance node. A chance node is <em>not</em> a player, so it never chooses: its value always lies between its smallest and largest child, strictly inside unless one outcome has probability 1. A chance value outside that range is an arithmetic error, and the usual cause is probabilities that don't sum to one.</p>
   </div>
 
   <div class="guided">
@@ -1030,23 +980,21 @@ def min-value(state, α, β):
 
   <p><strong>In general, no: you cannot prune at a chance node without bounds on the utilities.</strong> The reason is structural. α-β works because a MIN node's running value can only go <em>down</em> and a MAX node's can only go <em>up</em>. Those are monotone one-sided guarantees, and a one-sided guarantee is exactly what lets you say "this can never beat what I already hold."</p>
 
-  <p>A chance node has no such property. Its value is $\sum_{s'} P(s') V(s')$, a weighted average that partial information does not bound. Suppose a chance node has two equally likely outcomes and you have evaluated the first at 3. What do you know about the node? Only that its value is $\tfrac12(3) + \tfrac12(V_2) = 1.5 + 0.5 V_2$ — and with $V_2$ unconstrained, that is any number at all. Seeing a terrible first outcome tells you nothing, because the second could be $+10^9$ and drag the average anywhere. <strong>Averages are not monotone in the outcomes you have seen so far.</strong>
+  <p>A chance node has no such property. With two equally likely outcomes and the first evaluated at 3, all you know is that the node is worth $\tfrac12(3) + \tfrac12(V_2) = 1.5 + 0.5 V_2$, and with $V_2$ unconstrained that is any number at all — the second outcome could be $+10^9$ and drag the average anywhere. <strong>Averages are not monotone in the outcomes you have seen so far.</strong>
 
-  <p>Now bound the utilities, and it changes. <span class="pill">beyond syllabus</span> Suppose every leaf lies in $[L, U]$. After evaluating the first outcome of an $n$-outcome chance node, the best possible completion is to assign $U$ to everything unseen and the worst is to assign $L$:</p>
+  <p>Bound the utilities and it changes. <span class="pill">beyond syllabus</span> If every leaf lies in $[L, U]$, the best possible completion assigns $U$ to everything unseen and the worst assigns $L$:</p>
 
   $$\underbrace{\sum_{\text{seen}} P(s')V(s') + \sum_{\text{unseen}} P(s')\,L}_{\text{lower bound}} \;\le\; V(\text{chance}) \;\le\; \underbrace{\sum_{\text{seen}} P(s')V(s') + \sum_{\text{unseen}} P(s')\,U}_{\text{upper bound}}$$
 
-  <p>If the <em>upper</em> bound already falls at or below $\alpha$, MAX will never come here, and you may stop. This is real and it is called <strong>*-minimax</strong> (star1/star2 pruning, Ballard 1983); backgammon engines use it. But note what it needs: a known, finite range for utilities, and it prunes far less than α-β because the bounds are loose. With unbounded utilities — or with a chance node whose outcomes you evaluate in a bad order — you get nothing.</p>
+  <p>If the <em>upper</em> bound already falls at or below $\alpha$, MAX will never come here and you may stop. That is <strong>*-minimax</strong> (star1/star2 pruning, Ballard 1983), which backgammon engines use; it needs a known finite range for utilities and prunes far less than α-β, because the bounds are loose.</p>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p>α-β prunes because an adversary is <em>predictable at the extreme</em>: you know MIN will pick the worst thing for you, so one bad option is enough to condemn a node. Chance is unpredictable in the middle: no single outcome condemns anything, because the others vote too. Adversaries are, in this narrow sense, easier to reason about than dice.</p>
+    <p>α-β prunes because an adversary is <em>predictable at the extreme</em>: MIN will pick the worst thing for you, so one bad option condemns a node. No single outcome condemns a chance node, because the others vote too. Adversaries are, in this narrow sense, easier to reason about than dice.</p>
   </div>
 
   <h2 id="modeling-assumptions">Modelling assumptions: know your opponent</h2>
 
-  <p>Everything above assumed you knew which kind of node you were looking at. What if you get that wrong?</p>
-
-  <p>Take the slides' little tree: a MAX root with two options. The left option leads to a node with children $\{10, 10\}$; the right option to a node with children $\{9, 100\}$.</p>
+  <p>Everything above assumed you knew which kind of node you were looking at. What if you get that wrong? Take the slides' tree: a MAX root whose left option leads to a node with children $\{10, 10\}$ and whose right option leads to one with children $\{9, 100\}$.</p>
 
   <ul>
     <li><strong>If those are MIN nodes:</strong> left $= \min(10,10) = 10$, right $= \min(9,100) = 9$. Play <strong>left</strong>, value 10.</li>
@@ -1058,22 +1006,21 @@ def min-value(state, α, β):
   <div class="grid2">
     <div class="card">
       <div class="kicker">Dangerous pessimism</div>
-      <p style="margin-top:6px"><strong>Assuming the worst case when it's not likely.</strong> You run minimax against a world that is merely random. You pass up the right branch — expected value 54.5 — to collect a guaranteed 10, because you treated a 50/50 coin as an enemy. You are never destroyed, but you leave enormous value on the table, permanently.</p>
+      <p style="margin-top:6px"><strong>Assuming the worst case when it's not likely.</strong> Minimax against a merely random world: you pass up the right branch's expected 54.5 to collect a guaranteed 10, because you treated a coin flip as an enemy. You are never destroyed, but you leave enormous value on the table, permanently.</p>
     </div>
     <div class="card">
       <div class="kicker">Dangerous optimism</div>
-      <p style="margin-top:6px"><strong>Assuming chance when the world is adversarial.</strong> You run expectimax against a real opponent. You take the right branch expecting 54.5 and the opponent, who was never rolling dice, hands you the 9. Worse, in a real game those "9"s are the losses, so you do not merely underperform — you get punished specifically for the optimism, over and over, because a competent opponent steers toward exactly the outcomes your model called unlikely.</p>
+      <p style="margin-top:6px"><strong>Assuming chance when the world is adversarial.</strong> Expectimax against a real opponent: you take the right branch expecting 54.5 and the opponent, who was never rolling dice, hands you the 9. In a real game those 9s are the losses, and a competent opponent steers toward exactly the outcomes your model called unlikely, so you are punished for the optimism over and over.</p>
     </div>
   </div>
 
   <div class="box analogy"><span class="label">Analogy</span>
-    <p><strong>The minimax driver.</strong> Imagine an autonomous vehicle that runs minimax against "the other cars." Minimax says: every oncoming car might swerve into my lane, every pedestrian might step out, so assume they will. The worst case of driving anywhere is a fatal collision, and the worst case of staying in the driveway is zero. A minimax driver never leaves the driveway. Real driving requires expectimax: other drivers are stochastic, mostly-cooperative agents, and you must weigh probabilities or you cannot move at all.</p>
-    <p>Where the analogy breaks: you do not want pure expectimax either. A pedestrian with a foot off the kerb deserves something closer to worst-case treatment. Real systems use expectimax over a <em>learned</em> behaviour model, with hard minimax-style safety constraints bolted on top — which is exactly "dangerous optimism" being engineered around.</p>
+    <p><strong>The minimax driver.</strong> For a self-driving car, the worst case of driving anywhere is a fatal collision and the worst case of staying in the driveway is zero — so a minimax driver never leaves the driveway. Real driving needs expectimax over a behaviour model, with hard minimax-style safety constraints bolted on where worst-case treatment is deserved.</p>
   </div>
 
   <h3>The 2×2 you should memorise</h3>
 
-  <p>The lecture demo ran Pacman with a depth-4 search against a depth-2 ghost, scoring +500 for a win, −500 for a loss, −1 per move, over 5 games per cell. The slides ask "which pair performs the worst for Pacman? which is the best?" and move on, so here are the numbers <em>and</em> the answer.</p>
+  <p>The lecture demo ran depth-4 Pacman against a depth-2 ghost: +500 for a win, −500 for a loss, −1 per move, 5 games per cell. The slides ask which pair is worst and which is best, and move on — so here are the numbers <em>and</em> the answer.</p>
 
   <div class="viz">
     <div class="viz-title">Figure 7 · Assumed opponent (rows) × actual opponent (columns)</div>
@@ -1096,7 +1043,7 @@ def min-value(state, α, β):
   </div>
 
   <div class="box key"><span class="label">Key idea</span>
-    <p>The two mistakes are not symmetric, and this asymmetry is the practical lesson of the whole chapter. <strong>Pessimism costs you upside; optimism costs you the game.</strong> When you do not know your opponent, err toward minimax — then, as evidence accumulates that they are weak, shift toward expectimax with a learned opponent model. And notice that both errors are errors of <em>modelling</em>, not of search: the search was executed perfectly in all four cells.</p>
+    <p>The two mistakes are not symmetric, and that asymmetry is the practical lesson of the chapter. <strong>Pessimism costs you upside; optimism costs you the game.</strong> Not knowing your opponent, err toward minimax, then shift toward expectimax with a learned model as evidence accumulates that they are weak. Both are errors of <em>modelling</em>, not of search: the search ran perfectly in all four cells.</p>
   </div>
 
   <div class="viz">
@@ -1121,7 +1068,7 @@ def min-value(state, α, β):
 
   <h2 id="summary">Summary and what carries forward</h2>
 
-  <p>The through-line: <strong>games require decisions when optimality is impossible.</strong> Every technique on this page is a response to that.</p>
+  <p>The through-line: <strong>games require decisions when optimality is impossible.</strong> Every technique here responds to that.</p>
 
   <table>
     <thead><tr><th>The obstacle</th><th>The response</th><th>What it costs you</th></tr></thead>
@@ -1135,21 +1082,14 @@ def min-value(state, α, β):
     </tbody>
   </table>
 
-  <p><strong>Games force efficient use of computation</strong> — α-β exists because the budget is finite. And <strong>game playing has produced ideas that outlived the games</strong>:</p>
-  <ul>
-    <li><strong>Reinforcement learning</strong> came out of checkers (Samuel's self-play evaluation tuning).</li>
-    <li><strong>Iterative deepening</strong> came out of chess engineering.</li>
-    <li><strong>Monte Carlo tree search</strong> came out of Go.</li>
-    <li><strong>Solution methods for partial-information games</strong> came out of poker, and feed straight back into economics.</li>
-  </ul>
-  <p>And the frontier is not solved: <strong>video games present much greater challenges</strong>, with $b = 10^{500}$, $|S| = 10^{4000}$ and $m = 10{,}000$ — numbers that make chess look like tic-tac-toe.</p>
+  <p><strong>Games force efficient use of computation</strong> — α-β exists because the budget is finite — and they have produced ideas that outlived them: <strong>reinforcement learning</strong> out of checkers (Samuel's self-play evaluation tuning), <strong>iterative deepening</strong> out of chess engineering, <strong>Monte Carlo tree search</strong> out of Go, and solution methods for partial-information games out of poker. The frontier is not solved: <strong>video games present much greater challenges</strong>, with $b = 10^{500}$, $|S| = 10^{4000}$ and $m = 10{,}000$.</p>
 
   <div class="box intuition"><span class="label">Intuition</span>
-    <p><strong>Where this goes next.</strong> Look again at the chance-node rule and the max rule together:</p>
+    <p><strong>Where this goes next.</strong> The chance-node rule and the max rule together,</p>
     $$V(s) = \max_a \sum_{s'} P(s' \mid s,a)\, V(s')$$
-    <p>That is expectimax written as one equation — and it is one small step from the <strong>Bellman equation</strong> for a Markov decision process:</p>
+    <p>are one small step from the <strong>Bellman equation</strong> for a Markov decision process:</p>
     $$V(s) = \max_a \sum_{s'} P(s' \mid s,a)\big[R(s,a,s') + \gamma V(s')\big]$$
-    <p>with <em>value iteration</em> $V_{k+1}(s) = \max_a \sum_{s'} P(s'\mid s,a)[R(s,a,s') + \gamma V_k(s')]$, <em>Q-iteration</em> $Q_{k+1}(s,a) = \sum_{s'} P(s'\mid s,a)[R(s,a,s') + \gamma \max_{a'} Q_k(s',a')]$, and <em>policy extraction</em> $\pi_V(s) = \argmax_a \sum_{s'} P(s'\mid s,a)[R(s,a,s') + \gamma V(s')]$. The differences are: rewards arrive along the way rather than only at the end, a discount $\gamma$ keeps infinite games finite, and states repeat so you iterate to a fixed point instead of recursing down a tree. The $\max$, the $\sum P(\cdot)$, the argmax that turns a value into a policy — all of it is already on this page. <span class="pill">beyond syllabus</span></p>
+    <p>The differences: rewards arrive along the way rather than only at the end, a discount $\gamma$ keeps infinite games finite, and states repeat so you iterate to a fixed point instead of recursing down a tree. The $\max$, the $\sum P(\cdot)$ and the argmax that turns a value into a policy are all already on this page. <span class="pill">beyond syllabus</span></p>
   </div>
 
   <div class="quiz" data-answer="3">
