@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maximum Likelihood Estimation · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="mle">
+<main>
+
+  <div class="eyebrow">Part II · Chapter 16</div>
+  <h1>Maximum likelihood estimation</h1>
+  <p class="subtitle">Where loss functions actually come from. Pick a probability model, ask which parameters make the data you saw most probable,
+  and out fall the sample mean, the fraction of heads, and the cross-entropy loss you have been using since chapter 11.</p>
+
+  <div data-toc></div>
+
+  <div class="box warn"><span class="label">Fixes to the pre-reading</span>
+    <p>The MLE pre-reading (v1.1) has a few slips. This chapter uses the corrected versions:</p>
+    <ul>
+      <li><strong>Fair coin, eq. (14):</strong> $\tfrac12\cdot\tfrac12\cdot(1-\tfrac12)\cdot\tfrac12 = \tfrac{1}{16}$, not $\tfrac18$.</li>
+      <li><strong>Gaussian grades, eqs. (36)–(40):</strong> the density values don't match the stated parameters. With $\mu = 80, \sigma^2 = 5^2$ the three densities are
+      $0.04839, 0.07979, 0.000886$ and the likelihood is $3.42\times10^{-6}$ (notes: $6.02\times10^{-11}$). With $\mu = 85, \sigma^2 = 10^2$ they are $0.02420, 0.03521, 0.02420$, likelihood
+      $2.06\times10^{-5}$ (notes: $2.19\times10^{-9}$). The conclusion still holds — the second parameter set is better — but by a factor of about 6, not 36.</li>
+      <li><strong>§3.2:</strong> "to find the parameters that <em>minimize</em> the likelihood" should be <em>maximize</em>.</li>
+      <li><strong>§3.5.4</strong> writes $\mathcal N(\mu, \sigma)$ where the rest of the notes write $\mathcal N(\mu, \sigma^2)$. The formulas use $\sigma^2$ as the variance throughout.</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="why">1. Why we need this: where do loss functions come from?</h2>
+
+  <p>So far each model came with a loss that was just handed to you. Linear regression used squared error. Logistic regression used cross-entropy, justified
+  by "it's convex and the gradient is clean". Why those? Would $|y - \hat y|^3$ be just as good?</p>
+
+  <p>Maximum likelihood estimation (MLE) is the principle behind those choices. It goes in two steps:</p>
+  <ol>
+    <li><strong>Say what you believe about how the data was generated</strong>, as a probability distribution with unknown parameters $\theta$: "each flip is heads with probability $\phi$", "grades are bell-shaped around some $\mu$".</li>
+    <li><strong>Choose the $\theta$ under which the data you actually observed is most probable.</strong></li>
+  </ol>
+  <p>Do that and the loss isn't a choice any more. It's derived. By the end of this chapter, cross-entropy will come out of a coin-flip model with no extra assumptions (§8).</p>
+
+  <div class="box analogy"><span class="label">Analogy — the detective</span>
+    <p>You find a coin that came up heads in 9 of 10 flips. Suspects: "fair coin", "coin with $\phi = 0.9$", "coin with $\phi = 0.5$ but you got lucky". The detective asks of each
+    suspect: <em>if it were you, how likely is what we saw?</em> The suspect that makes the evidence least surprising is the best explanation. MLE is that detective, searching over every possible $\phi$.
+    (Where it breaks: a real detective also weighs how plausible each suspect was <em>beforehand</em>. MLE doesn't — that's the extra step in MAP estimation, later in the course.)</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="distributions">2. The four distributions we'll use</h2>
+
+  <p>The first two are discrete (they give probabilities of outcomes); the normal distributions are continuous (they give probability <em>densities</em>).</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 1 — what each distribution looks like</div>
+    <svg id="distSvg" viewBox="0 0 660 220" role="img" aria-label="Bar chart for Bernoulli with phi 0.7, bar chart for a four-sided categorical, and a bell curve for the normal distribution"></svg>
+    <div class="caption">Left: Bernoulli with $\phi = 0.7$. Middle: categorical over 4 colours with $\boldsymbol\phi = [0.2, 0.1, 0.4, 0.3]$ (the notes' weighted die). Right: normal with $\mu = 0$ and
+    $\sigma = 1$ (solid) or $\sigma = 0.5$ (dashed). What to notice: the bars in each discrete chart sum to 1. The <em>area</em> under each normal curve is 1, so the narrow one has to be
+    taller, and its peak is about 0.80. Densities are not probabilities.</div>
+  </div>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th></th><th>Bernoulli</th><th>Categorical</th><th>Normal</th><th>Multivariate normal</th></tr></thead>
+    <tbody>
+      <tr><td>Canonical example</td><td>one flip of a (maybe biased) coin</td><td>one roll of a (maybe weighted) $K$-sided die</td><td>height of a person</td><td>height <em>and</em> weight of a person</td></tr>
+      <tr><td>Random variable</td><td>$Y\in\{0,1\}$</td><td>one-hot $\mathbf Y = [Y_1,\dots,Y_K]^\top$</td><td>$Y\in\R$</td><td>$\mathbf X\in\R^M$</td></tr>
+      <tr><td>Parameters</td><td>$\phi\in[0,1]$</td><td>$\phi_k\in[0,1]$, $\sum_k\phi_k = 1$</td><td>$\mu\in\R$, $\sigma^2 > 0$</td><td>$\boldsymbol\mu\in\R^M$, $\Sigma\in\R^{M\times M}$</td></tr>
+      <tr><td>p.m.f. / p.d.f.</td><td>$p(y\mid\phi) = \begin{cases}\phi &amp; y=1\\ 1-\phi &amp; y=0\end{cases}$</td><td>$P(Y_k = 1\mid\boldsymbol\phi) = \phi_k$</td>
+        <td>$\dfrac{1}{\sqrt{2\pi\sigma^2}}e^{-\frac{(y-\mu)^2}{2\sigma^2}}$</td><td>$\dfrac{1}{(2\pi)^{M/2}|\Sigma|^{1/2}}e^{-\frac12(\mathbf x-\boldsymbol\mu)^\top\Sigma^{-1}(\mathbf x-\boldsymbol\mu)}$</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two notes on notation. In the categorical row, the outcome is stored as a <strong>one-hot vector</strong>: "green" on a red/green/blue/magenta die is $[0,1,0,0]^\top$, so exactly one $Y_k$ is 1.
+  In the normal row, $\sigma^2$ is the <strong>variance</strong> and $\sigma$ the standard deviation. For the multivariate normal, $|\Sigma|$ is the determinant of the covariance matrix and
+  $\Sigma^{-1}$ its inverse; in 2-D the bell curve becomes a "hat".</p>
+
+  <div class="box warn"><span class="label">Common mistake</span>
+    <p>"A density can't be bigger than 1." It can. A normal with $\sigma = 0.1$ has a peak density of $\frac{1}{\sqrt{2\pi}\,0.1} \approx 3.99$. Only the <em>area</em> must be 1. So a Gaussian
+    likelihood can be larger than 1, and its log can be positive, and neither means something went wrong.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="likelihood">3. Likelihood: how probable is the data, given the parameters?</h2>
+
+  <div class="box defn"><span class="label">Likelihood</span>
+    <p>For a dataset $\D = \{y^{(1)},\dots,y^{(N)}\}$ and parameters $\theta$, the likelihood is the probability (or density) of the data given the parameters:</p>
+    $$ p(\D\mid\theta) = \prod_{i=1}^{N} p\bigl(y^{(i)}\mid\theta\bigr). $$
+    <p>The superscript $(i)$ is an index ("the $i$-th data point"), not a power.</p>
+  </div>
+
+  <p><strong>Why can we multiply?</strong> Because we assume the data is <strong>i.i.d.</strong>: independent (one flip doesn't affect the next) and identically distributed (every flip uses
+  the same $\theta$). For independent events, the joint probability is the product. Without that assumption you'd be stuck with each outcome depending on all the previous ones, each with its own parameters:</p>
+  $$ p(y^{(1)}\mid\theta_1)\,p(y^{(2)}\mid y^{(1)},\theta_2)\,p(y^{(3)}\mid y^{(1)},y^{(2)},\theta_3)\cdots $$
+  <p>which you couldn't estimate from one dataset.</p>
+
+  <h3>Three worked likelihoods</h3>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Example</span>Coin: $\D = \{1, 1, 0, 1\}$ (heads, heads, tails, heads)</div>
+    <div class="g-body"><p>Compute $p(\D\mid\phi)$ in general, then for a fair coin and for $\phi = 3/10$.</p></div>
+    <details class="step"><summary>General form</summary><div>
+      $$ p(\D\mid\phi) = p(\text{H})\,p(\text{H})\,p(\text{T})\,p(\text{H}) = \phi\cdot\phi\cdot(1-\phi)\cdot\phi = \phi^3(1-\phi). $$</div></details>
+    <details class="step"><summary>Plug in</summary><div>
+      <p>Fair, $\phi = \tfrac12$: $\left(\tfrac12\right)^3\cdot\tfrac12 = \tfrac{1}{16} = 0.0625$. (The notes say $\tfrac18$, which is a typo.)<br>
+      Biased, $\phi = \tfrac{3}{10}$: $\left(\tfrac{3}{10}\right)^3\cdot\tfrac{7}{10} = \tfrac{189}{10000} = 0.0189$.</p></div></details>
+    <details class="step"><summary>Takeaway</summary><div>
+      <p>The fair coin explains 3-heads-in-4 better than the tails-biased one, by a factor of about 3.3. Hold on to that "compare two $\theta$'s" idea, because it's the whole of MLE.</p></div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Example</span>Four-sided die: $\D = \{\text{green}, \text{magenta}, \text{magenta}, \text{red}, \text{green}\}$</div>
+    <div class="g-body"><p>Sides in order red, green, blue, magenta with probabilities $\phi_1,\phi_2,\phi_3,\phi_4$.</p></div>
+    <details class="step"><summary>General form</summary><div>
+      $$ p(\D\mid\boldsymbol\phi) = \phi_2\,\phi_4\,\phi_4\,\phi_1\,\phi_2 = \phi_1\,\phi_2^2\,\phi_4^2. $$
+      <p>Blue never appeared, so $\phi_3$ doesn't show up at all.</p></div></details>
+    <details class="step"><summary>Plug in</summary><div>
+      <p>Fair die, $\boldsymbol\phi = [\tfrac14,\tfrac14,\tfrac14,\tfrac14]$: $\left(\tfrac14\right)^5 = \tfrac{1}{1024} \approx 0.000977$.<br>
+      Weighted, $\boldsymbol\phi = [\tfrac{2}{10},\tfrac{1}{10},\tfrac{4}{10},\tfrac{3}{10}]$: $\tfrac{2}{10}\cdot\left(\tfrac{1}{10}\right)^2\cdot\left(\tfrac{3}{10}\right)^2 = \tfrac{18}{100000} = 0.00018$.</p></div></details>
+    <details class="step"><summary>Takeaway</summary><div>
+      <p>The weighted die puts 40% on blue, which never came up, and only 10% on green, which came up twice. So it explains this data about 5× worse than a fair die.</p></div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Example</span>Test grades: $\D = \{75, 95, 80\}$, normal model (corrected numbers)</div>
+    <div class="g-body"><p>$p(\D\mid\mu,\sigma^2) = p(75\mid\mu,\sigma^2)\,p(95\mid\mu,\sigma^2)\,p(80\mid\mu,\sigma^2)$, each factor the normal density. Compare $(\mu,\sigma^2) = (80, 5^2)$ with $(85, 10^2)$.</p></div>
+    <details class="step"><summary>$\mu = 80$, $\sigma = 5$</summary><div>
+      <p>$p(75) = \frac{1}{\sqrt{2\pi}\cdot5}e^{-25/50} = 0.07979\cdot0.6065 = 0.04839$; $p(80) = 0.07979$ (the peak); $p(95) = 0.07979\cdot e^{-225/50} = 0.000886$.<br>
+      Likelihood $= 0.04839\times0.07979\times0.000886 = 3.42\times10^{-6}$.</p></div></details>
+    <details class="step"><summary>$\mu = 85$, $\sigma = 10$</summary><div>
+      <p>$p(75) = p(95) = \frac{1}{\sqrt{2\pi}\cdot10}e^{-100/200} = 0.02420$; $p(80) = 0.03989\cdot e^{-25/200} = 0.03521$.<br>
+      Likelihood $= 0.02420^2\times0.03521 = 2.06\times10^{-5}$.</p></div></details>
+    <details class="step"><summary>Takeaway</summary><div>
+      <p>The second is about 6× more likely. The narrow curve at 80 almost rules out the 95 (density 0.000886), and that one point drags its whole product down. Notice also how
+      <em>small</em> these numbers are with only three points. That becomes a real problem in §5.</p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="mle">4. Maximum likelihood: flip the question around</h2>
+
+  <p>A single likelihood value like $3.42\times10^{-6}$ means almost nothing on its own. Comparing two values does: it told us $(85, 10^2)$ beats $(80, 5^2)$. MLE takes that to its
+  conclusion and searches over <em>all</em> parameter values for the best one:</p>
+  $$ \hat\theta_{\text{MLE}} = \argmax_\theta\ p(\D\mid\theta) = \argmax_\theta \prod_{i=1}^N p\bigl(y^{(i)}\mid\theta\bigr). $$
+  <p>To stress that we're now varying $\theta$ with the data held fixed, it's written as the <strong>likelihood function</strong> $L(\theta;\D) = p(\D\mid\theta)$, often just $L(\theta)$. It is the
+  same formula as before. The only thing that changed is which symbol we treat as the variable.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 2 — the coin's likelihood function $L(\phi) = \phi^{N_H}(1-\phi)^{N_T}$</div>
+    <svg id="coinSvg" viewBox="0 0 640 280" role="img" aria-label="Likelihood or log-likelihood of a coin as a function of phi, with the maximum marked"></svg>
+    <div class="controls">
+      <label>Heads $N_H$ <input type="range" id="coinH" min="0" max="40" step="1" value="3" data-out="coinHv" data-fmt="int"><span class="val" id="coinHv"></span></label>
+      <label>Tails $N_T$ <input type="range" id="coinT" min="0" max="40" step="1" value="1" data-out="coinTv" data-fmt="int"><span class="val" id="coinTv"></span></label>
+      <label><input type="checkbox" id="coinLog"> show log-likelihood</label>
+    </div>
+    <div class="caption" id="coinOut" style="font-family:var(--mono)"></div>
+    <div class="caption">Starts at the notes' dataset $\{1,1,0,1\}$. The dot is the maximum, found here by checking 2,000 grid points. What to notice: (1) the peak is always at $N_H/(N_H+N_T)$, which §6
+    derives. (2) Multiply both counts by 10 (30 heads, 10 tails) and the peak stays put but gets much <em>narrower</em>: more data, more certainty. (3) The readout's "area under $L$" is not 1
+    ($\tfrac{1}{20}$ for the starting data). The likelihood is <strong>not a probability distribution over $\phi$</strong>. (4) Tick "log": the curve changes shape but the peak doesn't move.</div>
+  </div>
+
+  <div class="box warn"><span class="label">Common mistake: $p(\D\mid\theta)$ is not $p(\theta\mid\D)$</span>
+    <p>It's tempting to read "the likelihood of $\phi = 0.75$ is 0.105" as "there's a 10.5% chance $\phi$ is 0.75". It isn't. The likelihood is still the probability of the <em>data</em> given the
+    parameters. We're just looking for the parameters that make it largest. Figure 2's area readout makes it concrete: integrate $L$ over $\phi$ and you don't get 1. Turning it into
+    $p(\theta\mid\D)$ needs Bayes' rule and a prior.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="log-likelihood">5. Take the log, then negate it</h2>
+
+  <p>In practice we never maximise $L$ directly. We use the <strong>log-likelihood</strong></p>
+  $$ \ell(\theta;\D) = \log L(\theta;\D) = \log\prod_{i=1}^N p\bigl(y^{(i)}\mid\theta\bigr) = \sum_{i=1}^N \log p\bigl(y^{(i)}\mid\theta\bigr), $$
+  <p>for two reasons:</p>
+
+  <div class="grid2">
+    <div class="box key"><span class="label">Reason 1 — underflow</span>
+      <p>A product of many numbers below 1 shrinks exponentially. Three grades already gave $10^{-6}$. With thousands of points, the true value is smaller than the smallest number a computer can store,
+      so it gets rounded to exactly 0. Then every $\theta$ "has likelihood 0" and you can't compare them. A sum of logs stays a reasonable size.</p>
+    </div>
+    <div class="box key"><span class="label">Reason 2 — easier calculus</span>
+      <p>Differentiating a product of $N$ factors needs the product rule $N$ times. The log turns it into a sum, which you differentiate term by term. It also cancels the $\exp$ in Gaussians (and other exponential-family distributions).</p>
+    </div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 3 — break the computer: multiply 0.5 by itself $N$ times</div>
+    <svg id="ufSvg" viewBox="0 0 640 230" role="img" aria-label="Log10 of the likelihood of N fair coin flips, computed by multiplying directly versus summing logs"></svg>
+    <div class="controls">
+      <label>Number of flips $N$ <input type="range" id="ufN" min="1" max="1500" step="1" value="1000" data-out="ufNv" data-fmt="int"><span class="val" id="ufNv"></span></label>
+    </div>
+    <div class="caption" id="ufOut" style="font-family:var(--mono)"></div>
+    <div class="caption">The likelihood of any particular sequence of $N$ fair-coin flips is $0.5^N$. The page computes it two ways in double precision: a running product, and a sum of logs.
+    What to notice: drag past $N = 1074$. At $N = 1075$ the running product becomes exactly 0 (the smallest storable positive double is $2^{-1074}$), and the pink line drops off the chart. The log version keeps
+    going as a straight line with $\log_{10}$-likelihood $-N\log_{10}2$. Real datasets have millions of points.</div>
+  </div>
+
+  <p><strong>Why is it allowed?</strong> $\log$ is <strong>monotonically increasing</strong>: if $L(\theta_B) > L(\theta_A)$ then $\log L(\theta_B) > \log L(\theta_A)$. It changes the <em>values</em>
+  but never the <em>order</em>, so the $\theta$ at the top is the same:</p>
+  $$ \hat\theta_{\text{MLE}} = \argmax_\theta\ p(\D\mid\theta) = \argmax_\theta\ \log p(\D\mid\theta). $$
+
+  <p><strong>Then negate.</strong> We've built all our tools around <em>minimising</em> (gradient descent), so flip the sign: $\argmax_\theta \ell(\theta) = \argmin_\theta\,[-\ell(\theta)]$. The
+  <strong>negative log-likelihood (NLL)</strong> is now an ordinary loss to minimise.</p>
+
+  <div class="box defn"><span class="label">The MLE recipe</span>
+    <ol>
+      <li>Write down the likelihood $p(\D\mid\theta)$.</li>
+      <li>Set the objective to the negative log-likelihood: $J(\theta) = -\log p(\D\mid\theta)$.</li>
+      <li>Compute $\partial J/\partial\theta$.</li>
+      <li>Find $\hat\theta_{\text{MLE}}$ by (a) setting the derivative to zero and solving, or (b) gradient descent.</li>
+    </ol>
+    <p>Steps 3 and 4 are exactly what we've done for linear regression, logistic regression, and neural networks. Only steps 1–2 are new.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="bernoulli-mle">6. MLE for a coin: the fraction of heads</h2>
+
+  <p><strong>A notation trick first.</strong> With specific data we could write each factor as $\phi$ or $1-\phi$ by inspection. With a general $y^{(i)}$ we need one expression that picks the
+  right one automatically. Use the indicator $\mathbb 1(\cdot)$, which is 1 when its condition is true and 0 otherwise, as an exponent:</p>
+  $$ p\bigl(y^{(i)}\mid\phi\bigr) = \phi^{\,\mathbb 1(y^{(i)}=1)}\,(1-\phi)^{\,\mathbb 1(y^{(i)}=0)}. $$
+  <p>If $y^{(i)} = 1$ this is $\phi^1(1-\phi)^0 = \phi$. If $y^{(i)} = 0$ it's $\phi^0(1-\phi)^1 = 1-\phi$. Anything to the power 0 is 1, so the factor that doesn't apply drops out.</p>
+
+  <h3>Derivation</h3>
+  <p>Suppose $\D$ has $N_H$ heads and $N_T$ tails ($N = N_H + N_T$).</p>
+  <div class="box proof"><span class="label">Derivation</span>
+    <p><strong>Log-likelihood.</strong> The log of a product is the sum of logs, and $\log a^b = b\log a$:</p>
+    $$ \ell(\phi) = \sum_{i=1}^N\Bigl[\mathbb 1(y^{(i)}=1)\log\phi + \mathbb 1(y^{(i)}=0)\log(1-\phi)\Bigr] = N_H\log\phi + N_T\log(1-\phi). $$
+    <p>(Summing the indicator $\mathbb 1(y^{(i)}=1)$ over all $i$ just counts the heads.)</p>
+    <p><strong>Differentiate and set to zero.</strong></p>
+    $$ \frac{d\ell}{d\phi} = \frac{N_H}{\phi} - \frac{N_T}{1-\phi} = \frac{(1-\phi)N_H - \phi N_T}{\phi(1-\phi)} = 0. $$
+    <p>A fraction is zero when its numerator is: $(1-\phi)N_H - \phi N_T = 0 \Rightarrow N_H - \phi(N_H + N_T) = 0$, so</p>
+    $$ \hat\phi_{\text{MLE}} = \frac{N_H}{N_H + N_T} = \frac{N_H}{N}. $$
+    <p><strong>Is it a maximum?</strong> $\frac{d^2\ell}{d\phi^2} = -\frac{N_H}{\phi^2} - \frac{N_T}{(1-\phi)^2} &lt; 0$ everywhere, so $\ell$ is concave and this is the maximum. (The notes skip this check.)</p>
+  </div>
+  <p>That's the answer you'd have guessed, the fraction of flips that came up heads. MLE agrees with intuition, and the same machinery keeps working when intuition runs out.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>MLE for $\D = \{1, 1, 0, 1\}$, and how good is it?</div>
+    <div class="g-body"><p>Find $\hat\phi_{\text{MLE}}$ and its likelihood. Compare with the fair coin's $\tfrac1{16}$.</p></div>
+    <details class="step"><summary>Step 1 — Count</summary><div><p>$N_H = 3$, $N_T = 1$, so $\hat\phi = 3/4$.</p></div></details>
+    <details class="step"><summary>Step 2 — Likelihood at the MLE</summary><div><p>$L(3/4) = (3/4)^3(1/4) = 27/256 \approx 0.1055$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$0.1055$ vs $0.0625$ (fair) vs $0.0189$ ($\phi = 0.3$). Nothing beats the MLE, by definition. Now the warning: after one flip that lands heads, the MLE is $\hat\phi = 1$, "this coin always lands heads".
+      With little data, MLE trusts the data completely and <strong>overfits</strong>. That's the same disease regularisation treated in chapter 12, and MAP estimation will treat it here.</p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="categorical-mle">7. MLE for a die: the trick the notes held back</h2>
+
+  <p>The same indicator trick, with one-hot data. For data point $i$, exactly one $y_k^{(i)}$ is 1:</p>
+  $$ p\bigl(\mathbf y^{(i)}\mid\boldsymbol\phi\bigr) = \prod_{k=1}^{K}\phi_k^{\,\mathbb 1(y^{(i)}_k = 1)}, \qquad L(\boldsymbol\phi) = \prod_{i=1}^{N}\prod_{k=1}^{K}\phi_k^{\,\mathbb 1(y^{(i)}_k = 1)}. $$
+  <p>For "green" $= [0,1,0,0]^\top$, the inner product is $\phi_1^0\phi_2^1\phi_3^0\phi_4^0 = \phi_2$. Every non-matching side contributes a factor of 1. Taking logs and swapping the order of the two sums:</p>
+  $$ \ell(\boldsymbol\phi) = \sum_{i=1}^N\sum_{k=1}^K \mathbb 1(y_k^{(i)} = 1)\log\phi_k = \sum_{k=1}^K\Bigl[\sum_{i=1}^N\mathbb 1(y_k^{(i)} = 1)\Bigr]\log\phi_k = \sum_{k=1}^K N_k\log\phi_k, $$
+  <p>where $N_k$ is how many times side $k$ came up.</p>
+
+  <p>The notes stop here: "we're going to hold off… as it involves one more trick related to the fact that $\sum_k\phi_k = 1$". Here's that trick.</p>
+
+  <div class="box proof"><span class="label">Solving it (constrained maximisation)</span>
+    <p><strong>Why the usual move fails.</strong> Set $\partial\ell/\partial\phi_k = N_k/\phi_k = 0$? That has no solution. $\ell$ just keeps rising as every $\phi_k$ grows. Without the constraint, "make every side more
+    likely" always helps. But the $\phi_k$ must sum to 1: raising one forces another down.</p>
+    <p><strong>Lagrange multiplier.</strong> To maximise $\ell$ subject to $\sum_k\phi_k = 1$, maximise $\ell(\boldsymbol\phi) - \lambda\bigl(\sum_k\phi_k - 1\bigr)$ over $\boldsymbol\phi$, where $\lambda$ is a new unknown:</p>
+    $$ \frac{\partial}{\partial\phi_k}: \quad \frac{N_k}{\phi_k} - \lambda = 0 \quad\Longrightarrow\quad \phi_k = \frac{N_k}{\lambda}. $$
+    <p><strong>Pin down $\lambda$</strong> using the constraint: $\sum_k\phi_k = \sum_k N_k/\lambda = N/\lambda = 1$, so $\lambda = N$. Therefore</p>
+    $$ \hat\phi_{k,\text{MLE}} = \frac{N_k}{N}. $$
+    <p><strong>Intuition for $\lambda$:</strong> at the optimum, the marginal gain from moving a little probability onto side $k$, which is $N_k/\phi_k$, must be the same for every side. If it weren't, you'd shift probability from the side with the smaller gain to the one with the larger gain and do better. $\lambda$ is that common value.</p>
+    <p><strong>No-Lagrange check:</strong> with $K = 2$, substitute $\phi_2 = 1 - \phi_1$. You get $N_1\log\phi_1 + N_2\log(1-\phi_1)$, which is exactly the coin from §6, with answer $N_1/N$. ✓</p>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>The die from §3</div>
+    <div class="g-body"><p>$\D = \{\text{green}, \text{magenta}, \text{magenta}, \text{red}, \text{green}\}$. Find $\hat{\boldsymbol\phi}_{\text{MLE}}$ and its likelihood.</p></div>
+    <details class="step"><summary>Step 1 — Counts</summary><div><p>Red 1, green 2, blue 0, magenta 2; $N = 5$.</p></div></details>
+    <details class="step"><summary>Step 2 — Estimates and likelihood</summary><div>
+      <p>$\hat{\boldsymbol\phi} = [\tfrac15, \tfrac25, 0, \tfrac25]$. Likelihood $\phi_1\phi_2^2\phi_4^2 = 0.2\cdot0.4^2\cdot0.4^2 = 0.00512$, about 5× the fair die's $0.000977$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>Look at $\hat\phi_3 = 0$. Blue never appeared, so MLE says blue is <strong>impossible</strong>. Roll blue once at test time and the model assigns it probability 0 (NLL $= \infty$). With five rolls that's
+      clearly overconfident. It's the categorical version of the one-flip problem, and the usual fix is to add a small pseudo-count to every side (smoothing). <span class="pill">going deeper</span></p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="gaussian-mle">8. MLE for a Gaussian: the mean, and the variance</h2>
+
+  <p>Data $x^{(1)},\dots,x^{(N)}$, model $\mathcal N(\mu,\sigma^2)$. Log of each density:</p>
+  $$ \log\Bigl[\frac{1}{\sqrt{2\pi\sigma^2}}e^{-\frac{(x^{(i)}-\mu)^2}{2\sigma^2}}\Bigr] = -\log\sqrt{2\pi} - \log\sigma - \frac{(x^{(i)}-\mu)^2}{2\sigma^2}, $$
+  <p>so summing over $i$,</p>
+  $$ \ell(\mu,\sigma) = -N\log\sqrt{2\pi} - N\log\sigma - \sum_{i=1}^N\frac{(x^{(i)}-\mu)^2}{2\sigma^2}. $$
+  <p>The log has removed the exponential, as promised.</p>
+
+  <div class="box proof"><span class="label">The mean</span>
+    <p>Only the last term involves $\mu$:</p>
+    $$ \frac{\partial\ell}{\partial\mu} = \sum_{i=1}^N\frac{2(x^{(i)}-\mu)}{2\sigma^2} = \frac{1}{\sigma^2}\sum_{i=1}^N(x^{(i)} - \mu) = 0 \ \Longrightarrow\ \sum_i x^{(i)} = N\mu \ \Longrightarrow\ \hat\mu = \frac1N\sum_{i=1}^N x^{(i)}. $$
+    <p>The sample average, as you'd expect. Notice that $\sigma$ dropped out, so $\hat\mu$ is the same whatever the variance is.</p>
+  </div>
+
+  <div class="box proof"><span class="label">The variance (not in the notes)</span>
+    <p>Differentiate with respect to $\sigma$. The first term is constant, $\frac{d}{d\sigma}(-N\log\sigma) = -\frac N\sigma$, and $\frac{d}{d\sigma}\frac{1}{2\sigma^2} = -\frac{1}{\sigma^3}$:</p>
+    $$ \frac{\partial\ell}{\partial\sigma} = -\frac{N}{\sigma} + \frac{1}{\sigma^3}\sum_{i=1}^N(x^{(i)}-\mu)^2 = 0 \ \Longrightarrow\ \hat\sigma^2 = \frac1N\sum_{i=1}^N\bigl(x^{(i)} - \hat\mu\bigr)^2. $$
+    <p>The average squared distance from the mean. The two terms pull in opposite directions. $-N\log\sigma$ rewards a narrow curve (tall peak, high density). The squared-error term punishes a curve too narrow to reach the data. The MLE balances them.</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 4 — fit a bell curve to three grades by hand</div>
+    <svg id="gSvg" viewBox="0 0 640 290" role="img" aria-label="Normal density curve over grades 50 to 110 with the three data points 75, 80, 95 marked and their density heights shown"></svg>
+    <div class="controls">
+      <label>$\mu$ <input type="range" id="gMu" min="60" max="100" step="0.5" value="80" data-out="gMuv" data-dp="1"><span class="val" id="gMuv"></span></label>
+      <label>$\sigma$ <input type="range" id="gSig" min="1" max="25" step="0.1" value="5" data-out="gSigv" data-dp="1"><span class="val" id="gSigv"></span></label>
+      <button class="btn primary" id="gMle">Jump to MLE</button>
+    </div>
+    <div class="caption" id="gOut" style="font-family:var(--mono)"></div>
+    <div class="caption">The likelihood is the <em>product of the three stem heights</em>. Starts at the notes' first guess, $(80, 5^2)$. What to notice: shrink $\sigma$ toward 1 and the stem at 95 collapses to almost nothing, so the
+    product collapses too. One badly-explained point is enough to sink a hypothesis. "Jump to MLE" sets $\hat\mu = 83.33$ and $\hat\sigma = 8.50$ ($\hat\sigma^2 = 72.22$), with likelihood
+    $2.31\times10^{-5}$. That beats both of the notes' candidates, and no slider setting beats it.</div>
+  </div>
+
+  <p class="tiny"><span class="pill">going deeper</span> $\hat\sigma^2$ divides by $N$. On average it slightly <em>underestimates</em> the true variance, because $\hat\mu$ was fitted to the same data and sits closer to it than the true $\mu$
+  does. The "sample variance" in statistics divides by $N-1$ to correct this (108.33 instead of 72.22 for the grades). MLE gives the $N$ version.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="logistic-mle">9. The payoff: logistic regression <em>is</em> MLE</h2>
+
+  <p>So far we've modelled one variable on its own. For prediction we want the distribution of the label <em>given</em> the input, $p(y\mid\mathbf x,\theta)$. The recipe: collect i.i.d. pairs $(\mathbf x^{(i)}, y^{(i)})$,
+  choose a form for $p(y\mid\mathbf x,\theta)$, and maximise</p>
+  $$ L(\theta) = p\bigl(y^{(1)},\dots,y^{(N)}\mid\mathbf x^{(1)},\dots,\mathbf x^{(N)},\theta\bigr) = \prod_{i=1}^N p\bigl(y^{(i)}\mid\mathbf x^{(i)},\theta\bigr). $$
+
+  <div class="box defn"><span class="label">Conditional likelihood (and why nobody says "MCLE")</span>
+    <p>This is the <strong>conditional likelihood</strong>: we condition on the inputs and only model the labels. Maximising it is strictly "maximum conditional likelihood estimation". In ML it's used so
+    often that people drop the "conditional" and call it the likelihood and MLE. Some even write it $p(\D\mid\theta)$, which is confusing because $\D$ contains the $\mathbf x$'s on the right of the bar. Read it as conditional.</p>
+  </div>
+
+  <h3>Binary</h3>
+  <p>Logistic regression says $p(y = 1\mid\mathbf x) = \sigma(\theta^\top\mathbf x) = \frac{1}{1+e^{-\theta^\top\mathbf x}}$. Write $\phi^{(i)} = \sigma(\theta^\top\mathbf x^{(i)})$. Each label is now a <strong>coin flip whose bias depends on its input</strong>.
+  So the likelihood is the Bernoulli one from §6, with a different $\phi$ per point:</p>
+  $$ L(\theta) = \prod_{i=1}^N\bigl(\phi^{(i)}\bigr)^{\mathbb 1(y^{(i)}=1)}\bigl(1-\phi^{(i)}\bigr)^{\mathbb 1(y^{(i)}=0)}, \qquad
+     -\ell(\theta) = -\sum_{i=1}^N\Bigl[\mathbb 1(y^{(i)}=1)\log\phi^{(i)} + \mathbb 1(y^{(i)}=0)\log(1-\phi^{(i)})\Bigr]. $$
+  <p>Now make three substitutions, each true by definition: $\mathbb 1(y^{(i)}=1) = y^{(i)}$ (since $y\in\{0,1\}$), $\mathbb 1(y^{(i)}=0) = 1 - y^{(i)}$, and $\phi^{(i)} = \hat y^{(i)}$:</p>
+  $$ \hat\theta_{\text{MLE}} = \argmin_\theta\ -\sum_{i=1}^N\Bigl[y^{(i)}\log\hat y^{(i)} + \bigl(1-y^{(i)}\bigr)\log\bigl(1-\hat y^{(i)}\bigr)\Bigr]. $$
+  <div class="box key"><span class="label">Key idea</span>
+    <p>That's exactly the <strong>binary cross-entropy</strong> objective from chapter 11, up to the constant factor $\frac1N$, which doesn't move the argmin. Cross-entropy was not an arbitrary choice. It is the NLL of a Bernoulli model.</p>
+  </div>
+
+  <h3>Multi-class</h3>
+  <p>With softmax, $\phi_k^{(i)} = \frac{\exp(\theta_k^\top\mathbf x^{(i)})}{\sum_{l=1}^K\exp(\theta_l^\top\mathbf x^{(i)})}$: each label is a <strong>die roll whose weights depend on the input</strong>. That gives the categorical likelihood from §7:</p>
+  $$ -\ell(\Theta) = -\sum_{i=1}^N\sum_{k=1}^K\mathbb 1(y_k^{(i)}=1)\log\phi_k^{(i)} = -\sum_{i=1}^N\sum_{k=1}^K y_k^{(i)}\log\hat y_k^{(i)}, $$
+  <p>which is the multi-class cross-entropy, again.</p>
+
+  <h3>And linear regression? <span class="pill">going deeper</span></h3>
+  <p>Assume $y = \theta^\top\mathbf x + \varepsilon$ with noise $\varepsilon\sim\mathcal N(0,\sigma^2)$, so $p(y\mid\mathbf x) = \mathcal N(\theta^\top\mathbf x,\sigma^2)$. Then</p>
+  $$ -\log p\bigl(y^{(i)}\mid\mathbf x^{(i)}\bigr) = \frac{\bigl(y^{(i)} - \theta^\top\mathbf x^{(i)}\bigr)^2}{2\sigma^2} + \log\bigl(\sqrt{2\pi}\,\sigma\bigr). $$
+  <p>The second term doesn't involve $\theta$ and $\frac{1}{2\sigma^2}$ is a positive constant, so minimising the NLL over $\theta$ is minimising the sum of <strong>squared errors</strong>. Squared error is the NLL of Gaussian noise.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 5 — every loss you've used is a negative log-likelihood</div>
+    <svg id="mapSvg" viewBox="0 0 640 210" role="img" aria-label="Three rows mapping a noise assumption to a likelihood to a loss: Gaussian to squared error, Bernoulli to binary cross-entropy, categorical to softmax cross-entropy"></svg>
+    <div class="caption">What to notice: the arrows only go one way. You choose the left column, a belief about how labels are generated, and the loss follows from it. A different belief gives a different loss.
+    Heavy-tailed noise, for example, leads to losses that are less sensitive to outliers than squared error.</div>
+  </div>
+
+  <div class="quiz" data-answer="2">
+    <div class="q">You model each label as $y\mid\mathbf x\sim\mathcal N(\theta^\top\mathbf x, 4)$ and fit by MLE. Your friend minimises $\sum_i (y^{(i)}-\theta^\top\mathbf x^{(i)})^2$ on the same data. How do the $\theta$'s compare?</div>
+    <button class="opt">Yours is scaled by 1/8 relative to theirs</button>
+    <button class="opt">Yours is different because the $\log\sigma$ term changes the optimum</button>
+    <button class="opt">Identical</button>
+    <button class="opt">Can't tell without knowing $N$</button>
+    <div class="why"><strong>Why:</strong> the NLL is $\frac{1}{8}\sum_i(y^{(i)}-\theta^\top\mathbf x^{(i)})^2$ plus a constant. Multiplying by a positive constant or adding a constant changes the objective's <em>value</em> but not where its minimum is.
+    Option A confuses scaling the loss with scaling the answer. Option B: $\log\sigma$ doesn't contain $\theta$.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="recap">10. Recap</h2>
+  <ol>
+    <li><strong>Likelihood</strong> $p(\D\mid\theta) = \prod_i p(y^{(i)}\mid\theta)$ under i.i.d. As a function of $\theta$ it's $L(\theta)$. It is <em>not</em> a distribution over $\theta$.</li>
+    <li><strong>MLE</strong>: $\hat\theta = \argmax_\theta L(\theta) = \argmax_\theta \ell(\theta) = \argmin_\theta -\ell(\theta)$. Logs avoid underflow and simplify the calculus, and they're safe because log is monotonic.</li>
+    <li><strong>Recipe</strong>: likelihood → NLL → derivative → set to 0 or run gradient descent.</li>
+    <li><strong>Indicator-exponent trick</strong>: $\phi^{\mathbb 1(y=1)}(1-\phi)^{\mathbb 1(y=0)}$ and $\prod_k\phi_k^{\mathbb 1(y_k=1)}$.</li>
+    <li>Results: Bernoulli $\hat\phi = N_H/N$; categorical $\hat\phi_k = N_k/N$ (Lagrange multiplier, $\lambda = N$); Gaussian $\hat\mu = $ mean and $\hat\sigma^2 = \frac1N\sum(x-\hat\mu)^2$.</li>
+    <li><strong>Conditional</strong> MLE with a Bernoulli/categorical label model is binary/multi-class <strong>cross-entropy</strong>. With Gaussian noise it's <strong>squared error</strong>.</li>
+    <li>MLE overfits with little data: one heads gives $\hat\phi = 1$, and an unseen class gets probability 0.</li>
+  </ol>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  const T = (svg, x, y, s, a = {}) => { const t = SG.el("text", Object.assign({x, y, "text-anchor":"middle", fill:"var(--ink)", "font-size":13}, a)); t.textContent = s; svg.appendChild(t); return t; };
+  const defs = (svg, id) => { const d = SG.el("defs", {}), m = SG.el("marker", {id, viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto"}); m.appendChild(SG.el("path", {d:"M0,0 L10,5 L0,10 z", fill:"var(--ink-soft)"})); d.appendChild(m); svg.appendChild(d); };
+  const line = (svg, x1, y1, x2, y2, a = {}) => svg.appendChild(SG.el("line", Object.assign({x1, y1, x2, y2, stroke:"var(--line-2)", "stroke-width":1}, a)));
+  const npdf = (x, m, s) => Math.exp(-((x - m) ** 2) / (2 * s * s)) / (Math.sqrt(2 * Math.PI) * s);
+
+  // ---------- Figure 1: distributions ----------
+  (() => {
+    const svg = document.getElementById("distSvg"), base = 180;
+    line(svg, 20, base, 190, base);
+    [[0.3, "y=0"], [0.7, "y=1"]].forEach(([p, l], i) => { const x = 50 + i * 70; svg.appendChild(SG.el("rect", {x, y:base - p * 200, width:44, height:p * 200, fill:"var(--accent)", opacity:0.8}));
+      T(svg, x + 22, base - p * 200 - 6, String(p), {"font-size":11}); T(svg, x + 22, base + 16, l, {"font-size":11, fill:"var(--ink-mute)"}); });
+    T(svg, 105, 20, "Bernoulli (φ = 0.7)", {"font-size":12, fill:"var(--ink-soft)"});
+    line(svg, 220, base, 420, base);
+    const cc = ["var(--rose)", "var(--accent-2)", "var(--accent)", "var(--gold)"], cl = ["red", "green", "blue", "magenta"];
+    [0.2, 0.1, 0.4, 0.3].forEach((p, i) => { const x = 230 + i * 48; svg.appendChild(SG.el("rect", {x, y:base - p * 200, width:36, height:p * 200, fill:cc[i], opacity:0.8}));
+      T(svg, x + 18, base - p * 200 - 6, String(p), {"font-size":11}); T(svg, x + 18, base + 16, cl[i], {"font-size":10.5, fill:"var(--ink-mute)"}); });
+    T(svg, 320, 20, "Categorical (K = 4)", {"font-size":12, fill:"var(--ink-soft)"});
+    line(svg, 450, base, 650, base);
+    const px = z => 550 + z * 30, py = v => base - v * 170;
+    for (const [s, dash] of [[1, null], [0.5, "5 4"]]) { let d = ""; for (let k = 0; k <= 160; k++) { const z = -3.3 + 6.6 * k / 160; d += (k ? "L" : "M") + px(z).toFixed(1) + "," + py(npdf(z, 0, s)).toFixed(1); }
+      svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent-2)", "stroke-width":2.4, "stroke-dasharray":dash})); }
+    T(svg, 550, 20, "Normal (μ = 0)", {"font-size":12, fill:"var(--ink-soft)"});
+    T(svg, 612, py(npdf(0, 0, 0.5)) + 4, "σ=0.5: peak 0.80", {"font-size":10.5, fill:"var(--ink-mute)"});
+    T(svg, 612, py(npdf(0, 0, 1)) + 14, "σ=1: peak 0.40", {"font-size":10.5, fill:"var(--ink-mute)"});
+  })();
+
+  // ---------- Figure 2: coin likelihood ----------
+  (() => {
+    const svg = document.getElementById("coinSvg"), H = document.getElementById("coinH"), Tt = document.getElementById("coinT"), LG = document.getElementById("coinLog"), out = document.getElementById("coinOut");
+    function draw() {
+      svg.innerHTML = ""; const nh = +H.value, nt = +Tt.value, useLog = LG.checked, G = 2000;
+      const ll = p => (nh ? nh * Math.log(p) : 0) + (nt ? nt * Math.log(1 - p) : 0);
+      const xs = [], ys = []; let best = -Infinity, bp = 0, area = 0;
+      for (let k = 1; k < G; k++) { const p = k / G, v = ll(p); xs.push(p); ys.push(v); if (v > best) { best = v; bp = p; } area += Math.exp(v) / G; }
+      let vals = useLog ? ys : ys.map(Math.exp);
+      let top = Math.max(...vals), bot = useLog ? Math.max(Math.min(...vals), top - 40) : 0;
+      if (top === bot) top = bot + 1;
+      const px = p => 50 + p * 560, py = v => 240 - (SG.clamp(v, bot, top) - bot) / (top - bot) * 210;
+      line(svg, 50, 240, 610, 240); line(svg, 50, 30, 50, 240);
+      [0, 0.25, 0.5, 0.75, 1].forEach(p => T(svg, px(p), 258, String(p), {"font-size":11, fill:"var(--ink-mute)"}));
+      T(svg, 330, 276, "φ", {"font-size":12, fill:"var(--ink-mute)"});
+      let d = ""; xs.forEach((p, i) => d += (i ? "L" : "M") + px(p).toFixed(1) + "," + py(vals[i]).toFixed(1));
+      svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width":2.6}));
+      const bv = useLog ? best : Math.exp(best);
+      svg.appendChild(SG.el("line", {x1:px(bp), y1:py(bv), x2:px(bp), y2:240, stroke:"var(--rose)", "stroke-dasharray":"4 4"}));
+      svg.appendChild(SG.el("circle", {cx:px(bp), cy:py(bv), r:6, fill:"var(--rose)"}));
+      T(svg, 60, 22, useLog ? "log L(φ)" : "L(φ)", {"font-size":12, fill:"var(--ink-mute)", "text-anchor":"start"});
+      const n = nh + nt, exact = n ? (nh / n).toFixed(4) : "any";
+      out.innerHTML = `N_H = ${nh}, N_T = ${nt} · grid argmax φ = ${bp.toFixed(4)} · N_H/N = ${exact}<br>max L = ${Math.exp(best).toExponential(3)} · max log L = ${best.toFixed(3)} · area under L over [0,1] ≈ ${area.toExponential(3)}`;
+    }
+    [H, Tt].forEach(e => e.addEventListener("input", draw)); LG.addEventListener("change", draw); draw();
+  })();
+
+  // ---------- Figure 3: underflow ----------
+  (() => {
+    const svg = document.getElementById("ufSvg"), Ns = document.getElementById("ufN"), out = document.getElementById("ufOut");
+    const prods = [1]; for (let n = 1; n <= 1500; n++) prods.push(prods[n - 1] * 0.5);
+    function draw() {
+      svg.innerHTML = ""; const N = +Ns.value;
+      const px = n => 60 + n / 1500 * 560, py = v => 20 + (-v) / 460 * 180;
+      line(svg, 60, 20, 620, 20); line(svg, 60, 20, 60, 200);
+      [0, -100, -200, -300, -400].forEach(v => { T(svg, 44, py(v) + 4, String(v), {"font-size":10.5, fill:"var(--ink-mute)"}); line(svg, 60, py(v), 620, py(v), {stroke:"var(--line)", "stroke-dasharray":"3 4"}); });
+      T(svg, 340, 222, "N (flips)", {"font-size":11, fill:"var(--ink-mute)"});
+      svg.appendChild(SG.el("path", {d:`M${px(0)},${py(0)} L${px(1500)},${py(-1500 * Math.log10(2))}`, fill:"none", stroke:"var(--accent)", "stroke-width":2.4}));
+      let d = ""; for (let n = 1; n <= Math.min(N, 1074); n++) d += (n > 1 ? "L" : "M") + px(n).toFixed(1) + "," + py(Math.log10(prods[n])).toFixed(1);
+      svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--rose)", "stroke-width":2.4, "stroke-dasharray":"7 4"}));
+      svg.appendChild(SG.el("line", {x1:px(N), y1:20, x2:px(N), y2:200, stroke:"var(--gold)", "stroke-width":1.5}));
+      T(svg, 520, 60, "— Σ log (always fine)", {"font-size":12, fill:"var(--accent)"}); T(svg, 520, 78, "- - Π directly", {"font-size":12, fill:"var(--rose)"});
+      const p = prods[N];
+      out.textContent = `N = ${N} · product computed directly = ${p === 0 ? "0  ← UNDERFLOW" : p.toExponential(4)} · via logs: log10 L = ${(-N * Math.log10(2)).toFixed(2)}`;
+    }
+    Ns.addEventListener("input", draw); draw();
+  })();
+
+  // ---------- Figure 4: Gaussian fit ----------
+  (() => {
+    const svg = document.getElementById("gSvg"), M = document.getElementById("gMu"), S = document.getElementById("gSig"), out = document.getElementById("gOut");
+    const data = [75, 95, 80];
+    function draw() {
+      svg.innerHTML = ""; const mu = +M.value, s = +S.value;
+      const px = x => 40 + (x - 50) / 60 * 580, ymax = Math.max(0.09, npdf(mu, mu, s) * 1.08), py = v => 250 - v / ymax * 220;
+      line(svg, 40, 250, 620, 250);
+      [50, 60, 70, 80, 90, 100, 110].forEach(x => T(svg, px(x), 268, String(x), {"font-size":11, fill:"var(--ink-mute)"}));
+      T(svg, 330, 286, "grade", {"font-size":11, fill:"var(--ink-mute)"});
+      let d = ""; for (let k = 0; k <= 300; k++) { const x = 50 + 60 * k / 300; d += (k ? "L" : "M") + px(x).toFixed(1) + "," + py(npdf(x, mu, s)).toFixed(1); }
+      svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width":2.6}));
+      let L = 1, ll = 0;
+      data.forEach(x => { const v = npdf(x, mu, s); L *= v; ll += Math.log(v);
+        svg.appendChild(SG.el("line", {x1:px(x), y1:250, x2:px(x), y2:py(v), stroke:"var(--rose)", "stroke-width":3}));
+        svg.appendChild(SG.el("circle", {cx:px(x), cy:py(v), r:5, fill:"var(--rose)"}));
+        svg.appendChild(SG.el("circle", {cx:px(x), cy:250, r:4, fill:"var(--ink)"}));
+        T(svg, px(x), Math.min(py(v) - 10, 240), v.toFixed(4), {"font-size":11, fill:"var(--rose)", "font-family":"var(--mono)"}); });
+      svg.appendChild(SG.el("line", {x1:px(mu), y1:250, x2:px(mu), y2:py(npdf(mu, mu, s)), stroke:"var(--accent)", "stroke-dasharray":"3 4"}));
+      out.textContent = `μ = ${mu.toFixed(2)}, σ = ${s.toFixed(2)} (σ² = ${(s * s).toFixed(2)}) · L = ${L.toExponential(3)} · log L = ${ll.toFixed(3)}`;
+    }
+    M.addEventListener("input", draw); S.addEventListener("input", draw);
+    document.getElementById("gMle").addEventListener("click", () => {
+      const mu = data.reduce((a, b) => a + b) / data.length, s = Math.sqrt(data.reduce((a, x) => a + (x - mu) ** 2, 0) / data.length);
+      M.value = mu; S.value = s; draw();
+      document.getElementById("gMuv").textContent = mu.toFixed(2); document.getElementById("gSigv").textContent = s.toFixed(2);
+      // redraw exactly at the MLE (slider steps would round it)
+      const L = data.reduce((a, x) => a * npdf(x, mu, s), 1);
+      out.textContent = `MLE: μ̂ = ${mu.toFixed(2)}, σ̂ = ${s.toFixed(2)} (σ̂² = ${(s * s).toFixed(2)}) · L = ${L.toExponential(3)} · log L = ${Math.log(L).toFixed(3)}`;
+    });
+    draw();
+  })();
+
+  // ---------- Figure 5: assumption -> loss ----------
+  (() => {
+    const svg = document.getElementById("mapSvg"); defs(svg, "mpA");
+    const rows = [["y = θᵀx + Gaussian noise", "Π N(y | θᵀx, σ²)", "squared error"], ["y ~ Bernoulli(σ(θᵀx))", "Π φ^y (1−φ)^(1−y)", "binary cross-entropy"], ["y ~ Categorical(softmax(Θx))", "Π Π φₖ^yₖ", "softmax cross-entropy"]];
+    T(svg, 110, 22, "belief about labels", {"font-size":12, fill:"var(--ink-mute)"}); T(svg, 330, 22, "likelihood", {"font-size":12, fill:"var(--ink-mute)"}); T(svg, 540, 22, "−log ⇒ loss", {"font-size":12, fill:"var(--ink-mute)"});
+    rows.forEach((r, i) => { const y = 40 + i * 56, c = ["var(--accent-2)", "var(--accent)", "var(--gold)"][i];
+      [[10, 200], [240, 180], [460, 160]].forEach(([x, w], j) => { svg.appendChild(SG.el("rect", {x, y, width:w, height:40, rx:8, fill:"var(--panel)", stroke: j === 2 ? c : "var(--line-2)", "stroke-width":1.5}));
+        T(svg, x + w / 2, y + 25, r[j], {"font-size":12, fill: j === 2 ? c : "var(--ink)", "font-weight": j === 2 ? 700 : 400}); });
+      svg.appendChild(SG.el("line", {x1:212, y1:y + 20, x2:236, y2:y + 20, stroke:"var(--ink-soft)", "stroke-width":1.6, "marker-end":"url(#mpA)"}));
+      svg.appendChild(SG.el("line", {x1:422, y1:y + 20, x2:456, y2:y + 20, stroke:"var(--ink-soft)", "stroke-width":1.6, "marker-end":"url(#mpA)"})); });
+  })();
+});
+</script>
+</body>
+</html>

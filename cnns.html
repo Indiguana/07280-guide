@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Computer Vision: CNNs &amp; ResNets · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="cnns">
+<main>
+
+  <div class="eyebrow">Part II · Chapter 15</div>
+  <h1>Computer vision: convolutional networks and ResNets</h1>
+  <p class="subtitle">Why a plain fully connected network is the wrong tool for images, what a convolution actually computes (by hand and
+  interactively), how pooling and stacking build a CNN, what made AlexNet a turning point, and why adding layers made networks
+  <em>worse</em> until skip connections fixed it.</p>
+
+  <div data-toc></div>
+
+  <!-- ============================================================ -->
+  <h2 id="why-not-fc">1. Images, and why the models you know struggle</h2>
+
+  <p>A grayscale image is a grid of pixels, each a number in $[0, 1]$ (0 = black, 1 = white). A colour image is three such grids — red, green,
+  blue — called <strong>channels</strong>. Suppose you have labelled images and want to classify them. The lecture asks two questions and leaves the first open.</p>
+
+  <h3>Logistic regression with pixels as features?</h3>
+  <p>Flatten the grid into a long vector and fit $\sigma(\boldsymbol\theta^\top\mathbf x)$. It runs. But the model is one weight per pixel — effectively a single
+  <strong>template</strong> image that it dot-products with the input. It can recognise "bright pixels in roughly <em>these</em> places", and nothing more: a cat
+  shifted 5 pixels left lights up a different set of weights, and its decision boundary is a single hyperplane in pixel space. It works on very
+  tidy datasets (centred digits); it fails on real photos.</p>
+
+  <h3>A fully connected neural network?</h3>
+  <p>Better — it can learn features. But the lecture lists three problems, and they're all one root cause: a fully connected layer treats the image as a
+  <em>bag of unrelated numbers</em>.</p>
+  <ul>
+    <li><strong>Doesn't exploit spatial relations.</strong> Neighbouring pixels are strongly related (they're usually part of the same object). An FC layer
+    has no notion of "neighbour". Here's a striking way to see it: shuffle every image's pixels with the same fixed permutation. An FC network learns
+    <em>exactly as well</em> on the scrambled images — it just learns permuted weights. A human couldn't recognise anything. So the FC network isn't using the structure humans rely on.</li>
+    <li><strong>Not spatially invariant.</strong> A pattern learned in the top-left corner has to be re-learned, from separate weights, for every other location.</li>
+    <li><strong>Too many parameters.</strong> A 224×224 colour image has $224\cdot224\cdot3 = 150{,}528$ inputs. One hidden layer of 1,000 neurons needs
+    $150{,}528\times1{,}000 + 1{,}000 = 150{,}529{,}000$ parameters — for <em>one</em> layer. That's a lot of compute and, worse, a lot of data needed to fit it without overfitting.</li>
+  </ul>
+
+  <div class="viz">
+    <div class="viz-title">Figure 1 — the same pattern, shifted: a fixed template (FC-style) vs a sliding detector (conv-style)</div>
+    <svg id="shiftSvg" viewBox="0 0 640 300" role="img" aria-label="A 10 by 10 image with a plus-shaped pattern that slides right; scores of a fixed-position template and a sliding filter"></svg>
+    <div class="controls">
+      <label>Shift the pattern right <input type="range" id="shiftS" min="0" max="7" step="1" value="0" data-out="shiftV" data-fmt="int"><span class="val" id="shiftV"></span></label>
+    </div>
+    <div class="caption" id="shiftOut" style="font-family:var(--mono)"></div>
+    <div class="caption">The image contains a 3×3 "plus" (5 bright pixels). Left: an FC-style detector — one weight per pixel, equal to the plus at its original
+    position (outlined). Its score is the dot product with the whole image. Right: a conv-style detector — the same 3×3 plus as a filter, slid over every position, keeping the
+    largest response. What to notice: shift by even one pixel and the fixed template's score drops; the sliding filter's score doesn't change at all, because it finds the pattern wherever it is.</div>
+  </div>
+
+  <p>Two families of image-specific model fix this:</p>
+  <div class="grid2">
+    <div class="card"><div class="kicker">Today</div><h3>Convolutional Neural Networks (CNNs)</h3><p>Less compute; work better with limited data. Bake in "nearby pixels matter" and "a pattern means the same thing anywhere".</p></div>
+    <div class="card"><div class="kicker">Later in the course</div><h3>Vision Transformers (ViTs)</h3><p>Many more parameters; better with very large datasets. Transformers come later, in the context of language. Many modern models are hybrids of the two.</p></div>
+  </div>
+  <p class="muted">Image <em>generation</em> mostly uses a third paradigm, diffusion models — covered in 07-380, not here.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="convolution">2. Convolution: a small window slid across the image</h2>
+
+  <p>Start where the lecture does: you want to <strong>blur</strong> an image. Blurring means replacing each pixel with an average of itself and its neighbours.
+  Do that by sliding a small grid of weights — a <strong>filter</strong> (also called a <strong>kernel</strong>) — across the image, and at each position
+  multiplying the overlapping numbers and adding them up. That operation is <strong>convolution</strong>.</p>
+
+  <div class="box analogy"><span class="label">Analogy — a stencil scanned over a page</span>
+    <p>Hold a small stencil over the top-left of a page, score how well what's underneath matches it, write the score down, slide one step, repeat. The page of scores
+    is the output — a <strong>feature map</strong>. A blur stencil scores "average brightness here"; an edge stencil scores "how sharp a light-dark change is here".</p>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>The lecture's blur example</div>
+    <div class="g-body">
+      <p>Image $x = \begin{bmatrix}0.1 &amp; 0.2 &amp; 0.6\\ 0.3 &amp; 0.4 &amp; 0.9\\ 0.7 &amp; 0.1 &amp; 0\end{bmatrix}$, blur filter $\omega = \begin{bmatrix}0.25 &amp; 0.25\\ 0.25 &amp; 0.25\end{bmatrix}$. Compute the output.</p>
+    </div>
+    <details class="step"><summary>Step 1 — What's being asked, and what size is the answer?</summary><div>
+      <p>The 2×2 window fits in $3 - 2 + 1 = 2$ positions across and 2 down, so the output is 2×2. Each entry = sum of (window values × filter values) = the average of 4 pixels.</p></div></details>
+    <details class="step"><summary>Step 2 — Top row of the output</summary><div>
+      <p>Top-left window $\{0.1, 0.2, 0.3, 0.4\}$: $0.25(0.1+0.2+0.3+0.4) = 0.25$.<br>Top-right window $\{0.2, 0.6, 0.4, 0.9\}$: $0.25(2.1) = 0.525$.</p></div></details>
+    <details class="step"><summary>Step 3 — Bottom row</summary><div>
+      <p>Bottom-left $\{0.3, 0.4, 0.7, 0.1\}$: $0.3\times0.25 + 0.4\times0.25 + 0.7\times0.25 + 0.1\times0.25 = 0.375$ (the lecture's worked entry).<br>Bottom-right $\{0.4, 0.9, 0.1, 0\}$: $0.25(1.4) = 0.35$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$z = \begin{bmatrix}0.25 &amp; 0.525\\ 0.375 &amp; 0.35\end{bmatrix}$. Two things to keep: the output is <strong>smaller</strong> than the input ($n - k + 1$ per side), and the
+      same four weights were reused at every position.</p></div></details>
+  </div>
+
+  <div class="box defn"><span class="label">Convolution formula (single channel)</span>
+    <p>For a $k_1\times k_2$ kernel $\omega$ and input $x$,</p>
+    $$ z[i, j] = \sum_{u=0}^{k_1-1}\sum_{v=0}^{k_2-1} x[i+u,\ j+v]\cdot\omega_{u,v}. $$
+    <p>$z[i,j]$ is the output at row $i$, column $j$. The double sum runs over the window whose top-left corner is at $(i, j)$: $u$ steps down, $v$ steps right.
+    An $n_1\times n_2$ input gives an output of size $(n_1 - k_1 + 1)\times(n_2 - k_2 + 1)$.</p>
+  </div>
+  <p class="tiny"><span class="pill">going deeper</span> In maths, "convolution" flips the kernel first; what's written above (no flip) is technically <em>cross-correlation</em>.
+  Deep-learning libraries all compute this unflipped version and call it convolution. Since the kernel is learned, the flip makes no difference.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 2 — convolution explorer: click pixels to paint, pick a filter, slide the window</div>
+    <svg id="convSvg" viewBox="0 0 640 330" role="img" aria-label="Input image grid, filter, and output feature map with the current window highlighted"></svg>
+    <div class="controls">
+      <label>Filter
+        <select id="convK">
+          <option value="blur">2×2 blur (lecture)</option>
+          <option value="vedge" selected>3×3 vertical edge</option>
+          <option value="hedge">3×3 horizontal edge</option>
+          <option value="blur3">3×3 blur</option>
+        </select></label>
+      <label>Window position <input type="range" id="convP" min="0" max="35" step="1" value="8" data-out="convPv" data-fmt="int"><span class="val" id="convPv"></span></label>
+      <button class="btn" id="convReset">Reset image</button>
+    </div>
+    <div class="caption" id="convOut" style="font-family:var(--mono)"></div>
+    <div class="caption">Input: 8×8, values 0 (dark) to 1 (bright) — click a cell to toggle it. Output cells are shaded blue for positive and pink for negative, darker = larger.
+    What to notice: the vertical-edge filter $\begin{bmatrix}1&amp;0&amp;-1\end{bmatrix}$ (repeated in 3 rows) is zero over flat regions and lights up only where brightness changes
+    left-to-right — positive on one side of the bright bar, negative on the other. Switch to the horizontal-edge filter and the bar's long sides vanish from the output; only its top and bottom ends light up, because those are the only places brightness changes top-to-bottom.
+    A filter is a pattern detector, and what it detects is entirely set by its numbers.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="learned-filters">3. Classical vision vs CNNs: who designs the filter?</h2>
+
+  <div class="grid2">
+    <div class="box defn"><span class="label">Classical image processing</span>
+      <ul>
+        <li>Many filters: blur, edge detection, …</li>
+        <li><strong>Designed by hand</strong></li>
+        <li>Convolved with the image to extract features</li>
+        <li>Features then fed to a downstream model</li>
+      </ul>
+    </div>
+    <div class="box key"><span class="label">The CNN idea</span>
+      <p><strong>Learn the filters from data.</strong> A 2×2 filter becomes four parameters</p>
+      $$ \begin{bmatrix}\omega_{00} &amp; \omega_{01}\\ \omega_{10} &amp; \omega_{11}\end{bmatrix} $$
+      <p>trained by gradient descent like any other weights.</p>
+    </div>
+  </div>
+  <p>This is chapter 12's "feature engineering vs feature learning" again. The edge detector in Figure 2 was hand-designed; a CNN would discover something like it
+  (or something better that nobody thought of) because it reduces the loss.</p>
+
+  <h3>Multi-channel convolution</h3>
+  <p>A colour image has $C = 3$ channels; a grayscale one has $C = 1$. The filter gets a matching depth — it's a $C\times k_1\times k_2$ block — and the sum also runs over channels:</p>
+  $$ z[i, j] = \sum_{u=0}^{k_1-1}\sum_{v=0}^{k_2-1}\sum_{c=0}^{C-1} x[c,\ i+u,\ j+v]\cdot\omega_{c,u,v}\ (+\ b). $$
+  <p>Note the output is still <strong>one</strong> 2-D map: the filter mixes all the input channels together. A bias $b$ (one number per filter) is added too.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Count the parameters</div>
+    <div class="g-body"><p>A convolutional layer takes a 224×224 RGB image and applies 64 filters, each 3×3, with a bias each. Stride 1, no padding. (a) How many parameters? (b) What's the output shape? (c) Compare with §1's fully connected layer.</p></div>
+    <details class="step"><summary>Step 1 — One filter</summary><div><p>Depth must match the input: $3\times3\times3 = 27$ weights, plus 1 bias = 28.</p></div></details>
+    <details class="step"><summary>Step 2 — All filters, and the output</summary><div>
+      <p>$64\times 28 = 1{,}792$ parameters. Each filter produces a $(224-3+1)\times(224-3+1) = 222\times222$ map, so the output is $64\times222\times222$ — one map per filter.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>1,792 parameters vs 150,529,000 for the FC layer — about 84,000× fewer. The count <strong>doesn't depend on the image size</strong> at all, because the same small filter is reused at
+      every position. That's <em>parameter sharing</em>, and it's where most of the saving comes from. Common mistake: forgetting the channel depth (answering $64\times(9+1) = 640$).</p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="pipeline">4. Many filters, pooling, and the CNN pipeline</h2>
+
+  <p>One filter detects one kind of pattern. A layer runs <strong>several convolutions in parallel</strong>, each with its own kernel and bias, producing several
+  <strong>feature maps</strong>. The next conv layer's filters then have depth equal to that number of maps — so it combines "edge here" and "edge there" into "corner".</p>
+
+  <p>The catch: many feature maps, each almost image-sized, is a lot of memory and compute. So we <strong>downsample</strong> each map — <strong>pooling</strong>. Split the map
+  into small blocks (typically 2×2) and replace each block with one number:</p>
+  <ul>
+    <li><strong>Max pooling</strong> — keep the largest. "Did this feature appear anywhere in this block?"</li>
+    <li><strong>Average pooling</strong> — keep the mean. "How strongly, on average?"</li>
+  </ul>
+  <p>Pooling is applied to each feature map separately and has no parameters.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 3 — 2×2 pooling on a 4×4 feature map</div>
+    <svg id="poolSvg" viewBox="0 0 640 210" role="img" aria-label="A 4 by 4 grid divided into four 2 by 2 blocks, with max-pooled and average-pooled 2 by 2 results"></svg>
+    <div class="caption">What to notice: each colour block becomes one number, so width and height halve (16 numbers → 4). Max pooling keeps the strongest response in the block,
+    which also means a feature that moves by one pixel <em>within</em> a block gives the same output — a little built-in shift tolerance.</div>
+  </div>
+
+  <div class="box key"><span class="label">The typical CNN pipeline</span>
+    <p>Conv → Pool → Nonlinearity (ReLU) → Conv → Pool → ReLU → ⋯ → Fully Connected → Softmax</p>
+    <p>The conv/pool stages shrink the image spatially while growing the number of feature maps; the final FC layer + softmax is just multiclass logistic regression on the learned features (chapter 11).</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 4 — shapes through a small CNN (28×28 grayscale, 10 classes)</div>
+    <svg id="pipeSvg" viewBox="0 0 660 230" role="img" aria-label="Pipeline from a 28 by 28 by 1 input through conv, pool, conv, pool, to fully connected and softmax with shapes and parameter counts"></svg>
+    <div class="caption">Two conv layers (5×5 filters, 6 then 16 of them), each followed by 2×2 max pooling and ReLU, then one FC layer to 10 classes. Parameter counts are written under each layer
+    (weights + biases). What to notice: the second conv layer's filters are $6\times5\times5$ deep, not $5\times5$ — they read all 6 maps below them. The whole network has 5,142 parameters,
+    and half of them are in the final FC layer.</div>
+  </div>
+
+  <div class="quiz" data-answer="2">
+    <div class="q">An input is $32\times32\times3$. A conv layer has 10 filters of size $5\times5$ (stride 1, no padding), followed by 2×2 max pooling. What's the output shape?</div>
+    <button class="opt">$28\times28\times10$</button>
+    <button class="opt">$14\times14\times30$</button>
+    <button class="opt">$14\times14\times10$</button>
+    <button class="opt">$16\times16\times10$</button>
+    <div class="why"><strong>Why:</strong> conv: $32 - 5 + 1 = 28$, one map per filter → $28\times28\times10$ (that's option A — correct but before pooling). Pool halves width and height → $14\times14\times10$.
+    The input's 3 channels are summed inside each filter, so they don't multiply the number of maps (option B's mistake). Option D pooled the input instead of the conv output.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="properties">5. Properties of convolutional layers</h2>
+  <ul>
+    <li><strong>Still linear in the parameters.</strong> Like an FC layer, the weights and bias apply linearly to the previous layer's outputs. A conv layer <em>is</em> an FC layer
+    with most weights forced to zero and the rest forced to be copies of each other.</li>
+    <li><strong>Parameter sharing.</strong> The same weights are used at every sliding-window location.</li>
+    <li><strong>Sparse (local) connectivity.</strong> Each output node connects to only a small window of the previous layer, not to every node.</li>
+    <li><strong>Trained by backprop.</strong> Nothing new is needed — with one detail from chapter 14 (below).</li>
+    <li><strong>Hierarchical.</strong> Each layer combines the previous layer's features, and CNNs are empirically observed to learn interesting representations on their own.</li>
+  </ul>
+
+  <div class="box intuition"><span class="label">Backprop through a shared weight = the "+=" rule</span>
+    <p>A filter weight $\omega_{u,v}$ is used at <em>every</em> output position $(i, j)$. That's fan-out, so its gradient is a sum over all of them:</p>
+    $$ \frac{\partial J}{\partial\omega_{u,v}} = \sum_{i}\sum_{j}\frac{\partial J}{\partial z[i,j]}\; x[i+u,\ j+v]. $$
+    <p>This is chapter 14's multivariate chain rule and its "+=" accumulator, applied to a weight used hundreds of times. (Fun fact: the right-hand side is itself a convolution —
+    of the input with the output gradients.)</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 5 — what the layers learn (schematic reconstruction of the lecture's Figure 1)</div>
+    <svg id="hierSvg" viewBox="0 0 640 250" role="img" aria-label="Schematic of feature hierarchy: pixels, then edges, then object parts, then objects"></svg>
+    <div class="caption">The lecture's figure (credit Honglak Lee, NIPS 2010 workshop) shows real learned features as images: 1st layer ≈ oriented edges, 2nd ≈ object parts, 3rd ≈ whole objects
+    (faces, in that example). This is a hand-drawn schematic of the same idea, <strong>not</strong> the learned features themselves — check the original slide for those. What to notice: each layer
+    sees a bigger patch of the image than the one before (its <em>receptive field</em> grows), so it can represent bigger structures built from smaller ones.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="alexnet">6. AlexNet: the moment deep learning took over vision</h2>
+
+  <p><strong>ImageNet</strong> was a landmark competition because of its (then) sheer size and difficulty. Before it, there was far less emphasis on collecting gigantic datasets.
+  In 2012, <strong>AlexNet</strong> — a CNN — got about <strong>15%</strong> error. The next best entry got about <strong>26%</strong>. That gap was so large that computer vision switched to deep learning
+  almost overnight. Its key contributions:</p>
+
+  <div class="grid2">
+    <div class="box defn"><span class="label">ReLU activations</span>
+      <p>$\mathrm{ReLU}(x) = \max\{0, x\}$. Previous work used tanh or sigmoid, which are more expensive to compute and whose gradients aren't well behaved: the sigmoid's
+      derivative is at most $0.25$ and near zero for large $|z|$, so stacking many layers shrinks the gradient (chapter 14, Figure 4). ReLU's derivative is exactly 1 wherever it's active.</p>
+    </div>
+    <div class="box defn"><span class="label">Training on GPUs</span>
+      <p>Convolutions are millions of independent multiply-adds — exactly what graphics hardware does in parallel. This made a big network trainable in days instead of months.</p>
+    </div>
+    <div class="box defn"><span class="label">Deeper architectures</span>
+      <p>More layers → more levels of the feature hierarchy in §5.</p>
+    </div>
+    <div class="box defn"><span class="label">Data augmentation</span>
+      <p>Artificially enlarge the training set: from each 256×256 image, take several 224×224 patches. A 224 window fits in $256 - 224 + 1 = 33$ positions per side, so
+      $33^2 = 1{,}089$ possible crops — each still clearly the same object, so each a valid new labelled example. (The AlexNet paper also used horizontal flips.)</p>
+    </div>
+  </div>
+  <div class="box defn"><span class="label">Dropout</span>
+    <p>To fight overfitting, at each training gradient step randomly drop a subset of the network's connections (the lecture says "edges"; the standard implementation zeroes a random
+    subset of neurons' outputs, which drops all their outgoing edges at once). At test time nothing is dropped.</p>
+    <p><strong>Intuition:</strong> no neuron can rely on any particular other neuron being there, so the network can't build fragile, co-adapted pathways that memorise individual training examples.
+    It's a bit like training a large team where random members are absent each day — everyone has to be broadly useful.</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 6 — why ReLU: the derivative of each activation</div>
+    <svg id="actSvg" viewBox="0 0 640 220" role="img" aria-label="Plot of sigmoid derivative peaking at 0.25 and ReLU derivative which is 0 for negative z and 1 for positive"></svg>
+    <div class="caption">What to notice: the sigmoid's derivative (blue) never exceeds 0.25 and is almost 0 beyond $|z| \approx 5$. Backprop multiplies one of these per layer, so 10 sigmoid layers scale the
+    gradient by at most $0.25^{10} \approx 0.001$. ReLU's derivative (pink) is 1 on the whole active side, so it passes gradients through undiminished.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="resnets">7. ResNets: when deeper got worse</h2>
+
+  <p>Residual networks were invented for CNNs but are now used almost everywhere (including transformers). Start with the puzzle that motivated them.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Think about it</span>The lecture's question: 20 layers or 56?</div>
+    <div class="g-body"><p>Take a 20-layer network and a 56-layer network. The 20-layer one is a <strong>special case</strong> of the 56-layer one: for any parameters $(\omega, b)$ of the
+    20-layer net there are parameters $(\omega', b')$ of the 56-layer net with $h_{\omega,b}(x) = h'_{\omega',b'}(x)$ for every input $x$. Train both with ERM on the same data. Which has lower <em>training</em> error?</p></div>
+    <details class="step"><summary>Step 1 — Why is the 20-layer net a special case?</summary><div>
+      <p>Copy its 20 layers into the first 20 of the 56, and make the remaining 36 layers each compute the <strong>identity</strong> (output = input). Then the 56-layer net computes exactly the same function.</p></div></details>
+    <details class="step"><summary>Step 2 — The expected answer</summary><div>
+      <p>The 56-layer net can do everything the 20-layer net can, and more. ERM minimises training error over everything the model can represent, so its best training error can only be lower or equal. Expect: <strong>56 layers ≤ 20 layers</strong> on training error.</p></div></details>
+    <details class="step"><summary>Step 3 — What was actually observed</summary><div>
+      <p><strong>The 56-layer network had higher training error</strong> — and higher test error too. (The lecture's plots show training-error and test-error curves over iterations, with the 56-layer curve above the 20-layer curve in both.)</p></div></details>
+    <details class="step"><summary>The takeaway — it's not overfitting</summary><div>
+      <p>Overfitting means <em>low</em> training error and high test error. Here training error is higher — so the bigger model isn't fitting too well, it's failing to fit at all. The problem isn't
+      what the model <em>can represent</em>; it's that gradient descent <em>can't find</em> the good parameters. It's an optimisation problem.</p></div></details>
+  </div>
+
+  <h3>What's going on: vanishing (and exploding) gradients</h3>
+  <p>Picture the network as a chain: input → layer 1 → layer 2 → ⋯ → layer $L$ → output. By backprop (chapter 14), the gradient reaching layer 1 is a <strong>product</strong> of one local derivative
+  per layer to its right. If those factors are typically smaller than 1, the product shrinks exponentially with depth (vanishes); if larger than 1, it grows exponentially (explodes). Either way,
+  the weights on the left either hardly change during training or change chaotically.</p>
+
+  <div class="box intuition"><span class="label">Why "learning zero is easier than learning identity"</span>
+    <p>The lecture's key observation. To make an extra layer harmless, a plain network has to learn the identity map exactly — weights precisely tuned so that output = input. But weights are
+    initialised small and random, so a fresh layer computes roughly <em>zero</em>, not the identity, and pushing it to exactly identity is a delicate target. The fix: change what "do nothing"
+    means, so that all-zero weights <em>are</em> the identity.</p>
+  </div>
+
+  <div class="box defn"><span class="label">Skip (residual) connection</span>
+    <p>Add a block's input directly to its output: instead of $\mathbf h_{\text{out}} = F(\mathbf h_{\text{in}})$, compute</p>
+    $$ \mathbf h_{\text{out}} = F(\mathbf h_{\text{in}}) + \mathbf h_{\text{in}}. $$
+    <p>$F$ only has to learn the <strong>residual</strong> — the change to make. If the block should do nothing, $F = 0$: all-zero weights, the easy target.</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 7 — a skip connection (the lecture's diagram)</div>
+    <svg id="skipSvg" viewBox="0 0 640 170" role="img" aria-label="Input to layer 1 to layer 2 to a plus node to layer 3; an arc from layer 1's output skips layer 2 and joins at the plus"></svg>
+    <div class="caption">What to notice: there are now two routes from layer 1's output to the rest of the network — through layer 2, and around it. In the backward pass the gradient
+    takes both and they add (the multivariate chain rule again), so the skip route delivers the gradient back with a factor of exactly 1, no matter what layer 2 does.</div>
+  </div>
+
+  <p>In derivative terms: for one block, $\frac{\partial\mathbf h_{\text{out}}}{\partial\mathbf h_{\text{in}}} = \frac{\partial F}{\partial\mathbf h_{\text{in}}} + I$. The "+ I" means each layer's factor is
+  near 1 instead of near 0 when $F$'s weights are small, so the product over many layers no longer collapses.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 8 — gradient size at each layer: plain chain vs residual chain (toy model)</div>
+    <svg id="vanSvg" viewBox="0 0 640 290" role="img" aria-label="Bar chart of log10 gradient magnitude by layer for a plain network and a residual network"></svg>
+    <div class="controls">
+      <label>Depth $L$ <input type="range" id="vanL" min="2" max="60" step="1" value="56" data-out="vanLv" data-fmt="int"><span class="val" id="vanLv"></span></label>
+      <label>Weight size $w$ <input type="range" id="vanW" min="0.05" max="1.5" step="0.05" value="0.1" data-out="vanWv" data-dp="2"><span class="val" id="vanWv"></span></label>
+    </div>
+    <div class="caption" id="vanOut" style="font-family:var(--mono)"></div>
+    <div class="caption"><strong>Toy model</strong>, not a real ResNet: every layer is a scalar linear map with weight $\pm w$ (signs fixed at random). Plain layer: $h \leftarrow \pm w\,h$, so its local derivative is $\pm w$.
+    Residual layer: $h \leftarrow h \pm w\,h$, local derivative $1 \pm w$. Bars show $\log_{10}$ of the gradient magnitude reaching each layer from the output (0 means size 1; −10 means $10^{-10}$).
+    What to notice: the plain chain only survives in a knife-edge band near $w = 1$ — at $L = 56$, $w = 0.9$ shrinks layer 1's gradient to $0.9^{55} \approx 0.003$, and $w = 1.1$ blows it up to about 189.
+    With small weights — which is how networks start out — the plain chain's gradient is gone: at $w = 0.1$, $L = 56$ it is $10^{-55}$ at layer 1, while the residual chain's is about 1.02 and stays between
+    0.79 and 1.55 at every layer. Now push $w$ up: the residual chain degrades too (about 0.19 at layer 1 for $w = 0.3$, about 0.002 for $w = 0.5$). Skip connections work best when each block makes a <em>small</em> change, and
+    real ResNets add other tricks (careful initialisation, normalisation layers) to keep it that way.</div>
+  </div>
+
+  <p>With skip connections, the deeper network's training and test error both came out <strong>lower</strong> than the shallower one's — depth helped again, as the "special case" argument said it should.</p>
+
+  <div class="quiz" data-answer="1">
+    <div class="q">A 56-layer plain network has higher <em>training</em> error than a 20-layer one. Which fix addresses the actual cause?</div>
+    <button class="opt">Add dropout and more data augmentation</button>
+    <button class="opt">Add skip connections</button>
+    <button class="opt">Add L2 regularisation</button>
+    <button class="opt">Remove layers until training error stops improving — deeper nets just can't be trained</button>
+    <div class="why"><strong>Why:</strong> high <em>training</em> error means the problem is optimisation, not overfitting — gradients vanish before reaching early layers. Dropout, augmentation and L2 all fight
+    overfitting and would make training error <em>worse</em> if anything. Option D accepts the symptom; skip connections remove the cause and let much deeper nets train well.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="recap">8. Recap</h2>
+  <ol>
+    <li>Pixels as features ignore spatial structure; FC networks are not shift-invariant and need huge numbers of parameters ($150{,}529{,}000$ for one 1,000-unit layer on 224×224×3).</li>
+    <li><strong>Convolution</strong>: slide a $k_1\times k_2$ filter, multiply-and-sum; $z[i,j] = \sum_u\sum_v x[i+u, j+v]\,\omega_{u,v}$; output $(n-k+1)$ per side. With channels, also sum over $c$.</li>
+    <li>CNNs <strong>learn</strong> the filters. Several filters per layer → several feature maps. Parameters per layer = filters × ($C k_1 k_2$ + 1), independent of image size.</li>
+    <li><strong>Pooling</strong> (max or average, per map) downsamples. Pipeline: Conv → Pool → ReLU → ⋯ → FC → Softmax.</li>
+    <li>Conv layers: linear, shared weights, local connections, trained by backprop (shared weight ⇒ gradients summed over positions); layers learn edges → parts → objects.</li>
+    <li><strong>AlexNet</strong> (2012, ~15% vs ~26%): ReLU, GPUs, depth, data augmentation (crops), dropout.</li>
+    <li><strong>ResNets</strong>: deeper plain nets had <em>higher training error</em> — an optimisation failure from vanishing/exploding gradients. Skip connections $\mathbf h + F(\mathbf h)$ make "do nothing" = zero weights and pass gradients back with a factor of 1.</li>
+  </ol>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  const T = (svg, x, y, s, a = {}) => { const t = SG.el("text", Object.assign({x, y, "text-anchor":"middle", fill:"var(--ink)", "font-size":13}, a)); t.textContent = s; svg.appendChild(t); return t; };
+  const defs = (svg, id, color) => { const d = SG.el("defs", {}), m = SG.el("marker", {id, viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto-start-reverse"}); m.appendChild(SG.el("path", {d:"M0,0 L10,5 L0,10 z", fill:color || "var(--ink-soft)"})); d.appendChild(m); svg.appendChild(d); };
+  const line = (svg, x1, y1, x2, y2, id, a = {}) => svg.appendChild(SG.el("line", Object.assign({x1, y1, x2, y2, stroke:"var(--ink-soft)", "stroke-width":1.6, "marker-end": id ? `url(#${id})` : null}, a)));
+  const box = (svg, x, y, w, h, a = {}) => svg.appendChild(SG.el("rect", Object.assign({x, y, width:w, height:h, rx:8, fill:"var(--panel)", stroke:"var(--line-2)", "stroke-width":1.4}, a)));
+  // grayscale-ish cell: ink with opacity = value (theme-safe)
+  const cell = (svg, x, y, s, v, a = {}) => { svg.appendChild(SG.el("rect", Object.assign({x, y, width:s, height:s, fill:"var(--bg-soft)", stroke:"var(--line)", "stroke-width":0.8}, a)));
+    if (v > 0) svg.appendChild(SG.el("rect", {x, y, width:s, height:s, fill:"var(--ink)", opacity:0.85 * v, "pointer-events":"none"})); };
+  const sgnCell = (svg, x, y, s, v, vmax) => { svg.appendChild(SG.el("rect", {x, y, width:s, height:s, fill:"var(--bg-soft)", stroke:"var(--line)", "stroke-width":0.8}));
+    if (Math.abs(v) > 1e-9) svg.appendChild(SG.el("rect", {x, y, width:s, height:s, fill: v > 0 ? "var(--accent)" : "var(--rose)", opacity: 0.15 + 0.8 * Math.min(1, Math.abs(v) / vmax)})); };
+  const conv2 = (img, k) => { const n1 = img.length, n2 = img[0].length, k1 = k.length, k2 = k[0].length, out = [];
+    for (let i = 0; i <= n1 - k1; i++) { const r = []; for (let j = 0; j <= n2 - k2; j++) { let s = 0; for (let u = 0; u < k1; u++) for (let v = 0; v < k2; v++) s += img[i + u][j + v] * k[u][v]; r.push(s); } out.push(r); } return out; };
+
+  // ---------- Figure 1: shift ----------
+  (() => {
+    const svg = document.getElementById("shiftSvg"), S = document.getElementById("shiftS"), out = document.getElementById("shiftOut");
+    const plus = [[0, 1, 0], [1, 1, 1], [0, 1, 0]], N = 10, r0 = 3, c0 = 0;
+    function draw() {
+      svg.innerHTML = ""; const sh = +S.value;
+      const img = Array.from({length:N}, () => Array(N).fill(0));
+      for (let u = 0; u < 3; u++) for (let v = 0; v < 3; v++) img[r0 + u][c0 + sh + v] = plus[u][v];
+      let fc = 0; for (let u = 0; u < 3; u++) for (let v = 0; v < 3; v++) fc += img[r0 + u][c0 + v] * plus[u][v];
+      const cm = conv2(img, plus); let best = -1, bi = 0, bj = 0; cm.forEach((r, i) => r.forEach((v, j) => { if (v > best) { best = v; bi = i; bj = j; } }));
+      const cs = 22, ox1 = 30, ox2 = 360, oy = 40;
+      for (const ox of [ox1, ox2]) for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) cell(svg, ox + j * cs, oy + i * cs, cs, img[i][j]);
+      svg.appendChild(SG.el("rect", {x:ox1 + c0 * cs, y:oy + r0 * cs, width:3 * cs, height:3 * cs, fill:"none", stroke:"var(--gold)", "stroke-width":3}));
+      svg.appendChild(SG.el("rect", {x:ox2 + bj * cs, y:oy + bi * cs, width:3 * cs, height:3 * cs, fill:"none", stroke:"var(--accent-2)", "stroke-width":3}));
+      T(svg, ox1 + 110, 26, "FC-style: fixed template here", {"font-size":12, fill:"var(--gold)"});
+      T(svg, ox2 + 110, 26, "Conv-style: best window anywhere", {"font-size":12, fill:"var(--accent-2)"});
+      T(svg, ox1 + 110, 286, `score = ${fc} / 5`, {"font-size":14, fill:"var(--gold)", "font-weight":700});
+      T(svg, ox2 + 110, 286, `score = ${best} / 5`, {"font-size":14, fill:"var(--accent-2)", "font-weight":700});
+      out.textContent = `shift = ${sh} px · fixed-template score ${fc}/5 · sliding-filter max score ${best}/5`;
+    }
+    S.addEventListener("input", draw); draw();
+  })();
+
+  // ---------- Figure 2: convolution explorer ----------
+  (() => {
+    const svg = document.getElementById("convSvg"), K = document.getElementById("convK"), P = document.getElementById("convP"), out = document.getElementById("convOut");
+    const KS = { blur:[[0.25, 0.25], [0.25, 0.25]], vedge:[[1, 0, -1], [1, 0, -1], [1, 0, -1]], hedge:[[1, 1, 1], [0, 0, 0], [-1, -1, -1]], blur3:[[1/9, 1/9, 1/9], [1/9, 1/9, 1/9], [1/9, 1/9, 1/9]] };
+    const N = 8; let img;
+    const resetImg = () => { img = Array.from({length:N}, () => Array(N).fill(0)); for (let i = 1; i < 7; i++) { img[i][3] = 1; img[i][4] = 1; } };
+    resetImg();
+    function draw() {
+      svg.innerHTML = ""; const k = KS[K.value], k1 = k.length, k2 = k[0].length, on = N - k1 + 1;
+      P.max = on * on - 1; if (+P.value > +P.max) P.value = P.max;
+      const p = +P.value, pi = Math.floor(p / on), pj = p % on;
+      document.getElementById("convPv").textContent = `(${pi}, ${pj})`;
+      const z = conv2(img, k); let vmax = 1e-9; z.forEach(r => r.forEach(v => vmax = Math.max(vmax, Math.abs(v))));
+      const cs = 30, ix = 14, iy = 40;
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        cell(svg, ix + j * cs, iy + i * cs, cs, img[i][j]);
+        const hit = SG.el("rect", {x:ix + j * cs, y:iy + i * cs, width:cs, height:cs, fill:"transparent", style:"cursor:pointer"});
+        hit.addEventListener("click", () => { img[i][j] = img[i][j] ? 0 : 1; draw(); }); svg.appendChild(hit);
+      }
+      svg.appendChild(SG.el("rect", {x:ix + pj * cs, y:iy + pi * cs, width:k2 * cs, height:k1 * cs, fill:"none", stroke:"var(--gold)", "stroke-width":3, "pointer-events":"none"}));
+      T(svg, ix + 120, 28, "input x (click to paint)", {"font-size":12, fill:"var(--ink-mute)"});
+      // kernel
+      const kx = 278, ky = 90, kc = 26;
+      T(svg, kx + k2 * kc / 2, 78, "filter ω", {"font-size":12, fill:"var(--ink-mute)"});
+      for (let u = 0; u < k1; u++) for (let v = 0; v < k2; v++) { svg.appendChild(SG.el("rect", {x:kx + v * kc, y:ky + u * kc, width:kc, height:kc, fill:"var(--panel)", stroke:"var(--gold)"}));
+        const val = k[u][v]; T(svg, kx + v * kc + kc / 2, ky + u * kc + 17, Math.abs(val - 1/9) < 1e-9 ? "1/9" : String(val), {"font-size":10.5, "font-family":"var(--mono)"}); }
+      // output
+      const oc = 240 / Math.max(on, 6), ox = 380, oy = 40;
+      for (let i = 0; i < on; i++) for (let j = 0; j < on; j++) sgnCell(svg, ox + j * oc, oy + i * oc, oc, z[i][j], vmax);
+      svg.appendChild(SG.el("rect", {x:ox + pj * oc, y:oy + pi * oc, width:oc, height:oc, fill:"none", stroke:"var(--gold)", "stroke-width":3}));
+      T(svg, ox + on * oc / 2, 28, `output z (${on}×${on})`, {"font-size":12, fill:"var(--ink-mute)"});
+      const terms = []; for (let u = 0; u < k1; u++) for (let v = 0; v < k2; v++) if (img[pi + u][pj + v] && k[u][v]) terms.push(`${img[pi + u][pj + v]}×${Math.abs(k[u][v] - 1/9) < 1e-9 ? "1/9" : k[u][v]}`);
+      out.textContent = `z[${pi},${pj}] = Σ x·ω = ${terms.length ? terms.join(" + ") : "0 (no bright pixels under a nonzero weight)"} = ${z[pi][pj].toFixed(3)}`;
+    }
+    K.addEventListener("change", draw); P.addEventListener("input", draw);
+    document.getElementById("convReset").addEventListener("click", () => { resetImg(); draw(); });
+    draw();
+  })();
+
+  // ---------- Figure 3: pooling ----------
+  (() => {
+    const svg = document.getElementById("poolSvg");
+    const M = [[1, 3, 2, 0], [4, 6, 1, 1], [0, 2, 5, 7], [1, 1, 3, 2]];
+    const cols = ["var(--accent)", "var(--accent-2)", "var(--gold)", "var(--rose)"], cs = 38;
+    const blk = (i, j) => (i < 2 ? 0 : 2) + (j < 2 ? 0 : 1);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { svg.appendChild(SG.el("rect", {x:30 + j * cs, y:30 + i * cs, width:cs, height:cs, fill:cols[blk(i, j)], opacity:0.18, stroke:"var(--line-2)"}));
+      T(svg, 30 + j * cs + cs / 2, 30 + i * cs + 24, String(M[i][j]), {"font-family":"var(--mono)"}); }
+    T(svg, 106, 20, "feature map (4×4)", {"font-size":12, fill:"var(--ink-mute)"});
+    const mx = [[6, 2], [2, 7]], av = [[3.5, 1], [1, 4.25]];
+    const small = (ox, title, V) => { T(svg, ox + cs, 56, title, {"font-size":12, fill:"var(--ink-mute)"});
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { svg.appendChild(SG.el("rect", {x:ox + j * cs, y:70 + i * cs, width:cs, height:cs, fill:cols[2 * i + j], opacity:0.25, stroke:"var(--line-2)"}));
+        T(svg, ox + j * cs + cs / 2, 70 + i * cs + 24, String(V[i][j]), {"font-family":"var(--mono)", "font-size":12.5}); } };
+    small(300, "max pool", mx); small(470, "average pool", av);
+    T(svg, 250, 112, "→", {"font-size":22}); T(svg, 430, 112, "or", {"font-size":13, fill:"var(--ink-mute)"});
+    T(svg, 400, 190, "top-left block {1,3,4,6}: max 6, mean 3.5", {"font-size":12, fill:"var(--ink-soft)"});
+  })();
+
+  // ---------- Figure 4: pipeline ----------
+  (() => {
+    const svg = document.getElementById("pipeSvg"); defs(svg, "ppA");
+    const st = [["input", "28×28×1", ""], ["conv 5×5 ×6", "24×24×6", "156"], ["pool 2×2 + ReLU", "12×12×6", "0"], ["conv 5×5 ×16", "8×8×16", "2,416"], ["pool 2×2 + ReLU", "4×4×16 = 256", "0"], ["FC + softmax", "10", "2,570"]];
+    const w = 98, g = 10;
+    st.forEach((s, i) => { const x = 8 + i * (w + g);
+      box(svg, x, 60, w, 70, {stroke: i === 0 ? "var(--line-2)" : (s[0].startsWith("conv") ? "var(--accent)" : s[0].startsWith("FC") ? "var(--gold)" : "var(--accent-2)")});
+      T(svg, x + w / 2, 86, s[0], {"font-size":11}); T(svg, x + w / 2, 110, s[1], {"font-size":11.5, "font-family":"var(--mono)", fill:"var(--accent)"});
+      if (s[2]) T(svg, x + w / 2, 156, s[2] + " params", {"font-size":11, fill:"var(--ink-mute)"});
+      if (i < st.length - 1) line(svg, x + w, 95, x + w + g, 95, "ppA"); });
+    T(svg, 330, 30, "spatial size shrinks · number of feature maps grows", {"font-size":12, fill:"var(--ink-soft)"});
+    T(svg, 330, 196, "6×(5·5·1+1) = 156     16×(5·5·6+1) = 2,416     256×10+10 = 2,570     total 5,142", {"font-size":11.5, fill:"var(--ink-mute)", "font-family":"var(--mono)"});
+  })();
+
+  // ---------- Figure 5: hierarchy schematic ----------
+  (() => {
+    const svg = document.getElementById("hierSvg"); defs(svg, "hiA");
+    const cols = [60, 220, 380, 540];
+    T(svg, cols[0], 225, "pixels", {"font-size":12}); T(svg, cols[1], 225, "layer 1: edges", {"font-size":12}); T(svg, cols[2], 225, "layer 2: parts", {"font-size":12}); T(svg, cols[3], 225, "layer 3: objects", {"font-size":12});
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) svg.appendChild(SG.el("rect", {x:24 + j * 12, y:70 + i * 12, width:11, height:11, fill:"var(--ink)", opacity: ((i * 7 + j * 3) % 5) / 6 + 0.08}));
+    const edges = [[0, 0, 1, 1], [0, 1, 1, 0], [0.5, 0, 0.5, 1], [0, 0.5, 1, 0.5]];
+    edges.forEach((e, k) => { const x = 180 + (k % 2) * 44, y = 60 + Math.floor(k / 2) * 52; svg.appendChild(SG.el("rect", {x, y, width:36, height:36, fill:"var(--bg-soft)", stroke:"var(--line-2)"}));
+      line(svg, x + 4 + e[0] * 28, y + 4 + e[1] * 28, x + 4 + e[2] * 28, y + 4 + e[3] * 28, null, {stroke:"var(--accent)", "stroke-width":3}); });
+    // parts: eye, nose, mouth
+    [[350, 70], [400, 70], [350, 130], [400, 130]].forEach(([x, y], k) => svg.appendChild(SG.el("rect", {x, y, width:40, height:40, fill:"var(--bg-soft)", stroke:"var(--line-2)"})));
+    svg.appendChild(SG.el("ellipse", {cx:370, cy:90, rx:12, ry:7, fill:"none", stroke:"var(--accent-2)", "stroke-width":2.5}));
+    svg.appendChild(SG.el("circle", {cx:370, cy:90, r:3, fill:"var(--accent-2)"}));
+    svg.appendChild(SG.el("path", {d:"M412,78 L412,100 L424,102", fill:"none", stroke:"var(--accent-2)", "stroke-width":2.5}));
+    svg.appendChild(SG.el("path", {d:"M356,146 Q370,160 384,146", fill:"none", stroke:"var(--accent-2)", "stroke-width":2.5}));
+    svg.appendChild(SG.el("path", {d:"M406,160 Q420,138 434,160", fill:"none", stroke:"var(--accent-2)", "stroke-width":2.5}));
+    // object: face
+    svg.appendChild(SG.el("circle", {cx:540, cy:110, r:52, fill:"var(--bg-soft)", stroke:"var(--gold)", "stroke-width":2.5}));
+    [[522, 96], [558, 96]].forEach(([x, y]) => { svg.appendChild(SG.el("ellipse", {cx:x, cy:y, rx:10, ry:6, fill:"none", stroke:"var(--gold)", "stroke-width":2})); svg.appendChild(SG.el("circle", {cx:x, cy:y, r:2.5, fill:"var(--gold)"})); });
+    svg.appendChild(SG.el("path", {d:"M540,102 L540,120 L548,122", fill:"none", stroke:"var(--gold)", "stroke-width":2}));
+    svg.appendChild(SG.el("path", {d:"M522,136 Q540,150 558,136", fill:"none", stroke:"var(--gold)", "stroke-width":2}));
+    [[100, 130], [270, 330], [440, 480]].forEach(([a, b]) => line(svg, a, 110, b, 110, "hiA"));
+    T(svg, 320, 24, "each stage combines the previous stage's features over a larger region", {"font-size":12, fill:"var(--ink-soft)"});
+  })();
+
+  // ---------- Figure 6: activation derivatives ----------
+  (() => {
+    const svg = document.getElementById("actSvg");
+    const px = z => 320 + z * 45, py = v => 180 - v * 130;
+    line(svg, px(-6.5), py(0), px(6.5), py(0), null, {stroke:"var(--line-2)", "stroke-width":1}); line(svg, px(0), py(0), px(0), py(1.15), null, {stroke:"var(--line-2)", "stroke-width":1});
+    [0.25, 1].forEach(v => { line(svg, px(-6.5), py(v), px(6.5), py(v), null, {stroke:"var(--line)", "stroke-dasharray":"3 4", "stroke-width":1}); T(svg, px(-6.5) - 14, py(v) + 4, String(v), {"font-size":11, fill:"var(--ink-mute)"}); });
+    let d = ""; for (let k = 0; k <= 200; k++) { const z = -6.5 + 13 * k / 200, s = 1 / (1 + Math.exp(-z)); d += (k ? "L" : "M") + px(z).toFixed(1) + "," + py(s * (1 - s)).toFixed(1); }
+    svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--accent)", "stroke-width":2.6}));
+    svg.appendChild(SG.el("path", {d:`M${px(-6.5)},${py(0) - 1} L${px(0)},${py(0) - 1} M${px(0)},${py(1)} L${px(6.5)},${py(1)}`, fill:"none", stroke:"var(--rose)", "stroke-width":2.6}));
+    T(svg, px(4.2), py(1) - 10, "ReLU′(z) = 1 for z > 0", {"font-size":12, fill:"var(--rose)"});
+    T(svg, px(2.6), py(0.25) - 14, "σ′(z) = σ(1−σ) ≤ 0.25", {"font-size":12, fill:"var(--accent)"});
+    T(svg, px(0), 205, "z", {"font-size":12, fill:"var(--ink-mute)"});
+  })();
+
+  // ---------- Figure 7: skip connection ----------
+  (() => {
+    const svg = document.getElementById("skipSvg"); defs(svg, "skA");
+    T(svg, 40, 110, "input", {"font-size":13});
+    box(svg, 90, 88, 100, 40); T(svg, 140, 113, "layer 1");
+    box(svg, 260, 88, 100, 40); T(svg, 310, 113, "layer 2");
+    svg.appendChild(SG.el("circle", {cx:420, cy:108, r:16, fill:"var(--panel)", stroke:"var(--accent-2)", "stroke-width":2})); T(svg, 420, 114, "+", {"font-size":18, fill:"var(--accent-2)"});
+    box(svg, 470, 88, 100, 40); T(svg, 520, 113, "layer 3"); T(svg, 600, 113, "⋯", {"font-size":16});
+    line(svg, 64, 108, 88, 108, "skA"); line(svg, 190, 108, 258, 108, "skA"); line(svg, 360, 108, 402, 108, "skA"); line(svg, 436, 108, 468, 108, "skA");
+    svg.appendChild(SG.el("path", {d:"M225,108 L225,40 L420,40 L420,90", fill:"none", stroke:"var(--accent-2)", "stroke-width":2, "marker-end":"url(#skA)"}));
+    T(svg, 322, 32, "skip: identity, derivative = 1", {"font-size":12, fill:"var(--accent-2)"});
+    T(svg, 310, 152, "F(h): the learned residual", {"font-size":12, fill:"var(--ink-mute)"});
+  })();
+
+  // ---------- Figure 8: vanishing gradient toy ----------
+  (() => {
+    const svg = document.getElementById("vanSvg"), Ls = document.getElementById("vanL"), Ws = document.getElementById("vanW"), out = document.getElementById("vanOut");
+    let seed = 12345; const signs = []; for (let i = 0; i < 60; i++) { seed = (seed * 16807) % 2147483647; signs.push(seed / 2147483647 < 0.5 ? -1 : 1); }
+    function draw() {
+      svg.innerHTML = ""; const L = +Ls.value, w = +Ws.value;
+      const plain = [], res = []; let gp = 1, gr = 1;
+      for (let l = L; l >= 1; l--) { plain[l] = gp; res[l] = gr; gp *= w; gr *= Math.abs(1 + signs[l - 1] * w); }
+      const lg = v => v > 0 ? Math.log10(v) : -40;
+      const py = v => 145 - SG.clamp(v, -12, 4) * 9.5, bw = 560 / L;
+      for (let v = -12; v <= 4; v += 4) { line(svg, 50, py(v), 620, py(v), null, {stroke: v === 0 ? "var(--line-2)" : "var(--line)", "stroke-width":1, "stroke-dasharray": v === 0 ? null : "3 4"}); T(svg, 36, py(v) + 4, String(v), {"font-size":10.5, fill:"var(--ink-mute)"}); }
+      for (let l = 1; l <= L; l++) { const x = 55 + (l - 1) * bw;
+        const a = lg(plain[l]), b = lg(res[l]);
+        svg.appendChild(SG.el("rect", {x, y:Math.min(py(a), py(0)), width:Math.max(1, bw * 0.45), height:Math.abs(py(a) - py(0)) || 1, fill:"var(--rose)", opacity:0.85}));
+        svg.appendChild(SG.el("rect", {x:x + bw * 0.47, y:Math.min(py(b), py(0)), width:Math.max(1, bw * 0.45), height:Math.abs(py(b) - py(0)) || 1, fill:"var(--accent-2)", opacity:0.85})); }
+      T(svg, 335, 280, "layer ℓ (1 = nearest the input, L = nearest the output)", {"font-size":11, fill:"var(--ink-mute)"});
+      T(svg, 14, 20, "log₁₀ |∂out/∂hℓ|", {"font-size":11, fill:"var(--ink-mute)", "text-anchor":"start"});
+      T(svg, 470, 20, "■ plain", {"font-size":12, fill:"var(--rose)"}); T(svg, 560, 20, "■ residual", {"font-size":12, fill:"var(--accent-2)"});
+      const f = v => v === 0 ? "0" : v.toExponential(2);
+      out.textContent = `L = ${L}, w = ${w.toFixed(2)} → gradient reaching layer 1: plain ${f(plain[1])} · residual ${f(res[1])}  (bars clipped to [−12, 4])`;
+    }
+    Ls.addEventListener("input", draw); Ws.addEventListener("input", draw); draw();
+  })();
+});
+</script>
+</body>
+</html>

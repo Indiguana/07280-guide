@@ -24,6 +24,9 @@ const CHAPTERS = [
   { slug: "logistic-regression", n: "11",  title: "Logistic regression" },
   { slug: "model-selection",     n: "12",  title: "Regularization & cross-validation" },
   { slug: "neural-networks",     n: "13",  title: "Neural networks (not on midterm 1)" },
+  { slug: "backpropagation",     n: "14",  title: "Neural networks II: backprop" },
+  { slug: "cnns",                n: "15",  title: "Computer vision: CNNs & ResNets" },
+  { slug: "mle",                 n: "16",  title: "Maximum likelihood estimation" },
 
   { group: "Exam prep" },
   { slug: "midterm",             n: "",    title: "Midterm 1 — scope & plan" },

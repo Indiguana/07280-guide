@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neural Networks II: Backpropagation · 07-280 Field Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="backpropagation">
+<main>
+
+  <div class="eyebrow">Part II · Chapter 14</div>
+  <h1>Neural networks II: what they can fit, and backprop with vectors</h1>
+  <p class="subtitle">Why a network can approximate anything but might not learn it, what non-convexity really costs you,
+  how to tell underfitting from overfitting, and backpropagation built up from a width-1 chain to a full matrix layer —
+  every blank the slides left for the board, filled in.</p>
+
+  <div data-toc></div>
+
+  <div class="box key"><span class="label">Where this sits</span>
+    <p>Chapter 13 built networks and the chain rule on computation graphs. Lecture 12 (Neural Networks II) asks five questions
+    and answers them in order: <em>Can we fit any function? Non-convex — what about local minima? What if there are no
+    non-linear activations? How many neurons/layers? And: tell me more about calculus.</em> Sections 1–4 are the first four;
+    sections 5–10 are the calculus, ending with the gradient formulas for a linear layer that the slides leave blank.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="fit-anything">1. Can a network fit any function?</h2>
+
+  <p>Start with the worry. Logistic regression draws one straight line. The lecture's demo (Karpathy's
+  <a href="https://cs.stanford.edu/people/karpathy/convnetjs/demo/classify2d.html">ConvNetJS 2-D classifier</a>) shows a small network
+  carving out a triangle, a disc, even an interlocking spiral. Is there <em>any</em> shape it can't do?</p>
+
+  <div class="box defn"><span class="label">Universal Approximation Theorem</span>
+    <p>A <strong>two-layer</strong> neural network (one hidden layer plus an output layer) with a <strong>sufficient number of
+    neurons</strong> can approximate any continuous function to any desired accuracy.</p>
+  </div>
+
+  <div class="box intuition"><span class="label">Intuition — bending a wire</span>
+    <p>Each ReLU neuron $\max(0, w x + b)$ is a straight line with one <strong>kink</strong> in it. Adding $H$ of them together gives a
+    piecewise-linear curve with up to $H$ kinks — like bending a piece of wire at $H$ places. Bend it at enough places and you can trace any
+    smooth curve as closely as you like. That's the whole theorem, in one dimension.</p>
+  </div>
+
+  <p>Concretely: pick $H+1$ points $x_0 &lt; x_1 &lt; \dots &lt; x_H$ on the curve you want. Join them with straight segments. The joined-up curve is</p>
+  $$ \hat y(x) = f(x_0) + s_0\,\mathrm{ReLU}(x - x_0) + \sum_{i=1}^{H-1} (s_i - s_{i-1})\,\mathrm{ReLU}(x - x_i), $$
+  <p>where $s_i$ is the slope of segment $i$. Read it as a network: hidden neuron $i$ has weight $1$ and bias $-x_i$; the output neuron's
+  weights are the <em>changes in slope</em> $s_i - s_{i-1}$, and its bias is $f(x_0)$. One hidden layer, $H$ neurons. The figure builds exactly this.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 1 — a one-hidden-layer ReLU network, built by hand to trace a curve</div>
+    <svg id="uatSvg" viewBox="0 0 640 280" role="img" aria-label="Target curve and a piecewise-linear ReLU network approximation with adjustable number of hidden neurons"></svg>
+    <div class="controls">
+      <label>Hidden neurons $H$ <input type="range" id="uatH" min="1" max="40" step="1" value="3" data-out="uatHv" data-fmt="int"><span class="val" id="uatHv"></span></label>
+    </div>
+    <div class="caption" id="uatOut" style="font-family:var(--mono)"></div>
+    <div class="caption">Target (dashed): $f(x) = \sin(2x) + 0.3x$ on $[0, 3]$. Dots mark the kinks — one per hidden neuron. What to notice:
+    each extra neuron buys one more bend, and the worst-case error in the readout keeps shrinking as $H$ grows. The theorem promises this;
+    it says nothing about how big $H$ must be for a hard function, or whether gradient descent would find these weights.</div>
+  </div>
+
+  <div class="box warn"><span class="label">What the theorem does not say</span>
+    <ul>
+      <li><strong>"Can represent" ≠ "will learn".</strong> The weights above were written down by hand. Training has to <em>find</em> them by gradient
+      descent on a non-convex objective (§2). The lecture's reminder slide is exactly this: "Just because it can fit any function, will it?"</li>
+      <li><strong>"Sufficient" may be enormous.</strong> The theorem doesn't bound $H$. In practice, deeper networks often get the same accuracy with far fewer neurons.</li>
+      <li><strong>Fitting anything includes fitting noise.</strong> The section title on the slide is "(Over?) Fitting any function" — a model that can fit any
+      function can fit your training set's mistakes too (§4).</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="local-minima">2. Non-convex: does getting stuck matter?</h2>
+
+  <p>Logistic regression's loss is a bowl — one minimum, and gradient descent finds it. A network's loss is not: the hidden-layer
+  weights multiply each other (and you can relabel hidden neurons without changing the function), so the surface has many valleys.
+  The lecture makes three points:</p>
+  <ol>
+    <li>The objective is <strong>non-convex</strong> → gradient descent can get stuck in a local minimum.</li>
+    <li><strong>Stochastic</strong> gradient descent takes noisy, pseudo-random steps → that noise helps it pop out of shallow minima.</li>
+    <li>"Is getting stuck at a local minimum necessarily a bad thing??" — the slide leaves this open. Answered below.</li>
+  </ol>
+
+  <div class="viz">
+    <div class="viz-title">Figure 2 — plain GD vs noisy (stochastic-style) steps on a loss with two valleys</div>
+    <svg id="sgdSvg" viewBox="0 0 640 270" role="img" aria-label="One-dimensional non-convex loss with a shallow right valley and deeper left valley; gradient descent trajectories"></svg>
+    <div class="controls">
+      <label>Gradient noise $\sigma$ <input type="range" id="sgdNoise" min="0" max="6" step="0.1" value="0" data-out="sgdNoiseV" data-dp="1"><span class="val" id="sgdNoiseV"></span></label>
+      <button class="btn primary" id="sgdRun">Run again (new noise)</button>
+    </div>
+    <div class="caption" id="sgdOut" style="font-family:var(--mono)"></div>
+    <div class="caption">Loss $L(w) = 0.1w^4 - 0.6w^2 + 0.35w$, start $w = 2.5$, 300 steps of size $0.05$; each step uses the true gradient plus
+    Gaussian noise of size $\sigma$ (a stand-in for the noise of a mini-batch gradient). What to notice: with $\sigma = 0$ the path slides
+    into the nearest (shallower) valley and stays — every time. Raise $\sigma$ to about 3 and click "run again" several times: in a 200-run simulation of
+    these exact settings, about 4 runs in 10 hopped the hump into the deeper valley; at $\sigma = 1$, none did. Notice too that at high $\sigma$ the end point
+    jitters around a valley floor instead of sitting on it — noise helps escape, but it also stops you converging precisely, which is why
+    learning rates are usually decayed late in training.</div>
+  </div>
+
+  <div class="box proof"><span class="label">Answer — is a local minimum bad?</span>
+    <p><strong>Not necessarily.</strong> Three reasons:</p>
+    <ul>
+      <li><strong>We don't actually want the global minimum of <em>training</em> loss.</strong> For a big network, the global minimum often means memorising the
+      training set — zero training loss, poor validation loss. A local minimum with slightly higher training loss can generalise better. What matters is validation performance.</li>
+      <li><strong>In large networks, most local minima are about equally good.</strong> Empirically, different random initialisations land in different minima with
+      very similar loss. A local minimum is only a problem if it's much <em>worse</em> than the alternatives.</li>
+      <li><strong>Many directions to escape.</strong> With millions of parameters, a point has to curve upward in <em>every</em> direction to trap you. Points that look
+      stuck are more often saddle points, which SGD's noise pushes off.</li>
+    </ul>
+    <p>When it <em>is</em> bad: when training loss is stuck high. That's underfitting, and §4 tells you what to do about it.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="no-nonlinearity">3. What if there are no non-linear activations?</h2>
+
+  <p>Delete every $g$ and keep stacking linear layers. Do you get a more powerful model? No:</p>
+  <div class="box key"><span class="label">Key idea</span>
+    <p>A deep network with only linear layers reduces to an <strong>exactly equivalent single linear layer</strong>.</p>
+  </div>
+  <p>Two layers: $\mathbf z_1 = W_1\mathbf x + \mathbf b_1$, then $\mathbf z_2 = W_2\mathbf z_1 + \mathbf b_2$. Substitute:</p>
+  $$ \mathbf z_2 = W_2(W_1\mathbf x + \mathbf b_1) + \mathbf b_2 = \underbrace{(W_2W_1)}_{W}\mathbf x + \underbrace{(W_2\mathbf b_1 + \mathbf b_2)}_{\mathbf b}. $$
+  <p>One matrix, one bias. By induction, any number of linear layers collapses the same way.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Collapse a two-layer linear network</div>
+    <div class="g-body"><p>$W_1 = \begin{bmatrix}1 &amp; 2\\ 0 &amp; 1\end{bmatrix}$, $\mathbf b_1 = \begin{bmatrix}1\\0\end{bmatrix}$, $W_2 = \begin{bmatrix}1 &amp; -1\end{bmatrix}$,
+    $b_2 = 2$. No activations. Write the network as a single $\hat y = \mathbf w^\top\mathbf x + b$.</p></div>
+    <details class="step"><summary>Step 1 — What's being asked?</summary><div>
+      <p>Find the one linear layer that computes the same function for <em>every</em> $\mathbf x$: $W = W_2W_1$ and $b = W_2\mathbf b_1 + b_2$.</p></div></details>
+    <details class="step"><summary>Step 2 — Multiply</summary><div>
+      <p>$W_2W_1 = \begin{bmatrix}1\cdot1 + (-1)\cdot 0 &amp; 1\cdot 2 + (-1)\cdot 1\end{bmatrix} = \begin{bmatrix}1 &amp; 1\end{bmatrix}$.
+      $W_2\mathbf b_1 + b_2 = (1\cdot 1 + (-1)\cdot 0) + 2 = 3$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$\hat y = x_1 + x_2 + 3$. Check at $\mathbf x = (1, 1)$: layer 1 gives $(1+2+1,\ 0+1+0) = (4, 1)$, layer 2 gives $4 - 1 + 2 = 5$; the
+      collapsed version gives $1 + 1 + 3 = 5$. ✓ <strong>The nonlinearity is what makes depth worth anything.</strong> It's also why ReLU's kink in §1
+      matters: without it, the "bent wire" is a straight wire.</p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="debugging">4. How many neurons and layers? Debug it from the losses</h2>
+
+  <p>There's no formula for the right size. Instead, train something, then read two numbers — <strong>training loss</strong> and
+  <strong>validation loss</strong> — and let them tell you which way to move.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 3 — the debugging flowchart from the lecture</div>
+    <svg id="dbgSvg" viewBox="0 0 640 260" role="img" aria-label="Flowchart: if training loss is poor, underfitting, add capacity. If training loss good but validation poor, overfitting: regularize or add data."></svg>
+    <div class="caption">What to notice: you check <strong>underfitting first</strong>. If the model can't even fit the training data, regularising or adding data
+    won't help — those are fixes for the other problem.</div>
+  </div>
+
+  <div class="grid2">
+    <div class="box defn"><span class="label">Underfitting (check this first!)</span>
+      <p><strong>Evidence:</strong> poor training loss (and poor validation loss).</p>
+      <p><strong>Baseline:</strong> compare with human performance — make sure the task isn't impossible for a human with unlimited resources. If people
+      can't do it either, "poor" may be as good as it gets.</p>
+      <p><strong>Try:</strong> more capacity — wider (more neurons per layer) or deeper (more layers).</p>
+    </div>
+    <div class="box defn"><span class="label">Overfitting</span>
+      <p><strong>Evidence:</strong> good training loss, poor validation loss. Also: really large parameter values.</p>
+      <p><strong>Try:</strong> regularisation (penalise large weights — chapter 12), or more data.</p>
+    </div>
+  </div>
+
+  <p>"But how do we choose a new network structure?" — the slide's follow-up. Treat width and depth as <strong>hyperparameters</strong>: pick a few
+  candidates, train each, and compare <em>validation</em> loss, exactly as chapter 12's cross-validation did for $\lambda$. Usual practice is to start
+  from an architecture known to work on a similar problem and adjust.</p>
+
+  <div class="box intuition"><span class="label">Why "really large parameter values" means overfitting</span>
+    <p>To pass exactly through noisy points, a model has to make sharp turns, and sharp turns need big weights (a steep slope on a ReLU is a big $w$).
+    Huge weights are the model contorting itself around individual training points.</p>
+  </div>
+
+  <div class="quiz" data-answer="2">
+    <div class="q">Training loss 0.02, validation loss 0.03, but a human expert gets 0.01 on the same task. Training loss for a bigger network you tried earlier was 0.001 with validation 0.4. What's going on with the current network?</div>
+    <button class="opt">Overfitting — add regularisation</button>
+    <button class="opt">Overfitting — the gap between 0.02 and 0.03 is too big</button>
+    <button class="opt">Slight underfitting — it's behind the human baseline on <em>training</em> loss, so a bit more capacity is worth trying, carefully</button>
+    <button class="opt">It's perfect; stop</button>
+    <div class="why"><strong>Why:</strong> training and validation are close, so there's no overfitting signal. But training loss is above what a human achieves, which is the
+    underfitting signal — the task is learnable to 0.01. The earlier big network shows the other cliff edge (0.001 train, 0.4 validation = overfitting),
+    so the right size is somewhere between. Options A/B mistake a small train–validation gap for overfitting.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="scalar-backprop">5. Backprop on a width-1 chain</h2>
+
+  <p>Now the calculus. The lecture's warm-up is a deliberately "dumb" network: five layers, <strong>one neuron each</strong>, no biases. It has none of the
+  index mess of a real network, so you can see the structure of the computation clearly.</p>
+  $$ z_\ell = w_\ell\, a_{\ell-1}, \qquad a_\ell = g(z_\ell), \qquad a_0 = x, \qquad \hat y = a_L, \qquad J = \ell(\hat y, y). $$
+  <p>Written out, $\hat y = g(w_5\, g(w_4\, g(w_3\, g(w_2\, g(w_1 x)))))$ — a nesting of $f$ (multiply by a weight) and $g$ (activation), ten deep.</p>
+
+  <p><strong>The question:</strong> gradient descent needs $\partial J/\partial w_\ell$ for every $\ell$ so it can update $w_\ell \leftarrow w_\ell - \alpha\,\partial J/\partial w_\ell$.
+  The chain rule along the single path gives, e.g.</p>
+  $$ \frac{\partial J}{\partial w_2} = \frac{\partial J}{\partial \hat y}\cdot\frac{\partial a_5}{\partial z_5}\frac{\partial z_5}{\partial a_4}\cdot\frac{\partial a_4}{\partial z_4}\frac{\partial z_4}{\partial a_3}\cdot\frac{\partial a_3}{\partial z_3}\frac{\partial z_3}{\partial a_2}\cdot\frac{\partial a_2}{\partial z_2}\cdot\frac{\partial z_2}{\partial w_2}. $$
+  <p>Now write the same thing for $w_1$: it's <em>the same long product</em> with two more factors on the end. Computing each $\partial J/\partial w_\ell$ from scratch
+  repeats almost all the work.</p>
+
+  <div class="box key"><span class="label">Backpropagation = start at the end and reuse</span>
+    <p>Walk backwards once, keeping a running product. At each layer you hold $\partial J/\partial a_\ell$ and do two cheap things:</p>
+    $$ \frac{\partial J}{\partial z_\ell} = \frac{\partial J}{\partial a_\ell}\, g'(z_\ell), \qquad
+       \frac{\partial J}{\partial w_\ell} = \frac{\partial J}{\partial z_\ell}\, a_{\ell-1}, \qquad
+       \frac{\partial J}{\partial a_{\ell-1}} = \frac{\partial J}{\partial z_\ell}\, w_\ell. $$
+    <p>The last one is what you hand to the layer below. Every intermediate gradient is computed <strong>once</strong>. For $L$ layers that's about $L$ steps of work instead of about $L^2/2$.</p>
+  </div>
+
+  <div class="box analogy"><span class="label">Analogy — blame flowing back down an assembly line</span>
+    <p>The final product is off by some amount. The last station works out how much of that is its fault and how much it inherited from upstream, then
+    passes the "inherited" part back to the previous station, which does the same. No station needs to see the whole line; each only needs the blame message
+    from the station after it. (Where it breaks: blame in real backprop can be negative, and it splits and sums when wires fork — §6.)</p>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 4 — forward and backward pass on a 3-layer width-1 chain (sigmoid, $J = \tfrac12(\hat y - y)^2$)</div>
+    <svg id="chainSvg" viewBox="0 0 660 250" role="img" aria-label="Chain x to z1 a1 z2 a2 z3 a3 to J with forward values above and backward gradients below"></svg>
+    <div class="controls">
+      <label>$w_1$ <input type="range" id="cw1" min="-4" max="4" step="0.1" value="0.5" data-out="cw1v" data-dp="1"><span class="val" id="cw1v"></span></label>
+      <label>$w_2$ <input type="range" id="cw2" min="-4" max="4" step="0.1" value="-1" data-out="cw2v" data-dp="1"><span class="val" id="cw2v"></span></label>
+      <label>$w_3$ <input type="range" id="cw3" min="-4" max="4" step="0.1" value="2" data-out="cw3v" data-dp="1"><span class="val" id="cw3v"></span></label>
+    </div>
+    <div class="caption" id="chainOut" style="font-family:var(--mono)"></div>
+    <div class="caption">$x = 1$, $y = 1$. Top row (blue): forward values. Bottom row (pink): $\partial J/\partial(\cdot)$, computed right-to-left. The last readout line
+    re-estimates each $\partial J/\partial w_\ell$ by nudging $w_\ell$ by $\pm10^{-6}$ — independently of backprop — and they agree. What to notice: drag $w_3$ to
+    $\pm4$ and watch $\partial J/\partial w_1$ shrink toward zero. Each sigmoid multiplies the backward signal by $g'(z) \le 0.25$, and a saturated sigmoid by much less.
+    That's the vanishing-gradient problem chapter 15's ResNets fix.</div>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>One full forward and backward pass by hand</div>
+    <div class="g-body"><p>Three layers, width 1, sigmoid activation $g(z) = \frac{1}{1+e^{-z}}$ (so $g'(z) = g(z)(1 - g(z))$), loss $J = \tfrac12(\hat y - y)^2$.
+    $x = 1$, $y = 1$, $w_1 = 0.5$, $w_2 = -1$, $w_3 = 2$. Find $\partial J/\partial w_1$, $\partial J/\partial w_2$, $\partial J/\partial w_3$.</p></div>
+    <details class="step"><summary>Step 1 — What's being asked?</summary><div>
+      <p>Three partial derivatives. The efficient route: one forward pass storing every $z_\ell$ and $a_\ell$, then one backward pass using the three boxed rules.</p></div></details>
+    <details class="step"><summary>Step 2 — Forward pass</summary><div>
+      <p>$z_1 = 0.5\cdot 1 = 0.5$, $a_1 = g(0.5) = 0.6225$.<br>
+      $z_2 = -1\cdot 0.6225 = -0.6225$, $a_2 = g(-0.6225) = 0.3492$.<br>
+      $z_3 = 2\cdot 0.3492 = 0.6984$, $a_3 = \hat y = g(0.6984) = 0.6678$.<br>
+      $J = \tfrac12(0.6678 - 1)^2 = 0.0552$.</p></div></details>
+    <details class="step"><summary>Step 3 — Backward through layer 3</summary><div>
+      <p>$\partial J/\partial a_3 = \hat y - y = -0.3322$.<br>
+      $\partial J/\partial z_3 = -0.3322 \cdot a_3(1-a_3) = -0.3322 \cdot 0.2218 = -0.0737$.<br>
+      $\partial J/\partial w_3 = -0.0737 \cdot a_2 = -0.0737\cdot 0.3492 = -0.0257$.<br>
+      Pass down: $\partial J/\partial a_2 = -0.0737 \cdot w_3 = -0.1474$.</p></div></details>
+    <details class="step"><summary>Step 4 — Layers 2 and 1</summary><div>
+      <p>$\partial J/\partial z_2 = -0.1474\cdot a_2(1-a_2) = -0.1474\cdot 0.2273 = -0.0335$; $\partial J/\partial w_2 = -0.0335 \cdot a_1 = -0.0208$; $\partial J/\partial a_1 = -0.0335\cdot w_2 = 0.0335$.<br>
+      $\partial J/\partial z_1 = 0.0335\cdot a_1(1-a_1) = 0.0335 \cdot 0.2350 = 0.00787$; $\partial J/\partial w_1 = 0.00787 \cdot x = 0.00787$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$\partial J/\partial w_3 = -0.0257$, $\partial J/\partial w_2 = -0.0208$, $\partial J/\partial w_1 = 0.0079$ (finite differences agree to 4 decimal places; Figure 4 starts at these weights).
+      Two things to notice: the sign of $\partial J/\partial a_1$ <em>flipped</em> because $w_2$ is negative, and the magnitude dropped by roughly ×4 per layer — the $g' \le 0.25$ effect.
+      The skill being tested is bookkeeping: store forward values, reuse the running product.</p></div></details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="generic-layer">6. The generic layer: the only interface backprop needs</h2>
+
+  <p>Zoom out. Every layer, whatever it computes, is a box $\mathbf z_{\text{out}} = f(\mathbf z_{\text{in}}, \theta)$. The forward pass pushes values left-to-right
+  through the boxes. The backward pass pushes $\partial J/\partial(\cdot)$ right-to-left. Each box only has to know its <em>own</em> local derivatives.</p>
+
+  <div class="viz">
+    <div class="viz-title">Figure 5 — one layer's job in the backward pass</div>
+    <svg id="layerSvg" viewBox="0 0 640 250" role="img" aria-label="Layer box receiving dJ/dz_out from the right, outputting dJ/dz_in to the left and dJ/dtheta downward"></svg>
+    <div class="caption">What to notice: the layer receives one message from the right, $\partial J/\partial z_{\text{out}}$, and produces two: one to the left (for earlier layers) and one
+    downward (for its own parameter update). It multiplies the incoming message by its local derivatives — it never needs to know what the rest of the network is.</div>
+  </div>
+
+  <p>For a scalar layer the two outputs are</p>
+  $$ \frac{\partial J}{\partial z_{\text{in}}} = \frac{\partial J}{\partial z_{\text{out}}}\frac{\partial f}{\partial z_{\text{in}}}, \qquad
+     \frac{\partial J}{\partial \theta} = \frac{\partial J}{\partial z_{\text{out}}}\frac{\partial f}{\partial \theta}. $$
+  <p>That's why deep-learning libraries can let you build arbitrary networks from Lego-brick layers: each brick implements <code>forward</code> and <code>backward</code>, and the library just calls them in order, then in reverse.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="multivariate">7. Multivariate chain rule: when paths fork, add</h2>
+
+  <p>The chain above has exactly one path from each weight to $J$. Real networks fork: one value feeds several neurons. The lecture's first exercise is the simplest fork.</p>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Exercise 1 from the slides (left unanswered there)</div>
+    <div class="g-body"><p>$g_1(x) = 3x$, $g_2(x) = 5x$, $f(z_1, z_2) = 2z_1 + 7z_2$, $y = f(g_1(x), g_2(x))$. Find $dy/dx$.</p></div>
+    <details class="step"><summary>Step 1 — Draw it</summary><div>
+      <p>$x$ splits into two paths: $x \to g_1 \to f$ and $x \to g_2 \to f$. The rule: multiply along each path, then add the paths:
+      $\frac{dy}{dx} = \frac{\partial f}{\partial g_1}\frac{dg_1}{dx} + \frac{\partial f}{\partial g_2}\frac{dg_2}{dx}$.</p></div></details>
+    <details class="step"><summary>Step 2 — Local derivatives</summary><div>
+      <p>$\frac{dg_1}{dx} = 3$, $\frac{dg_2}{dx} = 5$, $\frac{\partial f}{\partial z_1} = 2$, $\frac{\partial f}{\partial z_2} = 7$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$\frac{dy}{dx} = 2\cdot 3 + 7\cdot 5 = 6 + 35 = 41$. Sanity check by substitution: $y = 2(3x) + 7(5x) = 41x$. ✓ Forgetting a path gives 6 or 35 — a classic error.</p></div></details>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Exercise 2 from the slides — with a number at the end</div>
+    <div class="g-body"><p>$z_1 = \sin x$, $z_2 = x^3$, $y = f(z_1, z_2) = z_1^4 e^{z_2} + 5z_1 + 7z_2$. Find $dy/dx$, then evaluate it at $x = 1$.</p></div>
+    <details class="step"><summary>Step 1 — Four local derivatives</summary><div>
+      <p>$\frac{dz_1}{dx} = \cos x$, $\frac{dz_2}{dx} = 3x^2$, $\frac{\partial f}{\partial z_1} = 4z_1^3 e^{z_2} + 5$, $\frac{\partial f}{\partial z_2} = z_1^4 e^{z_2} + 7$.
+      (In $\partial f/\partial z_1$, $e^{z_2}$ is a constant; in $\partial f/\partial z_2$, $z_1^4$ is.)</p></div></details>
+    <details class="step"><summary>Step 2 — Combine</summary><div>
+      $$ \frac{dy}{dx} = \bigl(4z_1^3e^{z_2} + 5\bigr)\cos x + \bigl(z_1^4 e^{z_2} + 7\bigr)3x^2. $$</div></details>
+    <details class="step"><summary>Step 3 — Evaluate at $x = 1$</summary><div>
+      <p>$z_1 = \sin 1 = 0.8415$, $z_2 = 1$. First term: $(4\cdot 0.5958\cdot 2.7183 + 5)(0.5403) = (6.478 + 5)(0.5403) = 6.202$. Second: $(0.5014\cdot 2.7183 + 7)(3) = (1.363 + 7)(3) = 25.089$.
+      Total $\approx 31.29$.</p></div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>$dy/dx\big|_{x=1} \approx 31.290$; a central finite difference on $y(x) = \sin^4 x\, e^{x^3} + 5\sin x + 7x^3$ gives $31.290$ too. Note the answer is written in terms of
+      $z_1, z_2$ — values you <em>already computed on the forward pass</em>. That's the reuse that makes backprop cheap.</p></div></details>
+  </div>
+
+  <h3>Three versions of the chain rule</h3>
+  <div class="scroll-x"><table>
+    <thead><tr><th></th><th>Scalar</th><th>Scalar out, vector middle</th><th>Vector out, vector middle</th></tr></thead>
+    <tbody>
+      <tr><td>Setup</td><td>$y = f(z)$, $z = g(x)$</td><td>$y = f(\mathbf z)$, $\mathbf z = g(x)$</td><td>$\mathbf y = f(\mathbf z)$, $\mathbf z = g(\mathbf x)$</td></tr>
+      <tr><td>Rule</td><td>$\dfrac{dy}{dx} = \dfrac{dy}{dz}\dfrac{dz}{dx}$</td><td>$\dfrac{dy}{dx} = \displaystyle\sum_j \dfrac{\partial y}{\partial z_j}\dfrac{\partial z_j}{\partial x}$</td><td>$\dfrac{\partial y_i}{\partial x_k} = \displaystyle\sum_j \dfrac{\partial y_i}{\partial z_j}\dfrac{\partial z_j}{\partial x_k}$</td></tr>
+      <tr><td>In words</td><td>one path</td><td>one path per $z_j$; add them</td><td>same, for every (output $i$, input $k$) pair</td></tr>
+    </tbody>
+  </table></div>
+  <p>The third column is the one to remember — the other two are special cases. The sum over $j$ is "add over every intermediate the influence can flow through".</p>
+
+  <h3>Why the updated layer says "+="</h3>
+  <p>The lecture's "Generic Layer Implementation (updated)" slide changes $=$ to $+=$:</p>
+  $$ \frac{\partial J}{\partial z_{\text{in}}} \mathrel{+}= \frac{\partial J}{\partial z_{\text{out}}}\frac{\partial f}{\partial z_{\text{in}}}, \qquad
+     \frac{\partial J}{\partial \theta} \mathrel{+}= \frac{\partial J}{\partial z_{\text{out}}}\frac{\partial f}{\partial \theta}. $$
+
+  <div class="viz">
+    <div class="viz-title">Figure 6 — fan-out: one value used by two layers, so its gradient gets two contributions</div>
+    <svg id="fanSvg" viewBox="0 0 640 220" role="img" aria-label="z_in feeding two layers f and h; gradients from both flow back and are summed"></svg>
+    <div class="caption">What to notice: $z_{\text{in}}$ influences $J$ through two boxes. Each box, during its own backward call, only knows about its own path, so it
+    <em>adds</em> its contribution into a shared accumulator that starts at zero. After both have run, the accumulator holds the full multivariate-chain-rule sum.
+    The same thing happens to a parameter used in many places — which is exactly the situation in a convolutional layer (chapter 15).</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="vector-layer">8. A layer with a vector output</h2>
+
+  <p>Now let the layer output $K$ numbers, $\mathbf z_{\text{out}} \in \R^K$, with parameters $\boldsymbol\theta \in \R^M$. The slide leaves the formulas blank on its first
+  version. Fill them in with the third column of the table: $z_{\text{in}}$ reaches $J$ through each of the $K$ outputs, so sum over them.</p>
+  $$ \frac{\partial J}{\partial z_{\text{in}}} = \sum_{k=1}^{K}\frac{\partial J}{\partial z_{\text{out},k}}\frac{\partial z_{\text{out},k}}{\partial z_{\text{in}}}, \qquad
+     \frac{\partial J}{\partial \theta_j} = \sum_{k=1}^{K}\frac{\partial J}{\partial z_{\text{out},k}}\frac{\partial z_{\text{out},k}}{\partial \theta_j}. $$
+  <p>Here $j$ indexes a single parameter; you compute this once per $j = 1,\dots,M$. The incoming message is now a vector $\partial J/\partial\mathbf z_{\text{out}} \in \R^K$, one number per output.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="linear-layer">9. The linear layer: $\mathbf z = W\mathbf a + \mathbf b$</h2>
+
+  <p>The workhorse. Input $\mathbf a \in \R^M$, weights $W \in \R^{K\times M}$, bias $\mathbf b \in \R^K$, output $\mathbf z \in \R^K$. Entry by entry:</p>
+  $$ z_k = b_k + \sum_{j=1}^{M} W_{k,j}\, a_j. $$
+  <p>The slides pose three blanks: $\partial J/\partial a_j$, $\partial J/\partial W_{i,j}$, $\partial J/\partial b_i$. Here they are, filled.</p>
+
+  <h3>Scalar version — derive each one</h3>
+  <p><strong>Step 1, the vector-output rule:</strong> every derivative is $\sum_k \frac{\partial J}{\partial z_k}\cdot(\text{how much } z_k \text{ moves})$.</p>
+  <p><strong>Step 2, the local derivatives</strong> from $z_k = b_k + \sum_j W_{k,j}a_j$:</p>
+  <ul>
+    <li>$\frac{\partial z_k}{\partial a_j} = W_{k,j}$ — every output depends on every input.</li>
+    <li>$\frac{\partial z_k}{\partial W_{i,j}} = a_j$ if $k = i$, and $0$ otherwise — weight $W_{i,j}$ only appears in output $i$.</li>
+    <li>$\frac{\partial z_k}{\partial b_i} = 1$ if $k = i$, and $0$ otherwise.</li>
+  </ul>
+  <p><strong>Step 3, plug in.</strong> The sum over $k$ survives for $\mathbf a$, and collapses to a single term for $W$ and $\mathbf b$:</p>
+  $$ \frac{\partial J}{\partial a_j} = \sum_{k} \frac{\partial J}{\partial z_k}W_{k,j}, \qquad
+     \frac{\partial J}{\partial W_{i,j}} = \frac{\partial J}{\partial z_i}\,a_j, \qquad
+     \frac{\partial J}{\partial b_i} = \frac{\partial J}{\partial z_i}. $$
+
+  <div class="box intuition"><span class="label">Read them in words</span>
+    <ul>
+      <li><strong>Input gradient:</strong> $a_j$ feeds every output, so it collects blame from all of them, weighted by the connection strength $W_{k,j}$.</li>
+      <li><strong>Weight gradient:</strong> $W_{i,j}$ connects input $j$ to output $i$. Its blame = (how wrong output $i$ is) × (how active input $j$ was). An input that was zero
+      gets no blame for anything — it didn't contribute.</li>
+      <li><strong>Bias gradient:</strong> the bias passes the output's blame straight through.</li>
+    </ul>
+  </div>
+
+  <h3>Matrix version — two layouts</h3>
+  <p>Stack those into vectors and matrices. Write $\boldsymbol\delta = \partial J/\partial\mathbf z$ for the incoming message.</p>
+
+  <div class="grid2">
+    <div class="box defn"><span class="label">Denominator layout (gradient has the shape of the thing)</span>
+      $$ \frac{\partial J}{\partial \mathbf a} = W^\top\boldsymbol\delta \quad (M\times 1) $$
+      $$ \frac{\partial J}{\partial W} = \boldsymbol\delta\,\mathbf a^\top \quad (K\times M) $$
+      $$ \frac{\partial J}{\partial \mathbf b} = \boldsymbol\delta \quad (K\times 1) $$
+      <p class="tiny">$\boldsymbol\delta$ is a column vector. $\partial J/\partial W$ has the same shape as $W$, so the update $W \leftarrow W - \alpha\,\partial J/\partial W$ just works.</p>
+    </div>
+    <div class="box defn"><span class="label">Numerator layout (gradient is the transpose)</span>
+      $$ \frac{\partial J}{\partial \mathbf a} = \boldsymbol\delta^\top W \quad (1\times M) $$
+      $$ \frac{\partial J}{\partial W} = \mathbf a\,\boldsymbol\delta^\top \quad (M\times K) $$
+      $$ \frac{\partial J}{\partial \mathbf b} = \boldsymbol\delta^\top \quad (1\times K) $$
+      <p class="tiny">$\boldsymbol\delta^\top$ is a row vector. Everything is transposed relative to the left box — you must transpose $\partial J/\partial W$ back before the update.</p>
+    </div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-title">Figure 7 — shape check for $\partial J/\partial W = \boldsymbol\delta\,\mathbf a^\top$ (denominator layout), $K = 2$, $M = 3$</div>
+    <svg id="outerSvg" viewBox="0 0 640 200" role="img" aria-label="Column vector delta of length 2 times row vector a transpose of length 3 gives a 2 by 3 matrix"></svg>
+    <div class="caption">What to notice: the gradient for $W$ is an <strong>outer product</strong> — a column ($K$ entries, one per output) times a row ($M$ entries, one per input). Entry
+    $(i, j)$ is $\delta_i a_j$, exactly the scalar formula. If your shapes don't come out $K\times M$, you've mixed layouts.</div>
+  </div>
+
+  <div class="guided">
+    <div class="g-head"><span class="tag">Try it</span>Backward through a linear layer</div>
+    <div class="g-body"><p>$W = \begin{bmatrix}1 &amp; 2 &amp; 0\\ -1 &amp; 0 &amp; 3\end{bmatrix}$, $\mathbf b = \begin{bmatrix}0.5\\-1\end{bmatrix}$, $\mathbf a = \begin{bmatrix}2\\1\\-1\end{bmatrix}$, and the layer above sends back
+    $\boldsymbol\delta = \partial J/\partial\mathbf z = \begin{bmatrix}0.3\\-0.2\end{bmatrix}$. Find $\mathbf z$, $\partial J/\partial\mathbf a$, $\partial J/\partial W$, $\partial J/\partial\mathbf b$ (denominator layout).</p></div>
+    <details class="step"><summary>Step 1 — What's being asked, and the shapes</summary><div>
+      <p>$K = 2$ outputs, $M = 3$ inputs. Expect $\mathbf z$: 2×1, $\partial J/\partial\mathbf a$: 3×1, $\partial J/\partial W$: 2×3, $\partial J/\partial\mathbf b$: 2×1. Write the shapes down before any arithmetic.</p></div></details>
+    <details class="step"><summary>Step 2 — Forward</summary><div>
+      <p>$z_1 = 1\cdot2 + 2\cdot1 + 0\cdot(-1) + 0.5 = 4.5$, $z_2 = -1\cdot 2 + 0 + 3\cdot(-1) - 1 = -6$. So $\mathbf z = (4.5, -6)$.</p></div></details>
+    <details class="step"><summary>Step 3 — Input gradient $W^\top\boldsymbol\delta$</summary><div>
+      <p>Column $j$ of $W$ dotted with $\boldsymbol\delta$: $j=1$: $1(0.3) + (-1)(-0.2) = 0.5$; $j=2$: $2(0.3) + 0 = 0.6$; $j=3$: $0 + 3(-0.2) = -0.6$. So $\partial J/\partial\mathbf a = (0.5, 0.6, -0.6)$.</p></div></details>
+    <details class="step"><summary>Step 4 — Weight and bias gradients</summary><div>
+      $$ \frac{\partial J}{\partial W} = \begin{bmatrix}0.3\\-0.2\end{bmatrix}\begin{bmatrix}2 &amp; 1 &amp; -1\end{bmatrix} = \begin{bmatrix}0.6 &amp; 0.3 &amp; -0.3\\ -0.4 &amp; -0.2 &amp; 0.2\end{bmatrix}, \qquad \frac{\partial J}{\partial\mathbf b} = \begin{bmatrix}0.3\\-0.2\end{bmatrix}. $$</div></details>
+    <details class="step"><summary>Answer &amp; the takeaway</summary><div>
+      <p>Notice $\mathbf z$ never appeared in the gradients — for a <em>linear</em> layer the local derivatives don't depend on the output. What you need stored from the forward
+      pass is the input $\mathbf a$ (for $\partial J/\partial W$). The test here is shapes: transpose $W$ for the input gradient; outer product for the weight gradient.</p></div></details>
+  </div>
+
+  <div class="quiz" data-answer="1">
+    <div class="q">A linear layer has $W \in \R^{4\times 10}$. In denominator layout, what is the shape of $\partial J/\partial\mathbf a$ (the gradient passed to the layer below)?</div>
+    <button class="opt">4 × 1</button>
+    <button class="opt">10 × 1</button>
+    <button class="opt">4 × 10</button>
+    <button class="opt">1 × 4</button>
+    <div class="why"><strong>Why:</strong> $\mathbf a$ is the input, and $W$ is $K\times M = 4\times 10$, so $\mathbf a \in \R^{10}$. In denominator layout a gradient has the shape of the thing it's
+    with respect to: 10 × 1, computed as $W^\top\boldsymbol\delta$ = (10×4)(4×1). "4 × 1" is $\boldsymbol\delta$'s shape — the output side; "4 × 10" is $\partial J/\partial W$.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="full-network">10. Putting it together: backprop for a whole network</h2>
+
+  <p>A fully connected network is linear layers alternating with element-wise activation layers. You now have both bricks. The activation brick
+  $\mathbf a = g(\mathbf z)$ acts on each entry separately, so output $k$ depends only on input $k$, and the sum over $k$ collapses to one term:</p>
+  $$ \frac{\partial J}{\partial z_k} = \frac{\partial J}{\partial a_k}\, g'(z_k) \quad\Longleftrightarrow\quad \frac{\partial J}{\partial\mathbf z} = \frac{\partial J}{\partial\mathbf a}\odot g'(\mathbf z), $$
+  <p>where $\odot$ means multiply entry by entry. Chain the bricks:</p>
+
+<pre><code>forward(x):
+    a[0] = x
+    for l = 1..L:
+        z[l] = W[l] @ a[l-1] + b[l]        # linear brick (store a[l-1])
+        a[l] = g(z[l])                     # activation brick (store z[l])
+    return J = loss(a[L], y)
+
+backward():
+    dA = dJ/da[L]                          # from the loss
+    for l = L..1:
+        dZ    = dA * g'(z[l])              # activation brick, element-wise
+        dW[l] = dZ @ a[l-1].T              # outer product
+        db[l] = dZ
+        dA    = W[l].T @ dZ                # message to the layer below
+    # then: W[l] -= alpha * dW[l],  b[l] -= alpha * db[l]  for every l</code></pre>
+
+  <p>Set every width to 1 and this is exactly §5's chain. That's the payoff of the lecture's "dumb" warm-up: the structure was already there.</p>
+
+  <div class="box warn"><span class="label">Common mistakes</span>
+    <ul>
+      <li><strong>Using the updated weight in the backward pass.</strong> Compute <em>all</em> gradients first, using the weights from the forward pass, then update.</li>
+      <li><strong>Forgetting $g'$</strong> on the way through an activation, or applying it at the wrong $z$ (it's evaluated at that layer's pre-activation $z_\ell$).</li>
+      <li><strong>$=$ instead of $+=$</strong> when a value or parameter is used in more than one place. The gradients from other paths silently disappear.</li>
+      <li><strong>Mixing layouts.</strong> Pick denominator layout and check every product's shape.</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="recap">11. Recap</h2>
+  <ol>
+    <li><strong>Universal approximation:</strong> one hidden layer with enough neurons can approximate any continuous function — ReLUs are kinks in a bendable wire. Says nothing about learnability or size.</li>
+    <li><strong>Non-convex</strong> loss → local minima; SGD's noise helps escape. Local minima aren't necessarily bad: we care about validation loss, and in big nets most minima are similar.</li>
+    <li><strong>No nonlinearity → one linear layer</strong>: $W_2(W_1\mathbf x + \mathbf b_1) + \mathbf b_2 = (W_2W_1)\mathbf x + (W_2\mathbf b_1 + \mathbf b_2)$.</li>
+    <li><strong>Debug</strong> underfitting first (bad train loss → more capacity), then overfitting (good train, bad validation, large weights → regularise / more data). Size is a hyperparameter.</li>
+    <li><strong>Backprop</strong> = chain rule, computed right-to-left, reusing the running product. Each layer: receive $\partial J/\partial z_{\text{out}}$, emit $\partial J/\partial z_{\text{in}}$ and $\partial J/\partial\theta$.</li>
+    <li><strong>Multivariate chain rule:</strong> multiply along paths, add over paths → in code, $+=$.</li>
+    <li><strong>Linear layer:</strong> $\partial J/\partial\mathbf a = W^\top\boldsymbol\delta$, $\partial J/\partial W = \boldsymbol\delta\mathbf a^\top$, $\partial J/\partial\mathbf b = \boldsymbol\delta$ (denominator layout). <strong>Activation:</strong> $\boldsymbol\delta = \partial J/\partial\mathbf a \odot g'(\mathbf z)$.</li>
+  </ol>
+
+  <div class="quiz" data-answer="3">
+    <div class="q">In a network, a hidden activation $a$ feeds three neurons in the next layer. During backprop you've received $\partial J/\partial a$ contributions of $0.2$, $-0.5$ and $0.1$ from them. What is $\partial J/\partial a$?</div>
+    <button class="opt">0.1 — the last one computed overwrites the others</button>
+    <button class="opt">−0.5 — the largest in magnitude dominates</button>
+    <button class="opt">−0.0667 — the average</button>
+    <button class="opt">−0.2 — the sum</button>
+    <div class="why"><strong>Why:</strong> three paths from $a$ to $J$, so by the multivariate chain rule you add them: $0.2 - 0.5 + 0.1 = -0.2$. "0.1" is the bug you get from writing $=$ instead of $+=$; averaging has no basis in the chain rule.</div>
+  </div>
+
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="assets/site.js"></script>
+<script>
+document.addEventListener("shellready", () => {
+  const T = (svg, x, y, s, a = {}) => { const t = SG.el("text", Object.assign({x, y, "text-anchor":"middle", fill:"var(--ink)", "font-size":13}, a)); t.textContent = s; svg.appendChild(t); return t; };
+  const defs = (svg, id, color) => { const d = SG.el("defs", {}), m = SG.el("marker", {id, viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto-start-reverse"}); m.appendChild(SG.el("path", {d:"M0,0 L10,5 L0,10 z", fill:color || "var(--ink-soft)"})); d.appendChild(m); svg.appendChild(d); };
+  const line = (svg, x1, y1, x2, y2, id, a = {}) => svg.appendChild(SG.el("line", Object.assign({x1, y1, x2, y2, stroke:"var(--ink-soft)", "stroke-width":1.6, "marker-end": id ? `url(#${id})` : null}, a)));
+  const box = (svg, x, y, w, h, a = {}) => svg.appendChild(SG.el("rect", Object.assign({x, y, width:w, height:h, rx:8, fill:"var(--panel)", stroke:"var(--line-2)", "stroke-width":1.4}, a)));
+  const relu = v => Math.max(0, v), sig = z => 1 / (1 + Math.exp(-z));
+
+  // ---------- Figure 1: universal approximation ----------
+  (() => {
+    const svg = document.getElementById("uatSvg"), H = document.getElementById("uatH"), out = document.getElementById("uatOut");
+    const f = x => Math.sin(2 * x) + 0.3 * x, X0 = 0, X1 = 3;
+    const px = x => 50 + (x - X0) / (X1 - X0) * 560, py = y => 200 - y * 140;
+    function draw() {
+      svg.innerHTML = "";
+      const h = +H.value, knots = [];
+      for (let i = 0; i <= h; i++) knots.push(X0 + (X1 - X0) * i / h);
+      const slopes = []; for (let i = 0; i < h; i++) slopes.push((f(knots[i + 1]) - f(knots[i])) / (knots[i + 1] - knots[i]));
+      const net = x => { let y = f(knots[0]) + slopes[0] * relu(x - knots[0]); for (let i = 1; i < h; i++) y += (slopes[i] - slopes[i - 1]) * relu(x - knots[i]); return y; };
+      line(svg, 50, py(0), 610, py(0), null, {stroke:"var(--line-2)", "stroke-width":1});
+      let dT = "", dN = "", maxErr = 0;
+      for (let k = 0; k <= 300; k++) { const x = X0 + (X1 - X0) * k / 300, yt = f(x), yn = net(x); maxErr = Math.max(maxErr, Math.abs(yt - yn));
+        dT += (k ? "L" : "M") + px(x).toFixed(1) + "," + py(yt).toFixed(1); dN += (k ? "L" : "M") + px(x).toFixed(1) + "," + py(yn).toFixed(1); }
+      svg.appendChild(SG.el("path", {d:dT, fill:"none", stroke:"var(--ink-mute)", "stroke-width":2, "stroke-dasharray":"6 4"}));
+      svg.appendChild(SG.el("path", {d:dN, fill:"none", stroke:"var(--accent)", "stroke-width":2.6}));
+      knots.slice(0, h).forEach(k => svg.appendChild(SG.el("circle", {cx:px(k), cy:py(f(k)), r:4, fill:"var(--rose)"})));
+      T(svg, 50, 270, "0", {"font-size":11, fill:"var(--ink-mute)"}); T(svg, 610, 270, "3", {"font-size":11, fill:"var(--ink-mute)"}); T(svg, 330, 270, "x", {"font-size":12, fill:"var(--ink-mute)"});
+      T(svg, 560, 24, "— network", {fill:"var(--accent)", "font-size":12}); T(svg, 560, 42, "- - target", {fill:"var(--ink-mute)", "font-size":12});
+      out.textContent = `H = ${h} hidden ReLU neurons → ${3*h + 1} parameters · max |error| on [0,3] = ${maxErr.toFixed(4)}`;
+    }
+    H.addEventListener("input", draw); draw();
+  })();
+
+  // ---------- Figure 2: GD vs noisy GD ----------
+  (() => {
+    const svg = document.getElementById("sgdSvg"), N = document.getElementById("sgdNoise"), out = document.getElementById("sgdOut");
+    const L = w => 0.1 * w ** 4 - 0.6 * w ** 2 + 0.35 * w, dL = w => 0.4 * w ** 3 - 1.2 * w + 0.35;
+    const px = w => 320 + w * 105, py = v => 20 + (2.6 - v) * 52;
+    let seed = 7;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    function draw() {
+      svg.innerHTML = ""; const s = +N.value; const startSeed = seed;
+      let d = ""; for (let k = 0; k <= 200; k++) { const w = -2.8 + 5.6 * k / 200; d += (k ? "L" : "M") + px(w).toFixed(1) + "," + py(L(w)).toFixed(1); }
+      svg.appendChild(SG.el("path", {d, fill:"none", stroke:"var(--ink-soft)", "stroke-width":2.2}));
+      let w = 2.5; const pts = [w];
+      for (let t = 0; t < 300; t++) { w = w - 0.05 * (dL(w) + s * gauss()); w = SG.clamp(w, -2.8, 2.8); pts.push(w); }
+      pts.forEach((p, i) => { if (i % 3 === 0) svg.appendChild(SG.el("circle", {cx:px(p), cy:py(L(p)), r:2.6, fill:"var(--accent)", opacity:0.15 + 0.85 * i / pts.length})); });
+      svg.appendChild(SG.el("circle", {cx:px(2.5), cy:py(L(2.5)), r:6, fill:"none", stroke:"var(--gold)", "stroke-width":2.5}));
+      svg.appendChild(SG.el("circle", {cx:px(w), cy:py(L(w)), r:7, fill:"var(--rose)"}));
+      T(svg, px(2.5), py(L(2.5)) - 12, "start", {"font-size":11, fill:"var(--gold)"});
+      T(svg, px(w), py(L(w)) + 22, "end", {"font-size":11, fill:"var(--rose)"});
+      T(svg, 320, 262, "parameter w", {"font-size":11, fill:"var(--ink-mute)"});
+      const valley = w < 0 ? "deeper LEFT valley" : "shallower RIGHT valley";
+      out.textContent = `σ = ${s.toFixed(1)} · final w = ${w.toFixed(2)} · loss = ${L(w).toFixed(3)} · ended in the ${valley}`;
+      seed = startSeed;
+    }
+    N.addEventListener("input", draw);
+    document.getElementById("sgdRun").addEventListener("click", () => { seed = (seed * 31 + 12345) % 4294967296; draw(); });
+    draw();
+  })();
+
+  // ---------- Figure 3: debugging flowchart ----------
+  (() => {
+    const svg = document.getElementById("dbgSvg"); defs(svg, "dbgA");
+    box(svg, 220, 14, 200, 44); T(svg, 320, 41, "Train the network");
+    line(svg, 320, 58, 320, 82, "dbgA");
+    box(svg, 200, 86, 240, 44, {stroke:"var(--accent)"}); T(svg, 320, 113, "Is training loss good?");
+    line(svg, 200, 108, 130, 160, "dbgA"); T(svg, 150, 126, "no", {fill:"var(--rose)", "font-size":12});
+    box(svg, 20, 164, 220, 80, {stroke:"var(--rose)"}); T(svg, 130, 188, "UNDERFITTING", {fill:"var(--rose)", "font-weight":700});
+    T(svg, 130, 210, "add capacity:", {"font-size":12}); T(svg, 130, 228, "wider or deeper", {"font-size":12});
+    line(svg, 440, 108, 470, 108, null); line(svg, 470, 108, 470, 160, "dbgA"); T(svg, 488, 130, "yes", {fill:"var(--accent-2)", "font-size":12});
+    box(svg, 360, 164, 220, 36, {stroke:"var(--accent)"}); T(svg, 470, 187, "Is validation loss good?", {"font-size":12});
+    line(svg, 470, 200, 470, 212, null);
+    box(svg, 280, 214, 170, 40, {stroke:"var(--gold)"}); T(svg, 365, 232, "no → OVERFITTING", {fill:"var(--gold)", "font-size":12, "font-weight":700}); T(svg, 365, 248, "regularise · more data", {"font-size":11});
+    box(svg, 470, 214, 150, 40, {stroke:"var(--accent-2)"}); T(svg, 545, 238, "yes → done ✓", {fill:"var(--accent-2)", "font-size":12, "font-weight":700});
+  })();
+
+  // ---------- Figure 4: width-1 chain ----------
+  (() => {
+    const svg = document.getElementById("chainSvg"), out = document.getElementById("chainOut");
+    const ws = ["cw1", "cw2", "cw3"].map(id => document.getElementById(id));
+    const x = 1, y = 1;
+    const fwd = w => { const z = [], a = [x]; for (let l = 0; l < 3; l++) { z.push(w[l] * a[l]); a.push(sig(z[l])); } return {z, a, J: 0.5 * (a[3] - y) ** 2}; };
+    function draw() {
+      svg.innerHTML = ""; defs(svg, "chA"); defs(svg, "chB", "var(--rose)");
+      const w = ws.map(e => +e.value), F = fwd(w);
+      const dA = [], dZ = [], dW = []; let g = F.a[3] - y;
+      for (let l = 2; l >= 0; l--) { dA[l + 1] = g; dZ[l] = g * F.a[l + 1] * (1 - F.a[l + 1]); dW[l] = dZ[l] * F.a[l]; g = dZ[l] * w[l]; }
+      const names = ["x", "z₁", "a₁", "z₂", "a₂", "z₃", "a₃", "J"];
+      const vals = [x, F.z[0], F.a[1], F.z[1], F.a[2], F.z[2], F.a[3], F.J];
+      const grads = [g, dZ[0], dA[1], dZ[1], dA[2], dZ[2], dA[3], 1];
+      const X = i => 40 + i * 83;
+      for (let i = 0; i < 8; i++) {
+        svg.appendChild(SG.el("circle", {cx:X(i), cy:120, r:20, fill:"var(--panel)", stroke: i === 7 ? "var(--gold)" : "var(--line-2)", "stroke-width":1.6}));
+        T(svg, X(i), 125, names[i], {"font-size":13});
+        T(svg, X(i), 80, vals[i].toFixed(3), {"font-size":12, fill:"var(--accent)", "font-family":"var(--mono)"});
+        T(svg, X(i), 172, grads[i].toFixed(4), {"font-size":11.5, fill:"var(--rose)", "font-family":"var(--mono)"});
+        if (i < 7) { line(svg, X(i) + 21, 112, X(i + 1) - 22, 112, "chA"); line(svg, X(i + 1) - 21, 136, X(i) + 22, 136, "chB", {stroke:"var(--rose)", "stroke-width":1.3});
+          const lab = i === 6 ? "ℓ" : (i % 2 === 0 ? "×w" + (i / 2 + 1) : "g");
+          T(svg, (X(i) + X(i + 1)) / 2, 104, lab, {"font-size":11, fill:"var(--ink-mute)"}); }
+      }
+      T(svg, 20, 62, "forward values", {"text-anchor":"start", "font-size":11, fill:"var(--accent)"});
+      T(svg, 20, 196, "backward: ∂J/∂(node)", {"text-anchor":"start", "font-size":11, fill:"var(--rose)"});
+      for (let l = 0; l < 3; l++) { T(svg, X(2 * l) + 41, 228, `∂J/∂w${l + 1} = ${dW[l].toFixed(4)}`, {"font-size":12, fill:"var(--rose)", "font-family":"var(--mono)"}); }
+      const fd = [0, 1, 2].map(l => { const p = w.slice(), m = w.slice(); p[l] += 1e-6; m[l] -= 1e-6; return (fwd(p).J - fwd(m).J) / 2e-6; });
+      out.innerHTML = `ŷ = ${F.a[3].toFixed(4)}, J = ${F.J.toFixed(5)}<br>backprop: ∂J/∂w = [${dW.map(v => v.toFixed(5)).join(", ")}]<br>finite diff: ∂J/∂w ≈ [${fd.map(v => v.toFixed(5)).join(", ")}]`;
+    }
+    ws.forEach(e => e.addEventListener("input", draw)); draw();
+  })();
+
+  // ---------- Figure 5: generic layer ----------
+  (() => {
+    const svg = document.getElementById("layerSvg"); defs(svg, "lyA"); defs(svg, "lyB", "var(--rose)");
+    box(svg, 230, 50, 180, 110, {stroke:"var(--accent)"});
+    T(svg, 320, 78, "layer", {fill:"var(--ink-mute)", "font-size":12}); T(svg, 320, 100, "z_out = f(z_in, θ)", {"font-size":14});
+    T(svg, 320, 126, "knows ∂f/∂z_in", {"font-size":12, fill:"var(--ink-soft)"}); T(svg, 320, 144, "and ∂f/∂θ", {"font-size":12, fill:"var(--ink-soft)"});
+    line(svg, 80, 80, 226, 80, "lyA"); T(svg, 140, 72, "z_in", {"font-size":13});
+    line(svg, 414, 80, 560, 80, "lyA"); T(svg, 490, 72, "z_out", {"font-size":13});
+    line(svg, 560, 130, 414, 130, "lyB", {stroke:"var(--rose)"}); T(svg, 500, 150, "∂J/∂z_out (received)", {"font-size":12, fill:"var(--rose)"});
+    line(svg, 226, 130, 80, 130, "lyB", {stroke:"var(--rose)"}); T(svg, 140, 150, "∂J/∂z_in (sent left)", {"font-size":12, fill:"var(--rose)"});
+    line(svg, 290, 220, 290, 164, "lyA"); T(svg, 270, 238, "θ", {"font-size":14});
+    line(svg, 350, 164, 350, 220, "lyB", {stroke:"var(--rose)"}); T(svg, 410, 238, "∂J/∂θ (for the update)", {"font-size":12, fill:"var(--rose)"});
+    T(svg, 600, 84, "→ … J", {"font-size":12, fill:"var(--ink-mute)"}); T(svg, 40, 84, "… →", {"font-size":12, fill:"var(--ink-mute)"});
+  })();
+
+  // ---------- Figure 6: fan-out ----------
+  (() => {
+    const svg = document.getElementById("fanSvg"); defs(svg, "fnA"); defs(svg, "fnB", "var(--rose)");
+    svg.appendChild(SG.el("circle", {cx:90, cy:110, r:26, fill:"var(--panel)", stroke:"var(--accent)", "stroke-width":1.8})); T(svg, 90, 115, "z_in");
+    box(svg, 260, 30, 110, 50); T(svg, 315, 60, "layer f");
+    box(svg, 260, 140, 110, 50); T(svg, 315, 170, "layer h");
+    box(svg, 500, 85, 80, 50, {stroke:"var(--gold)"}); T(svg, 540, 115, "… J");
+    line(svg, 116, 100, 256, 58, "fnA"); line(svg, 116, 120, 256, 162, "fnA"); line(svg, 372, 55, 496, 100, "fnA"); line(svg, 372, 165, 496, 120, "fnA");
+    line(svg, 256, 74, 120, 112, "fnB", {stroke:"var(--rose)", "stroke-dasharray":"5 3"}); line(svg, 256, 148, 120, 124, "fnB", {stroke:"var(--rose)", "stroke-dasharray":"5 3"});
+    T(svg, 190, 70, "+= ∂J/∂f · ∂f/∂z_in", {"font-size":11.5, fill:"var(--rose)"}); T(svg, 190, 168, "+= ∂J/∂h · ∂h/∂z_in", {"font-size":11.5, fill:"var(--rose)"});
+    T(svg, 90, 160, "accumulator", {"font-size":11, fill:"var(--ink-mute)"}); T(svg, 90, 176, "starts at 0", {"font-size":11, fill:"var(--ink-mute)"});
+  })();
+
+  // ---------- Figure 7: outer product shapes ----------
+  (() => {
+    const svg = document.getElementById("outerSvg");
+    const cell = (x, y, s, c) => { svg.appendChild(SG.el("rect", {x, y, width:46, height:34, fill:"var(--bg-soft)", stroke:c, "stroke-width":1.4})); T(svg, x + 23, y + 22, s, {"font-size":12.5, "font-family":"var(--mono)"}); };
+    cell(40, 50, "0.3", "var(--rose)"); cell(40, 84, "−0.2", "var(--rose)"); T(svg, 63, 40, "δ (2×1)", {"font-size":12, fill:"var(--rose)"});
+    T(svg, 112, 92, "×", {"font-size":20});
+    ["2", "1", "−1"].forEach((s, j) => cell(140 + 46 * j, 67, s, "var(--accent)")); T(svg, 209, 57, "aᵀ (1×3)", {"font-size":12, fill:"var(--accent)"});
+    T(svg, 300, 92, "=", {"font-size":20});
+    const M = [["0.6", "0.3", "−0.3"], ["−0.4", "−0.2", "0.2"]];
+    M.forEach((r, i) => r.forEach((s, j) => cell(330 + 46 * j, 50 + 34 * i, s, "var(--gold)"))); T(svg, 399, 40, "∂J/∂W (2×3)", {"font-size":12, fill:"var(--gold)"});
+    T(svg, 560, 70, "entry (i, j)", {"font-size":12, fill:"var(--ink-mute)"}); T(svg, 560, 90, "= δᵢ · aⱼ", {"font-size":13}); T(svg, 560, 110, "same shape as W", {"font-size":12, fill:"var(--ink-mute)"});
+    T(svg, 320, 170, "row i ↔ output i   ·   column j ↔ input j", {"font-size":12, fill:"var(--ink-soft)"});
+  })();
+});
+</script>
+</body>
+</html>
